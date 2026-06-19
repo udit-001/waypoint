@@ -5,7 +5,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/spf13/cobra"
 )
@@ -25,14 +24,8 @@ var stopCmd = &cobra.Command{
 			return fmt.Errorf("invalid PID file: %w", err)
 		}
 
-		proc, err := os.FindProcess(pid)
-		if err != nil {
-			_ = os.Remove(pidFilePath())
-			return fmt.Errorf("no process with PID %d found (stale PID file removed)", pid)
-		}
-
-		if err := proc.Signal(syscall.SIGTERM); err != nil {
-			return fmt.Errorf("failed to stop server: %w", err)
+		if err := killProcess(pid); err != nil {
+			return err
 		}
 
 		_ = os.Remove(pidFilePath())
