@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"jobtracker/internal/db"
+	"jobtracker/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -17,8 +18,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "job-tracker",
-	Short: "Track job applications from the command line",
+	Use:     "job-tracker",
+	Short:   "Track job applications from the command line",
+	Version: version.Version,
 	Long: `A CLI tool to manage and track your job applications.
 
 Data is stored in a local SQLite database. Use 'job-tracker init'
@@ -26,8 +28,8 @@ to create one, then add, list, update, and delete your job entries.
 
 Most commands support --json for machine-readable output.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip DB connection for 'init' and help/completion
-		if cmd.Name() == "init" || cmd.Name() == "help" || cmd.Name() == "completion" {
+		// Skip DB connection for non-DB commands
+		if cmd.Name() == "init" || cmd.Name() == "help" || cmd.Name() == "completion" || cmd.Name() == "version" {
 			return nil
 		}
 		var err error
