@@ -1,12 +1,11 @@
-/* === Kanban Board View === */
+/* === Kanban Board View (read-only, no drag) === */
 const Kanban = {
   statuses: ['Not Applied', 'Applied', 'Offer', 'Rejected', 'Withdrawn'],
-  dragSrcId: null,
 
-  render() {
+  async render() {
     const board = document.getElementById('kanban-board');
     board.innerHTML = '';
-    const jobs = this.getFilteredJobs();
+    const jobs = await this.getFilteredJobs();
     this.statuses.forEach(status => {
       const col = document.createElement('div');
       col.className = 'kanban-column';
@@ -24,35 +23,15 @@ const Kanban = {
         cardsContainer.appendChild(this.createCard(job));
       });
       board.appendChild(col);
-
-      // Drag-and-drop
-      cardsContainer.addEventListener('dragover', e => {
-        e.preventDefault();
-        cardsContainer.classList.add('kanban-dropzone');
-      });
-      cardsContainer.addEventListener('dragleave', () => {
-        cardsContainer.classList.remove('kanban-dropzone');
-      });
-      cardsContainer.addEventListener('drop', e => {
-        e.preventDefault();
-        cardsContainer.classList.remove('kanban-dropzone');
-        if (this.dragSrcId) {
-          DB.updateJob(this.dragSrcId, { status });
-          this.dragSrcId = null;
-          this.render();
-          App.updateCounts();
-        }
-      });
     });
 
-    // Update view title
     document.getElementById('view-title').textContent = 'Kanban Board';
   },
 
   createCard(job) {
     const card = document.createElement('div');
     card.className = 'kanban-card';
-    card.draggable = true;
+    card.draggable = false; // read-only
     card.dataset.jobId = job.id;
     card.innerHTML = `
       <div class="card-company">${UI.escapeHtml(job.company)}</div>
@@ -68,18 +47,11 @@ const Kanban = {
       </div>
     `;
     card.addEventListener('click', () => App.showJobDetail(job.id));
-    card.addEventListener('dragstart', e => {
-      this.dragSrcId = job.id;
-      card.classList.add('dragging');
-    });
-    card.addEventListener('dragend', () => {
-      card.classList.remove('dragging');
-    });
     return card;
   },
 
-  getFilteredJobs() {
-    let jobs = DB.getJobs();
+  async getFilteredJobs() {
+    let jobs = await DB.getJobs();
     if (App.currentCategory && App.currentCategory !== 'all') {
       jobs = jobs.filter(j => j.category === App.currentCategory);
     }

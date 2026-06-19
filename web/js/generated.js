@@ -1,8 +1,8 @@
 /* === Generated Content View === */
 const GeneratedContentView = {
-  render() {
+  async render() {
     const container = document.getElementById('generated-container');
-    const items = DB.getGeneratedContent();
+    const items = await DB.getGeneratedContent();
 
     document.getElementById('view-title').textContent = 'Generated Content';
 

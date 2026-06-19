@@ -1,9 +1,9 @@
-/* === Table View === */
+/* === Table View (read-only) === */
 const TableView = {
   sortField: 'date',
   sortDir: -1,
 
-  render() {
+  async render() {
     const thead = document.getElementById('table-head');
     const tbody = document.getElementById('table-body');
     const filtersEl = document.getElementById('table-filters');
@@ -24,15 +24,15 @@ const TableView = {
     ).join('') + '</tr>';
 
     thead.querySelectorAll('th').forEach(th => {
-      th.addEventListener('click', () => {
+      th.addEventListener('click', async () => {
         const field = th.dataset.field;
         if (this.sortField === field) this.sortDir *= -1;
         else { this.sortField = field; this.sortDir = -1; }
-        this.render();
+        await this.render();
       });
     });
 
-    let jobs = this.getFilteredJobs();
+    let jobs = await this.getFilteredJobs();
     jobs.sort((a, b) => {
       let va = (a[this.sortField] || '').toString().toLowerCase();
       let vb = (b[this.sortField] || '').toString().toLowerCase();
@@ -63,23 +63,23 @@ const TableView = {
     }
 
     // Category filter chips
-    const cats = DB.getCategories();
+    const cats = await DB.getCategories();
     filtersEl.innerHTML = `<button class="btn btn-sm ${!App.tableCategoryFilter ? 'btn-primary' : 'btn-secondary'}" data-filter-cat="">All</button>`;
     cats.forEach(c => {
       filtersEl.innerHTML += `<button class="btn btn-sm ${App.tableCategoryFilter === c ? 'btn-primary' : 'btn-secondary'}" data-filter-cat="${c}">${c}</button>`;
     });
     filtersEl.querySelectorAll('[data-filter-cat]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         App.tableCategoryFilter = btn.dataset.filterCat || null;
-        this.render();
+        await this.render();
       });
     });
 
     document.getElementById('view-title').textContent = 'Table View';
   },
 
-  getFilteredJobs() {
-    let jobs = DB.getJobs();
+  async getFilteredJobs() {
+    let jobs = await DB.getJobs();
     if (App.tableCategoryFilter) {
       jobs = jobs.filter(j => j.category === App.tableCategoryFilter);
     } else if (App.currentCategory && App.currentCategory !== 'all') {
