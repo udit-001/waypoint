@@ -14,6 +14,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/SwatiBio/job-tracker/internal/version"
 )
 
 const (
@@ -45,6 +47,14 @@ var updateCmd = &cobra.Command{
 		}
 
 		fmt.Printf("  Latest version: %s\n", rel.TagName)
+
+		current := strings.TrimPrefix(version.Version, "v")
+		latest := strings.TrimPrefix(rel.TagName, "v")
+		if current != "dev" && current == latest {
+			fmt.Printf("  Already up to date (v%s)\n", current)
+			fmt.Println()
+			return nil
+		}
 
 		ext := ".tar.gz"
 		if runtime.GOOS == "windows" {
