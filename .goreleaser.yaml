@@ -7,7 +7,7 @@ before:
     - go mod tidy
 
 builds:
-  - main: ./cmd/job-tracker
+  - main: ./cmd/job-tracker/main.go
     binary: job-tracker
     ldflags:
       - -s -w -X jobtracker/internal/version.Version={{ .Version }}
@@ -22,10 +22,10 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
+  - formats: ["tar.gz"]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: ["zip"]
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
 

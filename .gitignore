@@ -20,3 +20,4 @@ job-tracker
 .vscode/
 .idea/
 *.swp
+.playwright-mcp/

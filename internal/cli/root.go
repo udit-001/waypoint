@@ -4,12 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"jobtracker/internal/db"
 	"jobtracker/internal/version"
 	"github.com/spf13/cobra"
 )
+
+func defaultDBPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "jobtracker.db"
+	}
+	return filepath.Join(home, ".job-tracker", "jobtracker.db")
+}
 
 var (
 	store     *db.Store
@@ -48,7 +57,7 @@ Most commands support --json for machine-readable output.`,
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&storePath, "db", "jobtracker.db", "Path to SQLite database")
+	rootCmd.PersistentFlags().StringVar(&storePath, "db", defaultDBPath(), "Path to SQLite database")
 	rootCmd.PersistentFlags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 }
 

@@ -3,6 +3,8 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite"
@@ -79,6 +81,13 @@ type Store struct {
 
 // Open opens (or creates) the SQLite database, sets WAL mode, and runs migrations.
 func Open(path string) (*Store, error) {
+	dir := filepath.Dir(path)
+	if dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("create db directory: %w", err)
+		}
+	}
+
 	db, err := sqlx.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
