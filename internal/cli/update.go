@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -49,15 +47,13 @@ This compiles from source — no binary download, no Windows SmartScreen flags.`
 		}
 
 		latest := strings.TrimPrefix(rel.TagName, "v")
+		current := strings.TrimPrefix(version.Version, "v")
 		fmt.Printf("  Latest version: %s\n", rel.TagName)
 
-		if !updateForce {
-			stored := readStoredVersion()
-			if stored != "" && semverCompare(stored, latest) >= 0 {
-				fmt.Printf("  Already up to date (v%s)\n", stored)
-				fmt.Println()
-				return nil
-			}
+		if !updateForce && current != "" && current != "dev" && semverCompare(current, latest) >= 0 {
+			fmt.Printf("  Already up to date (v%s)\n", current)
+			fmt.Println()
+			return nil
 		}
 
 		goPath, err := exec.LookPath("go")
@@ -79,38 +75,11 @@ This compiles from source — no binary download, no Windows SmartScreen flags.`
 			return fmt.Errorf("go install failed: %w\n%s", err, string(output))
 		}
 
-		writeStoredVersion(latest)
 		fmt.Printf("  Updated to %s\n", rel.TagName)
 		fmt.Printf("  Restart the server to use the new version\n")
 		fmt.Println()
 		return nil
 	},
-}
-
-func storedVersionFile() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".job-tracker", ".version")
-}
-
-func readStoredVersion() string {
-	b, err := os.ReadFile(storedVersionFile())
-	if err != nil {
-		// fall back to the embedded version
-		v := strings.TrimPrefix(version.Version, "v")
-		if v == "" || v == "dev" {
-			return ""
-		}
-		return v
-	}
-	return strings.TrimSpace(string(b))
-}
-
-func writeStoredVersion(v string) {
-	_ = os.MkdirAll(filepath.Dir(storedVersionFile()), 0755)
-	_ = os.WriteFile(storedVersionFile(), []byte(v+"\n"), 0644)
 }
 
 // semverCompare returns -1 if a < b, 0 if a == b, 1 if a > b.
