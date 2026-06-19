@@ -3,3 +3,19 @@ icon-gallery.html
 job tracker prompt.txt
 generated-content/
 user-profile/
+
+# Go
+job-tracker
+*.exe
+*.test
+*.out
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
