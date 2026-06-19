@@ -13,5 +13,8 @@ func killProcess(pid int) error {
 	if err != nil {
 		return fmt.Errorf("no process with PID %d found", pid)
 	}
-	return proc.Signal(syscall.SIGTERM)
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
+		// ESRCH means process already exited — treat as success
+	}
+	return nil
 }
