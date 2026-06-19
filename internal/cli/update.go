@@ -2,6 +2,7 @@ package cli
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
@@ -138,6 +139,13 @@ func downloadFile(path, url string) error {
 }
 
 func extractBinary(archivePath, tmpDir string) (string, error) {
+	if strings.HasSuffix(archivePath, ".zip") {
+		return extractZip(archivePath, tmpDir)
+	}
+	return extractTarGz(archivePath, tmpDir)
+}
+
+func extractTarGz(archivePath, tmpDir string) (string, error) {
 	f, err := os.Open(archivePath)
 	if err != nil {
 		return "", err
@@ -175,6 +183,39 @@ func extractBinary(archivePath, tmpDir string) (string, error) {
 		if err := out.Chmod(0755); err != nil {
 			return "", err
 		}
+		return outPath, nil
+	}
+	return "", fmt.Errorf("binary not found in archive")
+}
+
+func extractZip(archivePath, tmpDir string) (string, error) {
+	r, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		name := filepath.Base(f.Name)
+		if name != "job-tracker" && name != "job-tracker.exe" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return "", err
+		}
+		defer rc.Close()
+
+		outPath := filepath.Join(tmpDir, name)
+		out, err := os.Create(outPath)
+		if err != nil {
+			return "", err
+		}
+		defer out.Close()
+		if _, err := io.Copy(out, rc); err != nil {
+			return "", err
+		}
+		_ = out.Chmod(0755)
 		return outPath, nil
 	}
 	return "", fmt.Errorf("binary not found in archive")
