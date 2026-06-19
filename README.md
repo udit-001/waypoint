@@ -3,12 +3,31 @@
 A Notion-like job application tracker with a Go backend (SQLite + REST API) and a pure vanilla JS frontend.  
 Data mutations happen through the CLI; the web UI is a read-only dashboard.
 
+## Install
+
+### From a release (curl pipe)
+
+```bash
+curl -sfL https://raw.githubusercontent.com/SwatiBio/Job-tracker/main/install.sh | sh
+```
+
+To install a specific version:
+
+```bash
+curl -sfL https://raw.githubusercontent.com/SwatiBio/Job-tracker/main/install.sh | sh -s -- v0.1.0
+```
+
+### From source
+
+```bash
+git clone https://github.com/SwatiBio/Job-tracker.git
+cd Job-tracker
+go build -o job-tracker ./cmd/job-tracker
+```
+
 ## Quick Start
 
 ```bash
-# Build the binary
-go build -o job-tracker ./cmd/job-tracker
-
 # Initialize the database
 ./job-tracker init
 
