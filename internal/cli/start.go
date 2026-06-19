@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"syscall"
 
 	"jobtracker/internal/server"
 	"github.com/spf13/cobra"
@@ -47,7 +46,7 @@ Examples:
 			c.Stdin = nil
 			c.Stdout = nil
 			c.Stderr = nil
-			c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+			detachProcess(c)
 			if err := c.Start(); err != nil {
 				return fmt.Errorf("failed to start background server: %w", err)
 			}
