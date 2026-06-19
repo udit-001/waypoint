@@ -29,7 +29,7 @@ jobs:
           ext=""
           if [ "${{ matrix.os }}" = "windows" ]; then ext=".exe"; fi
           GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} CGO_ENABLED=0 \
-            go build -ldflags="-s -w -X jobtracker/internal/version.Version=${GITHUB_REF_NAME#v}" \
+            go build -ldflags="-s -w -X github.com/SwatiBio/job-tracker/internal/version.Version=${GITHUB_REF_NAME#v}" \
             -o "job-tracker${ext}" ./cmd/job-tracker/
 
       - name: Archive

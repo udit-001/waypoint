@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"jobtracker/internal/skills"
+	"github.com/SwatiBio/job-tracker/internal/skills"
 	"github.com/spf13/cobra"
 )
 

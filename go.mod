@@ -1,4 +1,4 @@
-module jobtracker
+module github.com/SwatiBio/job-tracker
 
 go 1.25.10
 

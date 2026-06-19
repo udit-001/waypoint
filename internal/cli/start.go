@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strconv"
 
-	"jobtracker/internal/server"
+	"github.com/SwatiBio/job-tracker/internal/server"
 	"github.com/spf13/cobra"
 )
 

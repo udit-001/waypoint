@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"jobtracker/internal/db"
+	"github.com/SwatiBio/job-tracker/internal/db"
 	"github.com/spf13/cobra"
 )
 

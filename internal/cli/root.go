@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"jobtracker/internal/db"
-	"jobtracker/internal/version"
+	"github.com/SwatiBio/job-tracker/internal/db"
+	"github.com/SwatiBio/job-tracker/internal/version"
 	"github.com/spf13/cobra"
 )
 

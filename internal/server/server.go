@@ -10,8 +10,8 @@ import (
 	"runtime"
 	"strconv"
 
-	"jobtracker/internal/db"
-	"jobtracker/web"
+	"github.com/SwatiBio/job-tracker/internal/db"
+	"github.com/SwatiBio/job-tracker/web"
 )
 
 // Config holds the server configuration.
