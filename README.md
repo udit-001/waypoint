@@ -17,6 +17,12 @@ To install a specific version:
 curl -sfL https://raw.githubusercontent.com/SwatiBio/Job-tracker/main/install.sh | sh -s -- v0.1.0
 ```
 
+### With Go (recommended — avoids Windows SmartScreen flags)
+
+```bash
+go install github.com/SwatiBio/job-tracker/cmd/job-tracker@latest
+```
+
 ### From source
 
 ```bash
