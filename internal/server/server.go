@@ -6,9 +6,13 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
+	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strconv"
+	"syscall"
 
 	"github.com/SwatiBio/job-tracker/internal/db"
 	"github.com/SwatiBio/job-tracker/web"
@@ -67,6 +71,15 @@ func Start(cfg Config) error {
 		fmt.Println()
 	}
 
+	// Handle shutdown signals
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-quit
+		_ = os.Remove(pidFilePath())
+		server.Close()
+	}()
+
 	return server.ListenAndServe()
 }
 
@@ -101,6 +114,14 @@ func spaHandler(fsys fs.FS) http.Handler {
 		}
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+func pidFilePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "server.pid"
+	}
+	return filepath.Join(home, ".job-tracker", "server.pid")
 }
 
 // openBrowser opens the default browser to the given URL.

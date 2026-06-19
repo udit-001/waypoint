@@ -52,7 +52,10 @@ go build -o job-tracker ./cmd/job-tracker
 | `update <id>` | Update job fields (`--status`, `--company`, `--position`, etc.) |
 | `delete <id>` | Delete a job (`--force` to skip confirmation) |
 | `stats` | Show aggregate statistics |
-| `start` | Launch the web UI server |
+| `start` | Launch the web UI server (background by default) |
+| `stop` | Stop the background web UI server |
+| `skills install` | Install agent skill file for AI coding assistants |
+| `update` | Self-update to the latest release |
 
 All commands support `--db` (database path) and `--json` (JSON output).
 

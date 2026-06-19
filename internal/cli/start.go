@@ -4,11 +4,20 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 
 	"github.com/SwatiBio/job-tracker/internal/server"
 	"github.com/spf13/cobra"
 )
+
+func pidFilePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "server.pid"
+	}
+	return filepath.Join(home, ".job-tracker", "server.pid")
+}
 
 var startFlags struct {
 	port       int
@@ -50,10 +59,11 @@ Examples:
 			if err := c.Start(); err != nil {
 				return fmt.Errorf("failed to start background server: %w", err)
 			}
+			_ = os.WriteFile(pidFilePath(), []byte(fmt.Sprintf("%d", c.Process.Pid)), 0644)
 			fmt.Println()
 			fmt.Printf("  Job Tracker server started in background (PID: %d)\n", c.Process.Pid)
 			fmt.Printf("  http://127.0.0.1:%d\n", startFlags.port)
-			fmt.Printf("  Use 'kill %d' to stop\n", c.Process.Pid)
+			fmt.Printf("  Use 'job-tracker stop' to stop\n")
 			fmt.Println()
 			return nil
 		}
