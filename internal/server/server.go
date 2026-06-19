@@ -16,9 +16,10 @@ import (
 
 // Config holds the server configuration.
 type Config struct {
-	Port      int
-	DB        *db.Store
-	NoOpen    bool // don't auto-open browser
+	Port   int
+	DB     *db.Store
+	NoOpen bool // don't auto-open browser
+	Silent bool // suppress terminal output (daemon mode)
 }
 
 // Start runs the HTTP server with the read-only API and embedded web UI.
@@ -51,16 +52,20 @@ func Start(cfg Config) error {
 	}
 
 	// Auto-open browser
-	if !cfg.NoOpen {
+	if !cfg.NoOpen && !cfg.Silent {
 		url := fmt.Sprintf("http://%s", addr)
 		if err := openBrowser(url); err != nil {
 			log.Printf("  Open %s in your browser", url)
 		}
 	}
 
-	fmt.Printf("  Job Tracker UI: http://127.0.0.1:%d\n", cfg.Port)
-	fmt.Println("  Press Ctrl+C to stop")
-	fmt.Println()
+	if cfg.Silent {
+		log.Printf("Job Tracker server listening on http://127.0.0.1:%d", cfg.Port)
+	} else {
+		fmt.Printf("  Job Tracker UI: http://127.0.0.1:%d\n", cfg.Port)
+		fmt.Println("  Press Ctrl+C to stop")
+		fmt.Println()
+	}
 
 	return server.ListenAndServe()
 }

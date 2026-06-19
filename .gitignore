@@ -6,6 +6,7 @@ user-profile/
 
 # Go
 job-tracker
+!cmd/job-tracker/
 !internal/skills/job-tracker/
 *.exe
 *.test
