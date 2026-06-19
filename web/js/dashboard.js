@@ -1,11 +1,11 @@
-/* === Dashboard View === */
+/* === Dashboard View (read-only) === */
 const Dashboard = {
   charts: {},
 
-  render() {
+  async render() {
     const container = document.getElementById('view-dashboard');
-    const jobs = DB.getJobs();
-    const allHistory = DB.getHistory();
+    const jobs = await DB.getJobs();
+    const allHistory = await DB.getHistory();
 
     const statusCounts = {};
     const catCounts = {};
@@ -36,11 +36,11 @@ const Dashboard = {
         <div class="empty-state" style="padding:80px 24px">
           <div class="empty-icon">${icon('briefcase', 64)}</div>
           <h3 style="font-size:22px;margin-bottom:8px">Welcome to Job Tracker</h3>
-          <p style="font-size:15px;max-width:400px;margin:0 auto 24px;line-height:1.6">Start tracking your job applications, manage interviews, and organize your job search — all in one place.</p>
-          <button class="btn btn-primary" id="empty-add-job" style="font-size:15px;padding:10px 24px">${icon('plus', 18)} Add Your First Job</button>
+          <p style="font-size:15px;max-width:400px;margin:0 auto 24px;line-height:1.6">Your job applications appear here. Use the CLI to add them:</p>
+          <pre style="background:var(--bg-secondary);padding:12px 20px;border-radius:8px;font-size:14px;display:inline-block;margin-bottom:24px">job-tracker add "Company" "Position"</pre>
+          <p class="text-muted" style="font-size:13px">Then reload this page</p>
         </div>
       `;
-      document.getElementById('empty-add-job').addEventListener('click', () => App.openJobForm());
       document.getElementById('view-title').textContent = 'Dashboard';
       return;
     }
@@ -70,16 +70,25 @@ const Dashboard = {
     jobs.forEach(j => jobMap[j.id] = j);
     const recent = allHistory.slice(0, 10);
     if (recent.length === 0) {
-      recentEl.innerHTML = '<div class="text-muted text-sm">No activity yet. Start by adding a job!</div>';
+      recentEl.innerHTML = '<div class="text-muted text-sm">No activity yet. Start by adding a job via the CLI!</div>';
     } else {
       recentEl.innerHTML = recent.map(h => {
         const j = jobMap[h.jobId];
         if (!j) return '';
+        const actionIcon = h.action === 'Created' ? icon('plus', 14) : h.action === 'Status' ? icon('pin', 14) : h.action === 'Deleted' ? icon('trash', 14) : icon('edit', 14);
         return `<div class="recent-item">
-          <span>${h.action === 'Created' ? icon('plus', 14) : h.action === 'Status' ? icon('pin', 14) : h.action === 'Deleted' ? icon('trash', 14) : icon('edit', 14)} <strong>${UI.escapeHtml(j.company)}</strong> - ${h.action}${h.to ? ' to ' + h.to : ''}</span>
+          <span>${actionIcon} <a href="/job/${j.id}" class="recent-job-link" data-job-id="${j.id}"><strong>${UI.escapeHtml(j.company)}</strong></a> - ${h.action}${h.to ? ' to ' + h.to : ''}</span>
           <span class="text-muted">${UI.formatDateTime(h.timestamp)}</span>
         </div>`;
       }).join('');
+
+      recentEl.querySelectorAll('.recent-job-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          App.currentJobId = parseInt(link.dataset.jobId, 10);
+          App.switchView('job');
+        });
+      });
     }
 
     document.getElementById('view-title').textContent = 'Dashboard';
@@ -100,8 +109,7 @@ const Dashboard = {
     if (!statusCtx || !catCtx || !monthlyCtx) return;
 
     const statusOrder = ['Not Applied', 'Applied', 'Offer', 'Rejected', 'Withdrawn'];
-    // Nord palette — Frost & Aurora
-    const statusColors = ['#81A1C1', '#5E81AC', '#A3BE8C', '#BF616A', '#4C566A']; // nord9, nord10, nord14, nord11, nord3
+    const statusColors = ['#81A1C1', '#5E81AC', '#A3BE8C', '#BF616A', '#4C566A'];
 
     if (typeof Chart !== 'undefined') {
       const compactChart = {

@@ -4,12 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Job Tracker</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+  <meta name="theme-color" content="#5E81AC">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
+  <script src="vendor/chart.umd.min.js" defer></script>
+  <script src="vendor/marked.min.js" defer></script>
   <script src="js/icons.js"></script>
 </head>
 <body>
@@ -17,21 +19,21 @@
     <!-- Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-header">
-        <a class="app-name" data-view="dashboard" href="#">Job Tracker</a>
+        <a class="app-name" data-view="dashboard" href="/">Job Tracker</a>
       </div>
       <nav class="sidebar-nav">
         <div class="nav-section">
           <span class="nav-section-title">Views</span>
-          <a class="nav-item active" data-view="dashboard" href="#">
+          <a class="nav-item active" data-view="dashboard" href="/">
             <span class="nav-icon" data-icon="dashboard" data-size="18"></span> Dashboard
           </a>
-          <a class="nav-item" data-view="kanban" href="#">
+          <a class="nav-item" data-view="kanban" href="/kanban">
             <span class="nav-icon" data-icon="kanban" data-size="18"></span> Kanban
           </a>
-          <a class="nav-item" data-view="table" href="#">
+          <a class="nav-item" data-view="table" href="/table">
             <span class="nav-icon" data-icon="table" data-size="18"></span> Table
           </a>
-          <a class="nav-item" data-view="timeline" href="#">
+          <a class="nav-item" data-view="timeline" href="/timeline">
             <span class="nav-icon" data-icon="timeline" data-size="18"></span> Timeline
           </a>
         </div>
@@ -40,19 +42,18 @@
           <div id="category-list">
             <a class="nav-item active" data-category="all" href="#">All Jobs</a>
           </div>
-          <button class="nav-item add-category-btn" id="add-category-btn">+ Add Category</button>
         </div>
         <div class="nav-section">
           <span class="nav-section-title">Skills</span>
-          <a class="nav-item" data-view="skills" href="#">
+          <a class="nav-item" data-view="skills" href="/skills">
             <span class="nav-icon" data-icon="zap" data-size="18"></span> Skills
           </a>
-          <a class="nav-item" data-view="generated" href="#">
+          <a class="nav-item" data-view="generated" href="/generated">
             <span class="nav-icon" data-icon="folder" data-size="18"></span> Generated Content
           </a>
         </div>
         <div class="nav-section">
-          <a class="nav-item" data-view="settings" href="#">
+          <a class="nav-item" data-view="settings" href="/settings">
             <span class="nav-icon" data-icon="sliders" data-size="18"></span> Settings
           </a>
         </div>
@@ -121,9 +122,6 @@
         </div>
       </div>
     </main>
-
-    <!-- Quick Add FAB -->
-    <button class="fab" id="fab" title="Quick Add Job (Ctrl+N)">+</button>
 
     <!-- Modals -->
     <!-- Job Form Modal -->
@@ -219,7 +217,6 @@
         <div class="modal-header">
           <h3 id="detail-title">Job Details</h3>
           <div class="modal-header-actions">
-            <button class="btn btn-sm" id="detail-edit-btn"><span data-icon="edit" data-size="14"></span> Edit</button>
             <button class="btn btn-sm btn-danger" id="detail-delete-btn"><span data-icon="trash" data-size="14"></span> Delete</button>
             <button class="modal-close" data-modal="detail-modal">&times;</button>
           </div>
@@ -272,5 +269,14 @@
   <script src="js/notifications.js"></script>
   <script src="js/skills.js"></script>
   <script src="js/app.js"></script>
+
+  <!-- Service Worker for offline PWA -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(function(err) {
+        console.log('SW registration failed:', err);
+      });
+    }
+  </script>
 </body>
 </html>

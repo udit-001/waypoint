@@ -1,9 +1,9 @@
-/* === Timeline View === */
+/* === Timeline View (read-only) === */
 const Timeline = {
-  render() {
+  async render() {
     const container = document.getElementById('timeline-container');
-    const allHistory = DB.getHistory();
-    let jobs = DB.getJobs();
+    const allHistory = await DB.getHistory();
+    let jobs = await DB.getJobs();
 
     if (App.currentCategory && App.currentCategory !== 'all') {
       const catJobIds = new Set(jobs.filter(j => j.category === App.currentCategory).map(j => j.id));

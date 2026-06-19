@@ -5,18 +5,16 @@ const UI = {
     this.initModals();
     this.initThemeToggle();
     this.initViewToggles();
-    this.initFAB();
     this.initExportImport();
     this.initSearch();
     this.initKeyboardShortcuts();
+    this.addReadOnlyStyles();
   },
 
   initSidebar() {
-    // Toggle sidebar open/closed, persisted in localStorage
     const STORAGE_KEY = 'jobtracker_sidebar_closed';
     const toggleBtn = document.getElementById('sidebar-toggle');
     const sidebar = document.getElementById('sidebar');
-    // Restore saved state; default to closed if not set
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === 'false') {
       sidebar.classList.remove('closed');
@@ -29,55 +27,48 @@ const UI = {
     });
 
     document.querySelectorAll('[data-view]').forEach(el => {
-      el.addEventListener('click', e => {
+      el.addEventListener('click', async e => {
         e.preventDefault();
         const view = el.dataset.view;
-        App.switchView(view);
+        await App.switchView(view);
         document.querySelectorAll('.nav-item[data-view]').forEach(n => n.classList.remove('active'));
         el.classList.add('active');
       });
     });
-    document.getElementById('add-category-btn').addEventListener('click', () => {
-      const name = prompt('Enter category name:');
-      if (name && name.trim()) {
-        DB.addCategory(name.trim());
-        this.renderCategories();
-        App.renderCurrentView();
-      }
-    });
+
   },
 
-  renderCategories() {
+  async renderCategories() {
     const list = document.getElementById('category-list');
-    const cats = DB.getCategories();
+    const cats = await DB.getCategories();
     list.innerHTML = '';
 
-    // All Jobs link — created as an element so it keeps its click handler
     const allLink = document.createElement('a');
     allLink.className = 'nav-item' + (App.currentCategory === 'all' ? ' active' : '');
     allLink.dataset.category = 'all';
     allLink.href = '#';
     allLink.textContent = 'All Jobs';
-    allLink.addEventListener('click', e => {
+    allLink.addEventListener('click', async e => {
       e.preventDefault();
       App.currentCategory = 'all';
       document.querySelectorAll('[data-category]').forEach(n => n.classList.remove('active'));
       allLink.classList.add('active');
-      App.renderCurrentView();
+      await App.renderCurrentView();
     });
     list.appendChild(allLink);
+
     cats.forEach(c => {
       const wrapper = document.createElement('div');
       wrapper.className = 'nav-item' + (App.currentCategory === c ? ' active' : '');
       wrapper.dataset.category = c;
       wrapper.style.cssText = 'display:flex;align-items:center;padding:0';
-      wrapper.addEventListener('click', e => {
+      wrapper.addEventListener('click', async e => {
         if (e.target.tagName === 'BUTTON') return;
         e.preventDefault();
         App.currentCategory = c;
         document.querySelectorAll('[data-category]').forEach(n => n.classList.remove('active'));
         wrapper.classList.add('active');
-        App.renderCurrentView();
+        await App.renderCurrentView();
       });
 
       const a = document.createElement('a');
@@ -89,15 +80,9 @@ const UI = {
       del.textContent = '×';
       del.title = 'Delete category';
       del.style.cssText = 'background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 8px;font-size:16px;line-height:1;display:none';
-      del.addEventListener('click', async e => {
+      del.addEventListener('click', e => {
         e.stopPropagation();
-        const confirmed = await UI.confirmDialog(`Delete category "${c}"? Jobs in this category will be moved to "General".`);
-        if (confirmed) {
-          DB.deleteCategory(c);
-          if (App.currentCategory === c) { App.currentCategory = 'all'; }
-          this.renderCategories();
-          App.renderCurrentView();
-        }
+        UI.showToast('Use the CLI to delete categories', 'info');
       });
 
       wrapper.addEventListener('mouseenter', () => { del.style.display = 'block'; });
@@ -138,35 +123,20 @@ const UI = {
       const next = current === 'light' ? 'dark' : 'light';
       html.dataset.theme = next;
       btn.innerHTML = icon(next === 'light' ? 'moon' : 'sun', 18);
-      const settings = DB.getSettings();
-      settings.theme = next;
-      DB.saveSettings(settings);
+      localStorage.setItem('jobtracker_theme', next);
     });
   },
 
   initViewToggles() {
     document.querySelectorAll('.view-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const view = btn.dataset.view;
-        App.switchView(view);
+      btn.addEventListener('click', async () => {
+        await App.switchView(btn.dataset.view);
       });
     });
   },
 
-  initFAB() {
-    document.getElementById('fab').addEventListener('click', () => {
-      App.openJobForm();
-    });
-  },
-
   initExportImport() {
-    const expBtn = document.getElementById('export-btn');
-    const impBtn = document.getElementById('import-btn');
-    if (expBtn) expBtn.addEventListener('click', Export.exportData);
-    if (impBtn) impBtn.addEventListener('click', () => {
-      document.getElementById('import-file').click();
-    });
-    document.getElementById('import-file').addEventListener('change', Export.importData);
+    // Read-only — disabled
   },
 
   initSearch() {
@@ -179,14 +149,13 @@ const UI = {
   initKeyboardShortcuts() {
     document.addEventListener('keydown', e => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-      if (e.ctrlKey && e.key === 'n') { e.preventDefault(); App.openJobForm(); }
+      if (e.ctrlKey && e.key === 'n') { e.preventDefault(); UI.showToast('Use the CLI to add jobs', 'info'); }
       if (e.ctrlKey && e.key === 'f') { e.preventDefault(); document.getElementById('search-input').focus(); }
-      if (e.ctrlKey && e.key === 's') { e.preventDefault(); Export.exportData(); }
     });
   },
 
-  showAdvancedSearch() {
-    const cats = DB.getCategories();
+  async showAdvancedSearch() {
+    const cats = await DB.getCategories();
     const statuses = ['Not Applied', 'Applied', 'Offer', 'Rejected', 'Withdrawn'];
     const body = document.createElement('div');
     body.innerHTML = `
@@ -208,7 +177,7 @@ const UI = {
     const footer = modal.querySelector('.modal-footer');
     footer.innerHTML = '<button class="btn btn-secondary" data-modal="skills-modal">Cancel</button><button class="btn btn-primary" id="adv-search-btn">Search</button>';
     modal.classList.add('active');
-    document.getElementById('adv-search-btn').addEventListener('click', () => {
+    document.getElementById('adv-search-btn').addEventListener('click', async () => {
       const filters = {
         company: document.getElementById('adv-company').value.toLowerCase(),
         position: document.getElementById('adv-position').value.toLowerCase(),
@@ -220,7 +189,7 @@ const UI = {
       };
       App.advancedFilters = filters;
       modal.classList.remove('active');
-      App.renderCurrentView();
+      await App.renderCurrentView();
     });
   },
 
@@ -245,41 +214,79 @@ const UI = {
     });
   },
 
-  showEmptyState(container, icon, title, desc) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">${icon}</div><h3>${title}</h3><p>${desc}</p></div>`;
+  showEmptyState(container, iconHtml, title, desc) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">${iconHtml}</div><h3>${title}</h3><p>${desc}</p></div>`;
+  },
+
+  addReadOnlyStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+      .read-only-badge {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 11px;
+        color: var(--text-muted);
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 200;
+        opacity: 0.8;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Add a small indicator
+    const badge = document.createElement('div');
+    badge.className = 'read-only-badge';
+    badge.textContent = '🔒 Read-only — manage via CLI';
+    document.body.appendChild(badge);
+  },
+
+  // === Helper utilities ===
+
+  escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   },
 
   statusBadge(status) {
-    const cls = 'status-' + status.replace(/\s+/g, '\\ ');
-    return `<span class="status-badge ${cls}">${status}</span>`;
+    const colors = {
+      'Not Applied': '#81A1C1',
+      'Applied': '#5E81AC',
+      'Offer': '#A3BE8C',
+      'Rejected': '#BF616A',
+      'Withdrawn': '#4C566A',
+    };
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:500;color:#fff;background:${colors[status] || '#888'}">${this.escapeHtml(status)}</span>`;
   },
 
   formatDate(d) {
     if (!d) return '';
-    const date = new Date(d);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+    catch { return d; }
   },
 
   formatDateTime(d) {
     if (!d) return '';
-    const date = new Date(d);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    try { return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+    catch { return d; }
   },
 
   formatCurrency(s) {
-    return s || '-';
-  },
-
-  escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return s || '';
   },
 
   renderMarkdown(text) {
     if (!text) return '';
     if (typeof marked !== 'undefined') {
-      return marked.parse(text);
+      try { return marked.parse(text); } catch { return text; }
     }
     return text.replace(/\n/g, '<br>');
   },
