@@ -31,6 +31,20 @@ const Dashboard = {
     const activePipeline = notApplied + applied;
     const responseRate = jobs.length ? Math.round((offers) / jobs.length * 100) : 0;
 
+    if (jobs.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state" style="padding:80px 24px">
+          <div class="empty-icon">${icon('briefcase', 64)}</div>
+          <h3 style="font-size:22px;margin-bottom:8px">Welcome to Job Tracker</h3>
+          <p style="font-size:15px;max-width:400px;margin:0 auto 24px;line-height:1.6">Start tracking your job applications, manage interviews, and organize your job search — all in one place.</p>
+          <button class="btn btn-primary" id="empty-add-job" style="font-size:15px;padding:10px 24px">${icon('plus', 18)} Add Your First Job</button>
+        </div>
+      `;
+      document.getElementById('empty-add-job').addEventListener('click', () => App.openJobForm());
+      document.getElementById('view-title').textContent = 'Dashboard';
+      return;
+    }
+
     container.innerHTML = `
       <div class="dashboard-stats">
         <div class="stat-card"><div class="stat-value">${jobs.length}</div><div class="stat-label">Total Applications</div></div>
@@ -42,7 +56,7 @@ const Dashboard = {
       <div class="dashboard-charts">
         <div class="chart-card"><h4>Status Breakdown</h4><canvas id="chart-status"></canvas></div>
         <div class="chart-card"><h4>By Category</h4><canvas id="chart-category"></canvas></div>
-        <div class="chart-card" style="grid-column:1/-1"><h4>Monthly Applications</h4><canvas id="chart-monthly"></canvas></div>
+        <div class="chart-card"><h4>Monthly Applications</h4><canvas id="chart-monthly"></canvas></div>
       </div>
       <div class="dashboard-recent">
         <h4>Recent Activity</h4>
@@ -86,9 +100,15 @@ const Dashboard = {
     if (!statusCtx || !catCtx || !monthlyCtx) return;
 
     const statusOrder = ['Not Applied', 'Applied', 'Offer', 'Rejected', 'Withdrawn'];
-    const statusColors = ['#6b7280', '#3b82f6', '#10b981', '#ef4444', '#9ca3af'];
+    // Nord palette — Frost & Aurora
+    const statusColors = ['#81A1C1', '#5E81AC', '#A3BE8C', '#BF616A', '#4C566A']; // nord9, nord10, nord14, nord11, nord3
 
     if (typeof Chart !== 'undefined') {
+      const compactChart = {
+        responsive: true,
+        maintainAspectRatio: false,
+      };
+
       this.charts.status = new Chart(statusCtx, {
         type: 'doughnut',
         data: {
@@ -98,7 +118,10 @@ const Dashboard = {
             backgroundColor: statusOrder.filter(s => statusCounts[s]).map(s => statusColors[statusOrder.indexOf(s)])
           }]
         },
-        options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } } }, maintainAspectRatio: true }
+        options: {
+          ...compactChart,
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 8, font: { size: 11 } } } },
+        }
       });
 
       this.charts.category = new Chart(catCtx, {
@@ -108,10 +131,14 @@ const Dashboard = {
           datasets: [{
             label: 'Applications',
             data: Object.values(catCounts),
-            backgroundColor: '#3b82f6'
+            backgroundColor: '#88C0D0'
           }]
         },
-        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }, maintainAspectRatio: true }
+        options: {
+          ...compactChart,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } } }, x: { ticks: { font: { size: 10 } } } }
+        }
       });
 
       const months = Object.keys(monthlyCounts).sort((a, b) => {
@@ -126,13 +153,17 @@ const Dashboard = {
           datasets: [{
             label: 'Applications',
             data: months.map(m => monthlyCounts[m]),
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59,130,246,0.1)',
+            borderColor: '#88C0D0',
+            backgroundColor: 'rgba(136,192,208,0.15)',
             fill: true,
             tension: 0.3
           }]
         },
-        options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }, maintainAspectRatio: true }
+        options: {
+          ...compactChart,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } } }, x: { ticks: { font: { size: 10 } } } }
+        }
       });
     }
   },

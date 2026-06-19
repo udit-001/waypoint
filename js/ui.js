@@ -12,12 +12,20 @@ const UI = {
   },
 
   initSidebar() {
-    // Toggle sidebar open/closed
+    // Toggle sidebar open/closed, persisted in localStorage
+    const STORAGE_KEY = 'jobtracker_sidebar_closed';
     const toggleBtn = document.getElementById('sidebar-toggle');
     const sidebar = document.getElementById('sidebar');
-    sidebar.classList.add('closed');
+    // Restore saved state; default to closed if not set
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === 'false') {
+      sidebar.classList.remove('closed');
+    } else {
+      sidebar.classList.add('closed');
+    }
     toggleBtn.addEventListener('click', () => {
       sidebar.classList.toggle('closed');
+      localStorage.setItem(STORAGE_KEY, sidebar.classList.contains('closed'));
     });
 
     document.querySelectorAll('[data-view]').forEach(el => {
@@ -27,16 +35,6 @@ const UI = {
         App.switchView(view);
         document.querySelectorAll('.nav-item[data-view]').forEach(n => n.classList.remove('active'));
         el.classList.add('active');
-      });
-    });
-    document.querySelectorAll('[data-category]').forEach(el => {
-      el.addEventListener('click', e => {
-        e.preventDefault();
-        const cat = el.dataset.category;
-        App.currentCategory = cat;
-        document.querySelectorAll('[data-category]').forEach(n => n.classList.remove('active'));
-        el.classList.add('active');
-        App.renderCurrentView();
       });
     });
     document.getElementById('add-category-btn').addEventListener('click', () => {
@@ -52,24 +50,40 @@ const UI = {
   renderCategories() {
     const list = document.getElementById('category-list');
     const cats = DB.getCategories();
-    list.innerHTML = '<a class="nav-item active" data-category="all" href="#">All Jobs</a>';
+    list.innerHTML = '';
+
+    // All Jobs link — created as an element so it keeps its click handler
+    const allLink = document.createElement('a');
+    allLink.className = 'nav-item' + (App.currentCategory === 'all' ? ' active' : '');
+    allLink.dataset.category = 'all';
+    allLink.href = '#';
+    allLink.textContent = 'All Jobs';
+    allLink.addEventListener('click', e => {
+      e.preventDefault();
+      App.currentCategory = 'all';
+      document.querySelectorAll('[data-category]').forEach(n => n.classList.remove('active'));
+      allLink.classList.add('active');
+      App.renderCurrentView();
+    });
+    list.appendChild(allLink);
     cats.forEach(c => {
       const wrapper = document.createElement('div');
       wrapper.className = 'nav-item' + (App.currentCategory === c ? ' active' : '');
+      wrapper.dataset.category = c;
       wrapper.style.cssText = 'display:flex;align-items:center;padding:0';
-
-      const a = document.createElement('a');
-      a.href = '#';
-      a.dataset.category = c;
-      a.textContent = c;
-      a.style.cssText = 'flex:1;padding:6px 12px;color:inherit;text-decoration:none;display:block';
-      a.addEventListener('click', e => {
+      wrapper.addEventListener('click', e => {
+        if (e.target.tagName === 'BUTTON') return;
         e.preventDefault();
         App.currentCategory = c;
         document.querySelectorAll('[data-category]').forEach(n => n.classList.remove('active'));
         wrapper.classList.add('active');
         App.renderCurrentView();
       });
+
+      const a = document.createElement('a');
+      a.href = '#';
+      a.textContent = c;
+      a.style.cssText = 'flex:1;padding:6px 12px;color:inherit;text-decoration:none;display:block';
 
       const del = document.createElement('button');
       del.textContent = '×';
