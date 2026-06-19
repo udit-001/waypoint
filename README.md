@@ -1,114 +1,84 @@
 # Job Application Tracker
 
-A comprehensive, Notion-like job application tracker built with pure HTML, CSS, and JavaScript. No build tools, no backend — just open the file and go.
+A Notion-like job application tracker with a Go backend (SQLite + REST API) and a pure vanilla JS frontend.  
+Data mutations happen through the CLI; the web UI is a read-only dashboard.
 
-## Clone & Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/SwatiBio/Job-tracker.git
-
-# Enter the directory
-cd Job-tracker
-
-# Serve locally (pick one)
-npx serve .          # requires Node.js
-python3 -m http.server 8000   # requires Python
-php -S localhost:8000          # requires PHP
-```
-
-Then open `http://localhost:8000` in your browser.
-
-## Features
-
-- **Dashboard** — Stats cards, charts (status doughnut, category bar, monthly trend)
-- **Kanban Board** — Drag-and-drop columns by application status
-- **Table View** — Sortable table with column filters
-- **Timeline View** — Chronological activity history
-- **Skills Plugin System** — 5 built-in generators:
-  - Email Template Generator
-  - Cover Letter Generator
-  - Resume Keyword Optimizer
-  - Interview Prep Assistant
-  - Career Summary Generator
-- **AI Integration (optional)** — Connect your free Google Gemini API key for AI-powered generation with fallback to built-in templates
-- **Quick Add** — Floating action button to add jobs instantly
-- **Search & Filter** — Search across all fields, filter by category
-- **Markdown Notes** — Per-job notes with live preview
-- **Settings & Profile** — Editable user profile that powers all generators
-- **Export/Import** — Full data backup as JSON (in Settings)
-- **Keyboard Shortcuts** — Ctrl+N (new job), Ctrl+F (search), Ctrl+S (export)
-- **Light/Dark Theme** — Toggle saved to localStorage
-- **Browser Notifications** — Reminders for follow-up dates
-- **Customizable Categories** — Add/delete sidebar categories
-
-## How to Run Locally
-
-### Option 1: Direct (easiest)
-Open `index.html` in any modern browser. All data is stored in localStorage.
-
-### Option 2: Local server (recommended for full functionality)
-Since some features use `fetch()` to load plugin files, a local server is recommended:
+## Quick Start
 
 ```bash
-# Using npx (Node.js required)
-npx serve .
+# Build the binary
+go build -o job-tracker ./cmd/job-tracker
 
-# Using Python
-python3 -m http.server 8000
+# Initialize the database
+./job-tracker init
 
-# Using PHP
-php -S localhost:8000
+# Start the web UI (opens on http://localhost:8080)
+./job-tracker start
 ```
 
-Then open `http://localhost:8000` in your browser.
+## CLI Commands
 
-## Getting Started
+| Command | Description |
+|---------|-------------|
+| `init` | Initialize a new SQLite database |
+| `add <company> <position>` | Add a job application |
+| `list` | List jobs (flags: `--status`, `--category`, `--search`, `--limit`, `--all`) |
+| `get <id>` | Show job details (`--history` for activity log) |
+| `update <id>` | Update job fields (`--status`, `--company`, `--position`, etc.) |
+| `delete <id>` | Delete a job (`--force` to skip confirmation) |
+| `stats` | Show aggregate statistics |
+| `start` | Launch the web UI server |
 
-1. Open the app
-2. Go to **Settings** → fill in your profile (name, skills, experience)
-3. Start adding jobs via the **+** button or **Ctrl+N**
-4. Use the **Skills** view to generate emails, cover letters, interview prep, etc.
-5. Optionally add a **Google Gemini API key** in Settings → AI Integration for AI-powered generation
+All commands support `--db` (database path) and `--json` (JSON output).
+
+## Web UI
+
+Seven read-only views:
+
+- **Dashboard** — Stats cards + charts (status doughnut, category bar, monthly trend)
+- **Kanban** — Columnar board grouped by status
+- **Table** — Sortable table with column filters
+- **Timeline** — Chronological activity history
+- **Skills** — 5 built-in generators (email, cover letter, resume optimizer, interview prep, career summary)
+- **Generated Content** — Browse saved outputs
+- **Settings** — View profile, settings, and AI integration config
+
+The web UI fetches data from the Go REST API (`GET /api/*`). All mutations (add/update/delete) require the CLI.
 
 ## AI Integration (Optional)
 
-The app supports free AI-powered content generation via Google Gemini. To enable:
-
 1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
-2. Paste it in **Settings → AI Integration**
-3. Toggle AI on — generators will use AI with automatic fallback to templates if the API is unavailable
-
-No API key = all generators still work using built-in smart templates.
+2. Set it via CLI: `job-tracker update settings --gemini-key <key>`
+3. Generators will use Gemini AI with automatic fallback to built-in templates
 
 ## Tech Stack
 
-- **HTML5** — Semantic structure
-- **CSS3** — Custom properties, flexbox, animations, light/dark theme
-- **JavaScript (ES6+)** — Vanilla JS, localStorage API
-- **Chart.js** (CDN) — Dashboard charts
-- **Marked.js** (CDN) — Markdown rendering
-- **Google Gemini API** (optional) — AI-powered generation
-- **No build tools** — Pure client-side application
+- **Backend:** Go 1.25 — standard library `net/http`, REST API, embedded static files
+- **CLI:** Cobra CLI framework
+- **Database:** SQLite (via `modernc.org/sqlite` — pure Go, no CGo)
+- **Frontend:** Vanilla HTML/CSS/JS (ES6+), no frameworks
+- **Charts:** Chart.js 4.4.1 (`web/vendor/`)
+- **Markdown:** marked 11.1.1 (`web/vendor/`)
+- **Typography:** PT Serif (`web/fonts/`)
+- **PWA:** Service worker for offline caching
 
 ## Data Storage
 
-All data persists in **localStorage** under these keys:
-- `jobTracker_jobs` — All job entries
-- `jobTracker_categories` — Custom categories
-- `jobTracker_history` — Activity history
-- `jobTracker_profile` — User profile
-- `jobTracker_settings` — App preferences
-- `jobTracker_generatedContent` — Generated emails, letters, etc.
-- `jobTracker_skillFeedback` — Thumbs up/down feedback
+All data lives in a SQLite database (`jobtracker.db`). Tables:
 
-Export your data anytime from **Settings → Export/Import**.
+- `jobs` — Applications with company, position, status, notes, etc.
+- `categories` — Custom category labels
+- `history` — Activity log (action audit trail)
+- `profile` — User profile (name, skills, experience, etc.)
+- `settings` — App preferences (theme, reminders, default view)
+
+Export from Settings → Export/Import (JSON download).
 
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+N` | New job |
+| `Ctrl+N` | New job (opens CLI hint) |
 | `Ctrl+F` | Focus search |
 | `Ctrl+S` | Export data |
 
