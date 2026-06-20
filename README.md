@@ -123,28 +123,11 @@ Read-only dashboard with 9 views. Manage data via CLI.
 
 ## Data
 
-All data lives in a SQLite database at `~/.waypoint/waypoint.db`.
+SQLite at `~/.waypoint/waypoint.db`. 7 tables: jobs, categories, artifacts,
+history, profile, settings, FTS5 indices.
 
-| Table | Contents |
-|-------|----------|
-| `jobs` | Applications with company, position, status, notes |
-| `categories` | Custom labels for grouping jobs |
-| `artifacts` | AI-generated content with multi-variant support |
-| `history` | Activity audit trail |
-| `profile` | Name, skills, experience, education |
-| `settings` | Theme, default view, reminders |
-| `jobs_fts` / `artifacts_fts` | FTS5 full-text search indices |
-
-### Tech Stack
-
-- **Backend:** Go 1.25 — standard library `net/http`, REST API
-- **CLI:** Cobra CLI framework
-- **Database:** SQLite (pure Go via `modernc.org/sqlite`)
-- **Frontend:** Vanilla HTML/CSS/JS (ES6+), no frameworks
-- **Charts:** Chart.js 4.4.1
-- **Markdown:** marked 11.1.1
-- **Typography:** Inter & PT Serif
-- **PWA:** Service worker for offline caching
+See [docs/architecture.md](docs/architecture.md) for the full schema,
+tech stack, API endpoints, and project layout.
 
 ## License
 
