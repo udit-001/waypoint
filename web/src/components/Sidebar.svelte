@@ -5,6 +5,19 @@
   let { sidebarClosed, onToggle } = $props();
   const router = getRouter();
 
+  let spinning = $state(false);
+
+  function handleLogoClick(e) {
+    e.preventDefault();
+    if (router.current.route === 'dashboard') {
+      // Spin feedback on dashboard
+      spinning = true;
+      setTimeout(() => { spinning = false; }, 500);
+    } else {
+      handleNav('dashboard');
+    }
+  }
+
   const navSections = [
     {
       title: 'Views',
@@ -46,9 +59,9 @@
     <a
       href="/"
       class="flex items-center gap-2 text-sm font-semibold text-slate-800 hover:text-slate-600 no-underline"
-      onclick={(e) => { e.preventDefault(); handleNav('dashboard'); }}
+      onclick={handleLogoClick}
     >
-      <svg class="shrink-0" viewBox="0 0 100 100" width="28" height="28" aria-hidden="true">
+      <svg class="shrink-0 transition-transform duration-500 {spinning ? 'rotate-180' : ''}" viewBox="0 0 100 100" width="28" height="28" aria-hidden="true">
         <g fill="none" stroke="currentColor" stroke-linecap="round">
           <circle cx="50" cy="50" r="32" stroke-width="4"/>
           <circle cx="50" cy="50" r="16" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.4"/>
