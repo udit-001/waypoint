@@ -32,7 +32,6 @@ waypoint categories delete 3           # Delete by ID (jobs → General)</code><
       <table class="cat-table">
         <thead>
           <tr>
-            <th>ID</th>
             <th>Name</th>
             <th>Jobs</th>
             <th>Actions</th>
@@ -41,8 +40,7 @@ waypoint categories delete 3           # Delete by ID (jobs → General)</code><
         <tbody>
           ${cats.map(c => `
             <tr>
-              <td>${c.id}</td>
-              <td>${UI.escapeHtml(c.name)}${c.id === 1 ? ' <span class="cat-default-badge">default</span>' : ''}</td>
+              <td><a href="/table" class="cat-job-link" data-cat="${UI.escapeHtml(c.name)}">${UI.escapeHtml(c.name)}</a>${c.id === 1 ? ' <span class="cat-default-badge">default</span>' : ''}</td>
               <td><a href="/table" class="cat-job-link" data-cat="${UI.escapeHtml(c.name)}">${jobCounts[c.name] || 0}</a></td>
               <td class="cat-actions">
                 <code class="cat-cmd" title="Copy" data-cmd="waypoint categories rename ${c.id} &quot;New Name&quot;">rename</code>
