@@ -74,6 +74,30 @@
   --color-blue-700: #81a1c1;   /* nord10 */
 }
 
+/* ── Custom scrollbar ──
+ * Uses CSS variables so color adapts to theme automatically.
+ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-slate-200);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-slate-400);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-slate-200) transparent;
+}
+
 /* ── Font toggle (Settings page) ──
  * data-font="serif" applies PT Serif everywhere (body level).
  * Monospace and code elements are excluded.
