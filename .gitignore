@@ -29,3 +29,6 @@ waypoint
 .pi/
 .docs/
 *.tar.gz
+
+# Vite
+web/.vite/
