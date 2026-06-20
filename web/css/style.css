@@ -317,29 +317,128 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .stat-card {
   background: var(--card-bg); border-radius: var(--radius-md); padding: 10px 12px;
-  border: 1px solid var(--border-color); text-align: center;
+  border: 1px solid var(--border-color);
 }
 .stat-card:hover { border-color: var(--accent); }
-.stat-card .stat-value { font-size: 18px; font-weight: 700; line-height: 1.2; }
-.stat-card .stat-label { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
-.dashboard-charts {
+.stat-card .stat-header { margin-bottom: 4px; }
+.stat-card .stat-label {
+  font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.06em; font-weight: 500;
+}
+.stat-card .stat-row {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+}
+.stat-card .stat-value {
+  font-size: 22px; font-weight: 700; line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.stat-card .stat-value--accent { color: var(--accent); }
+.stat-card .stat-sparkline { flex-shrink: 0; align-self: center; }
+.stat-card .stat-delta {
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.stat-card .stat-delta.positive { color: #A3BE8C; }
+.stat-card .stat-delta.negative { color: #BF616A; }
+.stat-card .stat-detail {
+  font-size: 11px; color: var(--text-muted); margin-left: auto; white-space: nowrap;
+}
+.dashboard-two-col {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-bottom: 12px;
+}
+.dashboard-col-left,
+.dashboard-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .chart-card {
   background: var(--card-bg); border-radius: var(--radius-md); padding: 12px;
   border: 1px solid var(--border-color);
 }
 .chart-card h4 {
-  font-size: 11px; font-weight: 600; margin-bottom: 6px;
-  color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px;
+  font-size: 11px; font-weight: 500; margin-bottom: 8px;
+  color: var(--text-muted); letter-spacing: 0.04em;
 }
 .chart-card canvas {
-  max-height: 180px;
+  max-height: 200px;
   width: 100% !important;
 }
+
+/* Category table */
+.cat-table-wrap { overflow-x: auto; }
+.cat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.cat-table th {
+  font-size: 10px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted);
+  padding: 4px 8px 6px; text-align: right;
+  border-bottom: 1px solid var(--border-color);
+}
+.cat-table .cat-th-left { text-align: left; }
+.cat-table td {
+  padding: 5px 8px; text-align: right;
+  border-bottom: 1px solid var(--border-light);
+}
+.cat-table .cat-td-left { text-align: left; font-weight: 500; }
+.cat-table .cat-td-num { font-variant-numeric: tabular-nums; }
+.cat-table .cat-td-accent { color: var(--accent); font-weight: 700; }
+.cat-table tbody tr:hover { background: var(--bg-secondary); }
+
+/* Deadlines */
+.deadline-item {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 6px 0; border-bottom: 1px solid var(--border-light); font-size: 12px;
+}
+.deadline-item:last-child { border-bottom: none; }
+.deadline-main { display: flex; flex-direction: column; gap: 1px; }
+.deadline-company { font-weight: 600; color: var(--text-primary); text-decoration: none; }
+.deadline-company:hover { color: var(--accent); }
+.deadline-position { color: var(--text-muted); font-size: 11px; }
+.deadline-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.deadline-date { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 11px; }
+.deadline-days { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.deadline-urgent { color: #D08770; }
+.deadline-past { color: #BF616A; }
+.deadline-ok { color: #A3BE8C; }
+
+/* Stale applications (needs follow-up) */
+.chart-card--alert {
+  border-color: #D08770;
+  border-width: 1px;
+}
+.alert-badge {
+  display: inline-block;
+  background: #D08770;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 0 6px;
+  line-height: 16px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.stale-list { max-height: 200px; overflow-y: auto; }
+.stale-item {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 5px 0; border-bottom: 1px solid var(--border-light); font-size: 12px;
+}
+.stale-item:last-child { border-bottom: none; }
+.stale-item.stale-critical .stale-days { color: #BF616A; font-weight: 700; }
+.stale-item.stale-warning .stale-days { color: #D08770; }
+.stale-main { display: flex; flex-direction: column; gap: 1px; }
+.stale-company { font-weight: 600; color: var(--text-primary); text-decoration: none; }
+.stale-company:hover { color: var(--accent); }
+.stale-position { color: var(--text-muted); font-size: 11px; }
+.stale-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.stale-days { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; }
+.stale-since { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 10px; }
 .dashboard-recent {
   background: var(--card-bg); border-radius: var(--radius-md); padding: 12px 16px;
   border: 1px solid var(--border-color);
@@ -637,7 +736,7 @@ textarea { resize: vertical; min-height: 80px; }
 /* === Responsive === */
 @media (max-width: 1024px) {
   .dashboard-stats { grid-template-columns: repeat(3, 1fr); }
-  .dashboard-charts { grid-template-columns: 1fr 1fr; }
+  .dashboard-two-col { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
   #sidebar { display: none; }
@@ -647,7 +746,7 @@ textarea { resize: vertical; min-height: 80px; }
   .search-box input:focus { width: 160px; }
   #search-dropdown { position: fixed; top: 60px; left: 12px; right: 12px; width: auto; }
   .dashboard-stats { grid-template-columns: repeat(2, 1fr); }
-  .dashboard-charts { grid-template-columns: 1fr; }
+  .dashboard-two-col { grid-template-columns: 1fr; }
   .kanban-board { flex-direction: column; }
   .kanban-column { max-width: 100%; }
   .form-row { flex-direction: column; }

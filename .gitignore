@@ -26,3 +26,5 @@ waypoint
 .idea/
 *.swp
 .playwright-mcp/
+.pi/
+*.tar.gz
