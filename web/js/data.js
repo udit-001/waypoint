@@ -25,17 +25,17 @@ const DB = {
   },
 
   addJob(job) {
-    UI.showToast('Use the CLI to add jobs: waypoint add "Company" "Position"', 'info');
+    UI.showToast('Use the CLI to add jobs: waypoint jobs add "Company" "Position"', 'info');
     return Promise.resolve(job);
   },
 
   updateJob(id, updates) {
-    UI.showToast('Use the CLI to update jobs: waypoint update ' + id + ' --flag value', 'info');
+    UI.showToast('Use the CLI to update jobs: waypoint jobs update ' + id + ' --flag value', 'info');
     return Promise.resolve(null);
   },
 
   deleteJob(id) {
-    UI.showToast('Use the CLI to delete jobs: waypoint delete ' + id, 'info');
+    UI.showToast('Use the CLI to delete jobs: waypoint jobs delete ' + id, 'info');
     return Promise.resolve(true);
   },
 
@@ -48,12 +48,12 @@ const DB = {
   },
 
   addCategory(name) {
-    UI.showToast('Use the CLI: waypoint add-category "', 'info');
+    UI.showToast('Use the CLI: waypoint categories add "', 'info');
     return Promise.resolve(false);
   },
 
   deleteCategory(name) {
-    UI.showToast('Use the CLI: waypoint delete-category "', 'info');
+    UI.showToast('Use the CLI: waypoint categories delete "', 'info');
     return Promise.resolve(false);
   },
 

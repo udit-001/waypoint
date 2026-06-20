@@ -12,7 +12,7 @@ Drafts job emails from job + profile data.
 - personal note/hook: bool (yes)
 
 ## Steps
-1. `waypoint get <id>` → pull job
+1. `waypoint jobs get <id>` → pull job
 2. read profile (name, skills, exp)
 3. pick type from request
 4. draft from template below

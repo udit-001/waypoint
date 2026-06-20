@@ -8,7 +8,7 @@ const Settings = {
     const profileHtml = profile ? `
       <div class="settings-section">
         <h3>${icon('user', 20)} User Profile</h3>
-        <p class="text-muted text-sm mb-8" style="margin-bottom:16px;line-height:1.6">Your profile is managed via the CLI. Use <code>waypoint update-profile --help</code> to see available options.</p>
+        <p class="text-muted text-sm mb-8" style="margin-bottom:16px;line-height:1.6">Your profile is managed via the CLI. Use <code>waypoint profile --help</code> to see available options.</p>
         <div class="settings-grid">
           <div class="form-group"><label>Full Name</label><div class="readonly-field">${UI.escapeHtml(profile.name || '-')}</div></div>
           <div class="form-group"><label>Email</label><div class="readonly-field">${UI.escapeHtml(profile.email || '-')}</div></div>
@@ -55,12 +55,12 @@ const Settings = {
       <div class="settings-section">
         <h3>${icon('terminal', 20)} CLI Quick Reference</h3>
         <pre style="background:var(--bg-secondary);padding:16px;border-radius:8px;font-size:13px;line-height:1.7;overflow-x:auto">
-  waypoint add "Company" "Position" --status Applied --category Tech
-  waypoint list --status Applied
-  waypoint update 42 --status Offer --notes "Got the offer!"
-  waypoint delete 42
-  waypoint stats
-  waypoint get 42 --history
+  waypoint jobs add "Company" "Position" --status Applied --category Tech
+  waypoint jobs list --status Applied
+  waypoint jobs update 42 --status Offer --notes "Got the offer!"
+  waypoint jobs delete 42
+  waypoint jobs stats
+  waypoint jobs get 42 --history
         </pre>
       </div>
     `;

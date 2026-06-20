@@ -14,7 +14,7 @@ Scores resume vs a job posting, finds keyword gaps, suggests fixes.
 - **detailed**: execSummary · categoryBreakdown · keywordDensity · competitorComparison · improvementPlan
 
 ## Steps
-1. `waypoint get <id>` — posting in `url`/`notes`
+1. `waypoint jobs get <id>` — posting in `url`/`notes`
 2. read profile/resume
 3. extract keywords, compare, score per category
 4. report ≤8 recs + quick wins

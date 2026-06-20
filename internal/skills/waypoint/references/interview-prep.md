@@ -18,7 +18,7 @@ Counts by level: Junior 8 · Mid 10 · Senior 12 · Lead 15. Max 5/section.
 - **full prep**: technical + sample answers
 
 ## Steps
-1. `waypoint get <id>`
+1. `waypoint jobs get <id>`
 2. read profile
 3. gen questions for type; add company research checklist (mission, products, stack, culture)
 4. if answers on → draft self-intro, STAR pitch, smart Qs to ask

@@ -196,9 +196,9 @@ const App = {
         <div class="job-detail-section">
           <h4>CLI Quick Actions</h4>
           <pre style="background:var(--bg-secondary);padding:12px;border-radius:6px;font-size:13px;line-height:1.6">
-  waypoint update ${jobId} --status "Offer" --notes "New status"
-  waypoint update ${jobId} --notes "Add a note here"
-  waypoint delete ${jobId}</pre>
+  waypoint jobs update ${jobId} --status "Offer" --notes "New status"
+  waypoint jobs update ${jobId} --notes "Add a note here"
+  waypoint jobs delete ${jobId}</pre>
         </div>
       </div>
     `;

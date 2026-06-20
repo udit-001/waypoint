@@ -17,7 +17,7 @@ Always: contact header + signature.
 - **Executive** — "Dear {{company}} Leadership Team": title-ref → strategic intro → leadership → vision → culture-fit → closing. Words: strategic, visionary, transformational.
 
 ## Steps
-1. `waypoint get <id>`
+1. `waypoint jobs get <id>`
 2. read profile
 3. pick tone + length
 4. draft following structure; swap `{{company}}`

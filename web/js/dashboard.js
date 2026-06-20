@@ -51,7 +51,7 @@ const Dashboard = {
           </div>
           <h3 style="font-size:22px;margin-bottom:8px">Welcome to Waypoint</h3>
           <p style="font-size:15px;max-width:400px;margin:0 auto 24px;line-height:1.6">Your job applications appear here. Use the CLI to add them:</p>
-          <pre style="background:var(--bg-secondary);padding:12px 20px;border-radius:8px;font-size:14px;display:inline-block;margin-bottom:24px">waypoint add "Company" "Position"</pre>
+          <pre style="background:var(--bg-secondary);padding:12px 20px;border-radius:8px;font-size:14px;display:inline-block;margin-bottom:24px">waypoint jobs add "Company" "Position"</pre>
           <p class="text-muted" style="font-size:13px">Then reload this page</p>
         </div>
       `;
