@@ -12,13 +12,13 @@ Data mutations happen through the CLI; the web UI is a read-only dashboard.
 ### From a release (curl pipe)
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/SwatiBio/Job-tracker/main/install.sh | sh
+curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh
 ```
 
 To install a specific version:
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/SwatiBio/Job-tracker/main/install.sh | sh -s -- v0.1.0
+curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh -s -- v0.1.0
 ```
 
 ### With Go (recommended)
@@ -30,8 +30,8 @@ go install github.com/SwatiBio/waypoint/cmd/waypoint@latest
 ### From source
 
 ```bash
-git clone https://github.com/SwatiBio/Job-tracker.git
-cd Job-tracker
+git clone https://github.com/SwatiBio/waypoint.git
+cd waypoint
 go build -o waypoint ./cmd/waypoint
 ```
 
