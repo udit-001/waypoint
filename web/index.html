@@ -9,6 +9,11 @@
         theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       }
       document.documentElement.dataset.theme = theme;
+
+      var font = localStorage.getItem('waypoint_font');
+      if (font) {
+        document.documentElement.dataset.font = font;
+      }
     })();
   </script>
   <meta charset="UTF-8" />

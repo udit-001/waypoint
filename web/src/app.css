@@ -75,16 +75,16 @@
 }
 
 /* ── Font toggle (Settings page) ──
- * data-font="serif" applies PT Serif to the main content area.
- * Sidebar and TopBar stay Inter (sans-serif) for UI clarity.
+ * data-font="serif" applies PT Serif everywhere (body level).
+ * Monospace and code elements are excluded.
  */
-[data-font="serif"] main,
-[data-font="serif"] main * {
+[data-font="serif"] body,
+[data-font="serif"] #app,
+[data-font="serif"] #app * {
   font-family: 'PT Serif', Georgia, 'Times New Roman', serif;
 }
-[data-font="serif"] main .font-mono,
-[data-font="serif"] main code,
-[data-font="serif"] main pre,
-[data-font="serif"] main .tabular-nums {
+[data-font="serif"] .font-mono,
+[data-font="serif"] code,
+[data-font="serif"] pre {
   font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
 }
