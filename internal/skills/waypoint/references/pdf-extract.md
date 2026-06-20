@@ -1,71 +1,51 @@
 # PDF Text Extraction
 
-## 0. Prerequisites
+## Prerequisites
 
-Needs poppler (`pdftotext`, `pdftoppm`). If missing, install:
+Needs poppler (`pdftotext`, `pdftoppm`). If missing:
 
-| OS | Command |
+| OS | Install |
 |-----|--------|
 | macOS | `brew install poppler` |
 | Ubuntu/Debian | `sudo apt install poppler-utils` |
 | Fedora | `sudo dnf install poppler-utils` |
 | Arch | `sudo pacman -S poppler` |
-| Windows | `winget install poppler` or `choco install poppler` or `scoop install poppler` |
+| Windows | `winget install poppler` / `choco install poppler` / `scoop install poppler` |
 
 Check: `pdftotext -v 2>&1 | head -1`
 
-## 1. Try pdftotext first
+## 1. pdftotext
 
 ```bash
-# extract to stdout
-pdftotext <file.pdf> -
-
-# first N lines
-pdftotext <file.pdf> - | head -200
-
-# extract to file
-pdftotext <file.pdf> /tmp/extracted.txt
+pdftotext <file.pdf> -              # stdout
+pdftotext <file.pdf> - | head -200  # first N lines
+pdftotext <file.pdf> /tmp/out.txt   # to file
 ```
 
-Check if output is readable. If empty/garbled → step 2.
+Empty/garbled → step 2.
 
-## 2. PDF to image → vision model
+## 2. PDF → image → vision model
 
-If `pdftoppm` (poppler) available and a vision model is accessible:
+If `pdftoppm` + vision model available:
 
 ```bash
-# convert pages to PNGs
-pdftoppm -png -r 200 file.pdf /tmp/pdf-page
-
-# produces /tmp/pdf-page-1.png, /tmp/pdf-page-2.png, etc.
+pdftoppm -png -r 200 file.pdf /tmp/pdf-page   # all pages
+pdftoppm -png -r 200 -f 1 -l 1 file.pdf /tmp/pdf-page  # page 1 only
+pdftoppm -png -r 200 -f 1 -l 3 file.pdf /tmp/pdf-page  # pages 1-3
 ```
 
-Then send images to vision model with prompt like "Extract all text from this document. Include headings, lists, and tables."
+Send PNGs to vision model: "Extract all text. Include headings, lists, tables."
 
-For multi-page PDFs, process pages in batches or concatenate:
-```bash
-# single page
-pdftoppm -png -r 200 -f 1 -l 1 file.pdf /tmp/pdf-page
-
-# pages 1-3
-pdftoppm -png -r 200 -f 1 -l 3 file.pdf /tmp/pdf-page
-```
-
-## 3. Pipe into waypoint
+## 3. Into waypoint
 
 ```bash
-# add notes from extracted text
 waypoint jobs update <id> --notes "$(pdftotext file.pdf - | head -100)"
-
-# or save as artifact
-pdftotext file.pdf /tmp/job-posting.txt
-waypoint artifacts add --skill resume-optimizer --title "Job Posting" -f /tmp/job-posting.txt --job <id>
+pdftotext file.pdf /tmp/posting.txt && waypoint artifacts add --skill resume-optimizer --title "Job Posting" -f /tmp/posting.txt --job <id>
 ```
 
 ## Remote PDFs
 
-Exa can't fetch PDFs (403s common). Download first:
+Exa can't fetch PDFs. Download first:
 ```bash
-curl -sL -o /tmp/dl.pdf "<url>"
-pdftotext /tmp/dl.pdf - | head -200
+curl -sL -o /tmp/dl.pdf "<url>" && pdftotext /tmp/dl.pdf - | head -200
 ```

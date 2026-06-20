@@ -7,64 +7,51 @@ description: Job application tracker CLI
 
 ## First-run
 
-Run at start of any waypoint conversation:
+At conversation start:
 ```bash
 waypoint jobs stats --json && waypoint profile show --json
 ```
 
 - `total: 0` + empty `name` → fresh install. Ask conversational questions, run commands yourself:
-  1. "What's your name and what roles are you targeting?" → `profile set --name "..." --title "..." --skills '["..."]'`
-  2. "Any jobs you're already tracking?" → `jobs add "..." "..." --status "..."` for each
-  3. "Want to see the dashboard?" → `start`
-- `total: 0` + has name → no jobs yet, ask if they want to add one
-- Profile incomplete but jobs exist → ask just the missing fields
+  1. "Name and roles you're targeting?" → `profile set --name "..." --title "..." --skills '["..."]'`
+  2. "Jobs already tracking?" → `jobs add "..." "..." --status "..."` per job
+  3. "See dashboard?" → `start`
+- `total: 0` + has name → no jobs yet, ask if they want to add
+- Profile incomplete + jobs exist → ask just missing fields
 
-## Before generating content
+## Before generating
 
 ### 0. Add the job (if not tracked)
 
-If user mentions a new job, `read` [job-extract](references/job-extract.md) to parse details from URL, PDF, or text into `jobs add` flags.
+`read` [job-extract](references/job-extract.md) — parse details from URL, PDF, or text → `jobs add` flags.
 
 ### 1. Resolve the job
 
-No job ID given? Search:
+No job ID? Search:
 ```bash
 waypoint jobs list --search "<company or role>" --json
 ```
-Found → use ID. Multiple → ask user to pick. None → ask for details, `jobs add`.
+Found → use ID. Multiple → ask user. None → `jobs add`.
 
 ### 2. Profile must be complete
 
-`name`, `title`, `skills` must be non-empty. If missing → ask user to fill before generating. Content quality depends on profile data.
-
+`name`, `title`, `skills` must be non-empty. Missing → ask before generating.
 ```bash
 waypoint profile set --name "Jane Doe" --title "Senior Engineer" --skills '["Go","React","AWS"]'
 ```
 
-Job resolved + profile complete → `read` the skill reference and generate.
+Job resolved + profile complete → `read` skill reference and generate.
 
 ### 3. After saving
 
-Suggest a natural next step:
 - Cover letter → "Follow-up email too?"
 - Interview prep → "Career summary as well?"
-- First artifact → "`waypoint start` to see it in the web UI"
+- First artifact → "`waypoint start` to see in web UI"
 
-# External Data Sources
+## External data
 
-## Exa search (if MCP connected)
-
-`read` [exa-search](references/exa-search.md) for company/people research patterns. Use findings to personalize content, save contacts via `jobs update --contact` / `--notes`.
-
-## PDFs
-
-If `pdftotext` (poppler) is available, extract text from PDFs for job details:
-
-```bash
-pdftotext <file.pdf> - | head -200
-```
-
-Useful for job postings, company dossiers, research papers saved as PDFs. Pipe output to `--notes` or `jobs add`.
+- **Exa MCP** → `read` [exa-search](references/exa-search.md) for company/people intel. Save via `jobs update --contact` / `--notes`
+- **PDFs** → `read` [pdf-extract](references/pdf-extract.md) if `pdftotext` available
 
 ## Commands
 
@@ -88,7 +75,7 @@ Useful for job postings, company dossiers, research papers saved as PDFs. Pipe o
 
 All: `--db <path>`, `--json`.
 
-## Skill references
+## References
 
 | Ref | Output |
 |-----|--------|
@@ -98,19 +85,19 @@ All: `--db <path>`, `--json`.
 | [interview-prep](references/interview-prep.md) | role Q&A + research checklist |
 | [career-summary](references/career-summary.md) | resume summary in 5 styles |
 | [statement-of-purpose](references/statement-of-purpose.md) | SOP in 4 tones |
+| [job-extract](references/job-extract.md) | parse job from URL/PDF/text → jobs add |
 | [exa-search](references/exa-search.md) | company/people research (if exa MCP) |
 | [pdf-extract](references/pdf-extract.md) | extract text from PDFs (if pdftotext) |
-| [job-extract](references/job-extract.md) | parse job details from URL/PDF/text into jobs add |
 
 ## Save as artifacts
 
 Always use `-f` — no shell escaping, linked to job, visible in web UI.
 
 ```bash
-waypoint artifacts add --skill cover-letter --title "Cover for Google" -f /tmp/cover.txt --job 3       # single variant
-waypoint artifacts add --skill email-generator --title "Follow-up" -f /tmp/email.txt --variant-label Casual --job 3  # custom label
-waypoint artifacts add --skill cover-letter --title "Cover" --variants-file /tmp/variants.json --job 3 # multi-variant JSON
-waypoint artifacts add --skill interview-prep --title-file /tmp/title.txt -f /tmp/prep.md --job 3      # title from file
+waypoint artifacts add --skill cover-letter --title "Cover for Google" -f /tmp/cover.txt --job 3
+waypoint artifacts add --skill email-generator --title "Follow-up" -f /tmp/email.txt --variant-label Casual --job 3
+waypoint artifacts add --skill cover-letter --title "Cover" --variants-file /tmp/variants.json --job 3
+waypoint artifacts add --skill interview-prep --title-file /tmp/title.txt -f /tmp/prep.md --job 3
 ```
 
 Skill IDs: `email-generator` `cover-letter` `resume-optimizer` `interview-prep` `career-summary` `statement-of-purpose`
@@ -122,7 +109,6 @@ View: `artifacts list` · `artifacts list --job 3` · `artifacts list --skill co
 waypoint jobs add "Google" "SWE" --status Applied --date 2026-06-20
 waypoint jobs list --search python --category Tech
 waypoint jobs update 1 --status Rejected
-waypoint jobs stats
 waypoint artifacts add --skill cover-letter --title "Cover" -f /tmp/cover.txt --job 1
 waypoint start --port 8080
 ```
