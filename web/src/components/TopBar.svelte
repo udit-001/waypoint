@@ -83,7 +83,7 @@
 <header class="flex items-center justify-between gap-4 min-h-10 px-6 py-1.5 bg-stone-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
   <div class="flex items-center gap-4">
     <button
-      class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
+      class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center"
       onclick={onToggleSidebar}
       title="Toggle Sidebar"
     >
@@ -149,7 +149,7 @@
 
     {#if router.current.route === 'dashboard' || router.current.route === 'kanban' || router.current.route === 'table'}
       <button
-        class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer relative"
+        class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer relative inline-flex items-center justify-center"
         onclick={filter.toggle}
         title="Toggle Filters"
       >
@@ -160,7 +160,7 @@
       </button>
     {/if}
     <button
-      class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
+      class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center"
       onclick={toggleTheme}
       title="Toggle Theme"
     >
