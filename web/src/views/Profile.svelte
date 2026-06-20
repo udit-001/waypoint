@@ -1,4 +1,5 @@
 <script>
+import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
   import * as api from '../stores/api.svelte.js';
@@ -6,6 +7,8 @@
   let profileData = $state(null);
 
   onMount(async () => {
+    setPage({ title: 'Profile' });
+
     await api.profile.ensure();
     profileData = api.profile.value;
   });

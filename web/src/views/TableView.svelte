@@ -1,4 +1,5 @@
 <script>
+import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
@@ -32,6 +33,8 @@
   };
 
   onMount(async () => {
+    setPage({ title: 'TableView' });
+
     await Promise.all([api.jobs.ensure(), api.categories.ensure()]);
     cats = api.categories.value || [];
     jobs = api.jobs.value || [];

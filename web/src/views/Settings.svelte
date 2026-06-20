@@ -1,4 +1,5 @@
 <script>
+import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
   import * as api from '../stores/api.svelte.js';
@@ -7,6 +8,8 @@
   let currentFont = $state('serif');
 
   onMount(async () => {
+    setPage({ title: 'Settings' });
+
     await api.settings.ensure();
     settingsData = api.settings.value;
     currentFont = document.documentElement.dataset.font || localStorage.getItem('waypoint_font') || 'serif';

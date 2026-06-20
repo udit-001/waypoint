@@ -1,4 +1,5 @@
 <script>
+import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
@@ -9,6 +10,8 @@
   let jobCounts = $state({});
 
   onMount(async () => {
+    setPage({ title: 'Categories' });
+
     await Promise.all([api.categories.ensure(), api.jobs.ensure()]);
     cats = api.categories.value || [];
 

@@ -1,4 +1,5 @@
 <script>
+import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
@@ -78,6 +79,8 @@
   });
 
   onMount(async () => {
+    setPage({ title: 'Dashboard' });
+
     await Promise.all([api.jobs.ensure(), api.history.ensure()]);
     jobs = api.jobs.value || [];
     allHistory = api.history.value || [];

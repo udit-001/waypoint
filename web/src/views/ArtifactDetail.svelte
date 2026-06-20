@@ -3,6 +3,7 @@
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
+  import { setPage } from '../stores/page.svelte.js';
 
   import { skillLabel } from '../stores/skillMeta.js';
 
@@ -18,6 +19,13 @@
     art = await api.getArtifact(parseInt(id));
     if (!art) { router.navigate('/artifacts'); return; }
     loading = false;
+    setPage({
+      title: art.title || 'Artifact',
+      breadcrumbs: [
+        { label: 'Artifacts', action: () => router.navigate('/artifacts') },
+        { label: art.title || 'Artifact' },
+      ],
+    });
   });
 
   function formatDate(d) {

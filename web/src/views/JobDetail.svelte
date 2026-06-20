@@ -3,6 +3,7 @@
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
+  import { setPage } from '../stores/page.svelte.js';
   import { marked } from 'marked';
 
   function renderMarkdown(text) {
@@ -26,6 +27,13 @@
     if (!job) { router.navigate('/'); return; }
     history = await api.getJobHistory(job.id);
     loading = false;
+    setPage({
+      title: `${job.company} — ${job.position}`,
+      breadcrumbs: [
+        { label: 'Jobs', action: () => router.navigate('/table') },
+        { label: `${job.company} — ${job.position}` },
+      ],
+    });
   });
 
   function formatDate(d) {

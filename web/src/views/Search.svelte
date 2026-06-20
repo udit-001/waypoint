@@ -1,10 +1,12 @@
 <script>
+  import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
 
+  onMount(() => { setPage({ title: 'Search' }); });
   const skillLabels = {
     'email-generator': 'Email',
     'cover-letter': 'Cover Letter',

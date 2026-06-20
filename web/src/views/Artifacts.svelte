@@ -1,4 +1,5 @@
 <script>
+import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
@@ -9,6 +10,8 @@
   let artifactsList = $state([]);
 
   onMount(async () => {
+    setPage({ title: 'Artifacts' });
+
     await api.artifacts.ensure();
     artifactsList = api.artifacts.value || [];
   });

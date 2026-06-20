@@ -1,6 +1,9 @@
 <script>
+  import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
   import * as api from '../stores/api.svelte.js';
+
+  onMount(() => { setPage({ title: 'AI Integration' }); });
 
   const agents = [
     { id: 'pi.dev', name: 'Pi', dir: '.pi/skills/waypoint' },

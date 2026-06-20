@@ -1,4 +1,5 @@
 <script>
+import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
@@ -17,6 +18,8 @@
   let allJobs = $state([]);
 
   onMount(async () => {
+    setPage({ title: 'Kanban' });
+
     await api.jobs.ensure();
     allJobs = api.jobs.value || [];
   });
