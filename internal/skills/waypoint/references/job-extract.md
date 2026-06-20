@@ -73,6 +73,7 @@ exa_web_search_advanced_exa { query: "category:company Stripe", numResults: 3 }
 exa_web_search_exa { query: "Stripe careers open roles engineering", numResults: 5 }
 → ask which role → jobs add "Stripe" "<role>" --category Tech
 → exa people search → jobs update <id> --contact "..."
+→ exa news/relationships for intel → jobs update <id> --notes "..."
 ```
 
 ## After adding
