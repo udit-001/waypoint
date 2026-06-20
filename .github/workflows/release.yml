@@ -34,7 +34,7 @@ jobs:
       - name: Build frontend
         run: |
           cd web
-          pnpm install --frozen-lockfile --config.minimum-release-age=7d
+          pnpm install --frozen-lockfile
           pnpm build
 
       - uses: actions/setup-go@v6
