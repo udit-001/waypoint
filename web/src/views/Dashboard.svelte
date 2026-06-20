@@ -6,7 +6,10 @@ import { setPage } from '../stores/page.svelte.js';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
+  import { getFilter } from '../stores/filter.svelte.js';
   import { Chart, registerables } from 'chart.js';
+
+  const filter = getFilter();
 
   Chart.register(...registerables);
 
@@ -20,10 +23,17 @@ import { setPage } from '../stores/page.svelte.js';
   let allHistory = $state([]);
   let loaded = $state(false);
 
+  // Filtered jobs based on selected category
+  let filteredJobs = $derived(
+    filter.category
+      ? (jobs || []).filter(j => j.category === filter.category)
+      : jobs || []
+  );
+
   // Derived state
   let statusCounts = $derived.by(() => {
     const counts = {};
-    (jobs || []).forEach(j => { counts[j.status] = (counts[j.status] || 0) + 1; });
+    (filteredJobs || []).forEach(j => { counts[j.status] = (counts[j.status] || 0) + 1; });
     return counts;
   });
 
@@ -57,12 +67,12 @@ import { setPage } from '../stores/page.svelte.js';
   // Week-over-week
   let thisWeek = $derived.by(() => {
     const weekAgo = new Date(Date.now() - 7 * 86400000);
-    return (jobs || []).filter(j => j.appliedDate && new Date(j.appliedDate) >= weekAgo).length;
+    return (filteredJobs || []).filter(j => j.appliedDate && new Date(j.appliedDate) >= weekAgo).length;
   });
   let lastWeek = $derived.by(() => {
     const weekAgo = new Date(Date.now() - 7 * 86400000);
     const twoWeeksAgo = new Date(Date.now() - 14 * 86400000);
-    return (jobs || []).filter(j => j.appliedDate && new Date(j.appliedDate) >= twoWeeksAgo && new Date(j.appliedDate) < weekAgo).length;
+    return (filteredJobs || []).filter(j => j.appliedDate && new Date(j.appliedDate) >= twoWeeksAgo && new Date(j.appliedDate) < weekAgo).length;
   });
   let weekDelta = $derived(lastWeek > 0 ? Math.round((thisWeek - lastWeek) / lastWeek * 100) : (thisWeek > 0 ? 100 : 0));
 
@@ -325,6 +335,12 @@ import { setPage } from '../stores/page.svelte.js';
     <pre class="inline-block bg-slate-100 px-5 py-3 rounded-lg text-sm mb-6">waypoint jobs add "Company" "Position"</pre>
     <p class="text-xs">Then reload this page</p>
   </div>
+{:else if filteredJobs.length === 0 && filter.category}
+  <div class="text-center py-20 text-slate-400">
+    <div class="text-4xl mb-4">{@html iconSvg("search", 48)}</div>
+    <h3 class="text-lg font-semibold text-slate-600 mb-1">No jobs match &ldquo;{filter.category}&rdquo;</h3>
+    <p class="text-sm">Try selecting a different category filter.</p>
+  </div>
 {:else}
   <div class="space-y-3">
     <!-- Stat cards -->
@@ -332,7 +348,7 @@ import { setPage } from '../stores/page.svelte.js';
       <div class="bg-white rounded-lg border border-slate-200 p-3 hover:border-slate-400 transition-colors">
         <div class="text-xs uppercase tracking-wide text-slate-400 font-medium">Total Applications</div>
         <div class="flex items-baseline gap-2 mt-1">
-          <span class="text-2xl font-bold text-slate-800 tabular-nums">{jobs.length}</span>
+          <span class="text-2xl font-bold text-slate-800 tabular-nums">{filteredJobs.length}</span>
           {#if weekDelta !== 0}
             <span class="text-xs font-semibold {weekDelta > 0 ? 'text-emerald-600' : 'text-red-600'}">{weekDelta > 0 ? '+' : ''}{weekDelta}%</span>
           {/if}
