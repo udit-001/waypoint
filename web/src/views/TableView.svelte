@@ -35,7 +35,7 @@ import { setPage } from '../stores/page.svelte.js';
   };
 
   onMount(async () => {
-    setPage({ title: 'TableView' });
+    setPage({ title: 'Table View' });
     filter.sync();
 
     await api.jobs.ensure();
