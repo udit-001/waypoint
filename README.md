@@ -4,7 +4,7 @@
 
 # Waypoint — Job Tracker
 
-A Notion-like job application tracker with a Go backend (SQLite + REST API) and a pure vanilla JS frontend.  
+A job application tracker with a Go backend (SQLite + REST API) and a pure vanilla JS frontend.  
 Data mutations happen through the CLI; the web UI is a read-only dashboard.
 
 ## Install
