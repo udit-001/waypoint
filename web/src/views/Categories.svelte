@@ -26,8 +26,7 @@ import { setPage } from '../stores/page.svelte.js';
   });
 
   function goToTable(category) {
-    // TODO: pass category filter to table view via store/query param
-    router.navigate('/table');
+    router.navigate('/table?category=' + encodeURIComponent(category));
   }
 
   async function copyCmd(cmd) {

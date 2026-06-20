@@ -124,6 +124,7 @@ import { setPage } from '../stores/page.svelte.js';
 
   onMount(async () => {
     setPage({ title: 'Dashboard' });
+    filter.sync();
 
     await Promise.all([api.jobs.ensure(), api.history.ensure()]);
     jobs = api.jobs.value || [];

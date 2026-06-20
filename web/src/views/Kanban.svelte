@@ -23,6 +23,7 @@ import { setPage } from '../stores/page.svelte.js';
 
   onMount(async () => {
     setPage({ title: 'Kanban' });
+    filter.sync();
 
     await api.jobs.ensure();
     allJobs = api.jobs.value || [];

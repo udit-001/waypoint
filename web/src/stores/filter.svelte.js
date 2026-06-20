@@ -28,6 +28,10 @@ export function getFilter() {
     get open() { return open; },
     set open(val) { open = val; },
     toggle() { open = !open; },
+    sync() {
+      category = readParam('category');
+      status = readParam('status');
+    },
     reset() {
       category = '';
       status = '';
