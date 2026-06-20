@@ -17,7 +17,6 @@ const STATIC_ASSETS = [
   '/js/dashboard.js',
   '/js/kanban.js',
   '/js/table.js',
-  '/js/timeline.js',
   '/js/search.js',
   '/js/notes.js',
   '/js/generated.js',
