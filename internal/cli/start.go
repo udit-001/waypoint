@@ -16,7 +16,7 @@ func pidFilePath() string {
 	if err != nil {
 		return "server.pid"
 	}
-	return filepath.Join(home, ".job-tracker", "server.pid")
+	return filepath.Join(home, ".waypoint", "server.pid")
 }
 
 var startFlags struct {

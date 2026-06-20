@@ -17,7 +17,7 @@ func defaultDBPath() string {
 	if err != nil {
 		return "jobtracker.db"
 	}
-	return filepath.Join(home, ".job-tracker", "jobtracker.db")
+	return filepath.Join(home, ".waypoint", "waypoint.db")
 }
 
 var (
