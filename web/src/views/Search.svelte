@@ -50,7 +50,6 @@
 </script>
 
 <div class="max-w-3xl mx-auto">
-  <h2 class="text-xl font-semibold text-slate-800 mb-4">Search</h2>
 
   <div class="flex gap-2 mb-6">
     <input
