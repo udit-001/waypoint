@@ -194,6 +194,11 @@ const App = {
             `).join('')}
         </div>
 
+        <div class="job-detail-section" id="job-artifacts-section">
+          <h4>${icon('folder', 16)} Artifacts</h4>
+          <p class="text-muted text-sm">Loading...</p>
+        </div>
+
         <div class="job-detail-section">
           <h4>CLI Quick Actions</h4>
           <pre style="background:var(--bg-secondary);padding:12px;border-radius:6px;font-size:13px;line-height:1.6">
@@ -206,6 +211,52 @@ const App = {
 
     pane.querySelector('.job-back-btn').addEventListener('click', () => {
       window.history.length > 1 ? window.history.back() : this.switchView('dashboard');
+    });
+
+    // Load linked artifacts
+    this._renderJobArtifacts(jobId);
+  },
+
+  async _renderJobArtifacts(jobId) {
+    const section = document.getElementById('job-artifacts-section');
+    if (!section) return;
+
+    const artifacts = await DB.getArtifacts(null, jobId);
+    const skillLabels = {
+      'email-generator': 'Email',
+      'cover-letter': 'Cover Letter',
+      'resume-optimizer': 'Resume Optimizer',
+      'interview-prep': 'Interview Prep',
+      'career-summary': 'Career Summary',
+    };
+
+    if (artifacts.length === 0) {
+      section.innerHTML = `<h4>${icon('folder', 16)} Artifacts</h4><p class="text-muted text-sm">No artifacts generated for this job yet.</p>`;
+      return;
+    }
+
+    section.innerHTML = `
+      <h4>${icon('folder', 16)} Artifacts (${artifacts.length})</h4>
+      <div class="job-artifact-list">
+        ${artifacts.map(a => {
+          let variants = [];
+          try { variants = JSON.parse(a.variants || '[]'); } catch { variants = []; }
+          return `
+            <div class="job-artifact-item" data-artifact-id="${a.id}" style="cursor:pointer">
+              <span class="gen-skill-badge">${skillLabels[a.skillId] || a.skillId}</span>
+              <span class="job-artifact-title">${UI.escapeHtml(a.title)}</span>
+              <span class="job-artifact-variants">${variants.length} variant${variants.length === 1 ? '' : 's'}</span>
+              <span class="job-artifact-date">${UI.formatDate(a.createdAt)}</span>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    section.querySelectorAll('.job-artifact-item').forEach(el => {
+      el.addEventListener('click', () => {
+        this.switchView('generated');
+      });
     });
   },
 
