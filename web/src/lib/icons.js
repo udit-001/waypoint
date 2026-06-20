@@ -58,7 +58,7 @@ export function iconSvg(name, size = 20) {
   const sw = size <= 16 ? 1.5 : 2;
   const offset = size <= 16 ? 1 : 1.5;
   // Duotone: two stacked SVGs — back layer offset with accent, front layer currentColor
-  return `<span style="display:inline-flex;position:relative;width:${size}px;height:${size}px;line-height:0;flex-shrink:0">
+  return `<span style="display:inline-flex;position:relative;width:${size}px;height:${size}px;line-height:0;flex-shrink:0;vertical-align:middle">
     <svg viewBox="0 0 24 24" width="${size}" height="${size}" stroke="var(--color-slate-400,#81a1c1)" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none" style="position:absolute;top:${offset}px;left:${-offset}px;opacity:0.5">${p}</svg>
     <svg viewBox="0 0 24 24" width="${size}" height="${size}" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none" style="position:absolute;top:0;left:0">${p}</svg>
   </span>`;
