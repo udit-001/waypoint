@@ -44,8 +44,8 @@ Ambiguous → ask user. Don't guess.
 ## Salary extraction
 
 Parse the salary string from the job posting into a compact value for
-`--salary`. The output must survive `waypoint upgrade` and render on the
-salary chart — keep it raw but clean, not normalised.
+`--salary`. The salary chart renders any string containing a parseable
+number — keep it raw but clean, not normalised.
 
 ### Extraction order
 
