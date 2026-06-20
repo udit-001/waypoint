@@ -21,6 +21,10 @@ waypoint jobs stats --json && waypoint profile show --json
 
 ## Before generating content
 
+### 0. Add the job (if not tracked)
+
+If user mentions a new job, `read` [job-extract](references/job-extract.md) to parse details from URL, PDF, or text into `jobs add` flags.
+
 ### 1. Resolve the job
 
 No job ID given? Search:
@@ -96,6 +100,7 @@ All: `--db <path>`, `--json`.
 | [statement-of-purpose](references/statement-of-purpose.md) | SOP in 4 tones |
 | [exa-search](references/exa-search.md) | company/people research (if exa MCP) |
 | [pdf-extract](references/pdf-extract.md) | extract text from PDFs (if pdftotext) |
+| [job-extract](references/job-extract.md) | parse job details from URL/PDF/text into jobs add |
 
 ## Save as artifacts
 
