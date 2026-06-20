@@ -397,8 +397,37 @@ textarea { resize: vertical; min-height: 80px; }
 .history-item .history-from { color: var(--danger); text-decoration: line-through; margin-right: 4px; }
 .history-item .history-to { color: var(--success); }
 
-/* === Skills === */
+/* === AI Integration (formerly Skills) === */
 .skills-container { max-width: 800px; margin: 0 auto; }
+
+/* Install section */
+.ai-install-section {
+  background: var(--card-bg); border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg); padding: 20px; margin-bottom: 24px;
+}
+.ai-install-section h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.ai-install-section p { margin-bottom: 12px; }
+.ai-install-cmd {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg); border: 1px solid var(--border-color);
+  border-radius: var(--radius); padding: 10px 14px;
+  font-family: var(--font-mono, monospace); font-size: 13px;
+}
+.ai-install-cmd code { flex: 1; }
+.ai-agent-pills {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px;
+}
+.ai-agent-pill {
+  background: var(--bg); border: 1px solid var(--border-color);
+  border-radius: 99px; padding: 4px 12px; font-size: 12px; cursor: pointer;
+  transition: all var(--transition);
+}
+.ai-agent-pill:hover { border-color: var(--accent); }
+.ai-agent-pill.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+
+/* Skill cards */
 .skill-card {
   background: var(--card-bg); border: 1px solid var(--border-color);
   border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px;
@@ -408,7 +437,12 @@ textarea { resize: vertical; min-height: 80px; }
 .skill-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
 .skill-card-header h3 { font-size: 16px; font-weight: 600; }
 .skill-card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
-.skill-card .skill-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+.skill-card .skill-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.skill-tag {
+  background: var(--bg); border: 1px solid var(--border-color);
+  border-radius: 99px; padding: 2px 10px;
+  font-size: 11px; color: var(--text-muted);
+}
 .skill-generate-btn { width: 100%; }
 
 /* === Generated Content === */
