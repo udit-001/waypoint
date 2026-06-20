@@ -491,6 +491,31 @@ textarea { resize: vertical; min-height: 80px; }
 .job-artifact-variants { font-size: 11px; color: var(--text-muted); }
 .job-artifact-date { font-size: 11px; color: var(--text-muted); }
 
+/* === Artifact Detail Page === */
+.artifact-detail-page { max-width: 800px; margin: 0 auto; }
+.artifact-detail-header { margin-bottom: 20px; }
+.artifact-variant-tabs {
+  display: flex; gap: 4px; border-bottom: 1px solid var(--border-color);
+  margin-bottom: 0; overflow-x: auto;
+}
+.artifact-variant-tab {
+  background: none; border: none; cursor: pointer;
+  padding: 8px 16px; font-size: 13px; color: var(--text-muted);
+  border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.artifact-variant-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+.artifact-variant-pane.hidden { display: none; }
+.artifact-variant-content {
+  font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+  background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+  padding: 24px; margin: 16px 0;
+}
+.artifact-detail-section {
+  background: var(--card-bg); border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg); padding: 16px 20px; margin-top: 16px;
+}
+.artifact-detail-section h4 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+
 /* === Categories Page === */
 .cat-cli-box {
   background: var(--card-bg); border: 1px solid var(--border-color);

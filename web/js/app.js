@@ -3,11 +3,12 @@ const App = {
   currentView: null,
   currentCategory: 'all',
   currentJobId: null,
+  currentArtifactId: null,
   searchQuery: '',
   advancedFilters: null,
   tableCategoryFilter: null,
 
-  _views: ['dashboard', 'kanban', 'table', 'timeline', 'categories', 'profile', 'skills', 'artifacts', 'settings', 'job'],
+  _views: ['dashboard', 'kanban', 'table', 'timeline', 'categories', 'profile', 'skills', 'artifacts', 'settings', 'job', 'artifact'],
 
   async init() {
     const settings = await DB.getSettings();
@@ -50,6 +51,11 @@ const App = {
       this._pendingJobId = parseInt(jobMatch[1], 10);
       return 'job';
     }
+    const artifactMatch = path.match(/^artifact\/(\d+)$/);
+    if (artifactMatch) {
+      this._pendingArtifactId = parseInt(artifactMatch[1], 10);
+      return 'artifact';
+    }
     if (this._views.includes(path)) return path;
     return null;
   },
@@ -57,22 +63,27 @@ const App = {
   async _switchToView(view, pushHistory) {
     if (!view) return;
 
-    // Allow re-entering 'job' view for different jobs
-    if (view !== 'job' && this.currentView === view) return;
+    // Allow re-entering 'job'/'artifact' view for different IDs
+    if (view !== 'job' && view !== 'artifact' && this.currentView === view) return;
 
     const prevView = this.currentView;
     this.currentView = view;
 
-    // Resolve pending job ID from URL
+    // Resolve pending IDs from URL
     if (view === 'job' && this._pendingJobId) {
       this.currentJobId = this._pendingJobId;
       this._pendingJobId = null;
+    }
+    if (view === 'artifact' && this._pendingArtifactId) {
+      this.currentArtifactId = this._pendingArtifactId;
+      this._pendingArtifactId = null;
     }
 
     if (pushHistory) {
       let path;
       if (view === 'dashboard') path = '/';
       else if (view === 'job') path = '/job/' + this.currentJobId;
+      else if (view === 'artifact') path = '/artifact/' + this.currentArtifactId;
       else path = '/' + view;
       history.pushState({ view }, '', path);
     }
@@ -82,22 +93,23 @@ const App = {
       dashboard: 'Dashboard', kanban: 'Kanban Board', table: 'Table View',
       timeline: 'Timeline', categories: 'Categories', profile: 'Profile', skills: 'AI Integration', artifacts: 'Artifacts',
       settings: 'Settings', job: this.currentJobId ? 'Job #' + this.currentJobId : 'Job Detail',
+      artifact: this.currentArtifactId ? 'Artifact #' + this.currentArtifactId : 'Artifact',
     };
     document.title = (titles[view] || 'Dashboard') + ' — Waypoint';
 
     // View panes
     document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
     let pane = document.getElementById('view-' + view);
-    if (!pane && view === 'job') {
+    if (!pane && (view === 'job' || view === 'artifact')) {
       pane = document.createElement('div');
       pane.className = 'view-pane';
-      pane.id = 'view-job';
+      pane.id = 'view-' + view;
       document.getElementById('view-container').appendChild(pane);
     }
     if (pane) pane.classList.add('active');
 
     // Nav items (skip for job detail — no active nav)
-    if (view !== 'job') {
+    if (view !== 'job' && view !== 'artifact') {
       document.querySelectorAll('.nav-item[data-view]').forEach(n => n.classList.remove('active'));
       document.querySelectorAll(`.nav-item[data-view="${view}"]`).forEach(n => n.classList.add('active'));
     }
@@ -128,6 +140,7 @@ const App = {
       case 'skills': await Skills.renderList(); break;
       case 'artifacts': await GeneratedContentView.render(); break;
       case 'settings': await Settings.render(); break;
+      case 'artifact': await this.renderArtifactDetail(); break;
       case 'job': await this.renderJobDetail(); break;
     }
   },
@@ -255,7 +268,7 @@ const App = {
 
     section.querySelectorAll('.job-artifact-item').forEach(el => {
       el.addEventListener('click', () => {
-        this.switchView('artifacts');
+        this.showArtifactDetail(parseInt(a.id));
       });
     });
   },
@@ -281,6 +294,107 @@ const App = {
   showJobDetail(jobId) {
     this.currentJobId = jobId;
     this.switchView('job');
+  },
+
+  showArtifactDetail(artifactId) {
+    this.currentArtifactId = artifactId;
+    this.switchView('artifact');
+  },
+
+  async renderArtifactDetail() {
+    const pane = document.getElementById('view-artifact');
+    const artifactId = this.currentArtifactId;
+    if (!artifactId) { await this.switchView('artifacts'); return; }
+
+    const art = await DB.getArtifact(artifactId);
+    if (!art) { await this.switchView('artifacts'); return; }
+
+    const titleEl = document.getElementById('view-title');
+    titleEl.textContent = art.title || 'Artifact';
+
+    let variants = [];
+    try { variants = JSON.parse(art.variants || '[]'); } catch { variants = []; }
+
+    // Resolve job info
+    let jobLink = '';
+    if (art.jobId) {
+      const job = await DB.getJob(art.jobId);
+      if (job) {
+        jobLink = `<a href="#" class="gen-job-link" data-job-id="${job.id}">${UI.escapeHtml(job.company)} — ${UI.escapeHtml(job.position)}</a>`;
+      }
+    }
+
+    const skillLabels = {
+      'email-generator': 'Email',
+      'cover-letter': 'Cover Letter',
+      'resume-optimizer': 'Resume Optimizer',
+      'interview-prep': 'Interview Prep',
+      'career-summary': 'Career Summary',
+    };
+
+    pane.innerHTML = `
+      <div class="artifact-detail-page">
+        <button class="btn btn-sm btn-secondary artifact-back-btn" style="margin-bottom:16px">
+          ${icon('arrow-left', 16)} Back
+        </button>
+
+        <div class="artifact-detail-header">
+          <div>
+            <h2 style="margin:0 0 4px">${UI.escapeHtml(art.title || 'Untitled')}</h2>
+            <div style="font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class="gen-skill-badge">${skillLabels[art.skillId] || art.skillId}</span>
+              ${jobLink ? ' · ' + jobLink : ''}
+              · ${UI.formatDateTime(art.createdAt)}
+            </div>
+          </div>
+        </div>
+
+        ${variants.length > 1 ? `
+          <div class="artifact-variant-tabs">
+            ${variants.map((v, i) => `<button class="artifact-variant-tab${i === 0 ? ' active' : ''}" data-variant="${i}">${UI.escapeHtml(v.label || 'Variant ' + (i+1))}</button>`).join('')}
+          </div>
+        ` : ''}
+
+        <div class="artifact-variant-panes">
+          ${variants.map((v, i) => `
+            <div class="artifact-variant-pane${i === 0 ? '' : ' hidden'}" data-variant-pane="${i}">
+              <div class="artifact-variant-content">${UI.escapeHtml(v.content || '')}</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="artifact-detail-section">
+          <h4>${icon('terminal', 16)} CLI</h4>
+          <pre style="background:var(--bg-secondary);padding:12px;border-radius:6px;font-size:13px;line-height:1.6">waypoint artifacts get ${artifactId}
+waypoint artifacts archive ${artifactId}
+waypoint artifacts delete ${artifactId}</pre>
+        </div>
+      </div>
+    `;
+
+    // Back button
+    pane.querySelector('.artifact-back-btn').addEventListener('click', () => {
+      window.history.length > 1 ? window.history.back() : this.switchView('artifacts');
+    });
+
+    // Job link
+    pane.querySelectorAll('.gen-job-link').forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        App.showJobDetail(parseInt(a.dataset.jobId));
+      });
+    });
+
+    // Variant tabs
+    pane.querySelectorAll('.artifact-variant-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const idx = tab.dataset.variant;
+        pane.querySelectorAll('.artifact-variant-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        pane.querySelectorAll('.artifact-variant-pane').forEach(p => p.classList.add('hidden'));
+        pane.querySelector(`[data-variant-pane="${idx}"]`).classList.remove('hidden');
+      });
+    });
   },
 };
 

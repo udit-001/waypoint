@@ -61,7 +61,7 @@ const GeneratedContentView = {
       : '';
 
     return `
-      <div class="generated-item" data-id="${item.id}">
+      <div class="generated-item" data-id="${item.id}" style="cursor:pointer">
         <div class="gen-header">
           <div>
             <div class="gen-title">${UI.escapeHtml(item.title || 'Untitled')}</div>
@@ -110,6 +110,15 @@ const GeneratedContentView = {
   },
 
   _bindItemActions(container) {
+    // Card click → artifact detail
+    container.querySelectorAll('.generated-item').forEach(el => {
+      el.addEventListener('click', e => {
+        // Don't navigate if clicking a button or link
+        if (e.target.closest('button') || e.target.closest('a')) return;
+        App.showArtifactDetail(parseInt(el.dataset.id));
+      });
+    });
+
     // Job links → navigate to job detail
     container.querySelectorAll('.gen-job-link').forEach(a => {
       a.addEventListener('click', e => {
@@ -141,12 +150,10 @@ const GeneratedContentView = {
       });
     });
 
-    // View full artifact in modal
+    // View full artifact detail
     container.querySelectorAll('.get-gen-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.id;
-        const art = await DB.getArtifact(id);
-        this._showModal(art);
+      btn.addEventListener('click', () => {
+        App.showArtifactDetail(parseInt(btn.dataset.id));
       });
     });
   },
