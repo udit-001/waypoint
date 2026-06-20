@@ -51,6 +51,7 @@ go build -o waypoint ./cmd/waypoint
 | `add <company> <position>` | Add a job application |
 | `list` | List jobs (flags: `--status`, `--category`, `--search`, `--limit`, `--all`) |
 | `get <id>` | Show job details (`--history` for activity log) |
+| `update <id>` | Update job fields (`--status`, `--company`, `--position`, etc.) |
 | `delete <id>` | Delete a job (`--force` to skip confirmation) |
 | `stats` | Show aggregate statistics |
 | `start` | Launch the web UI server (background by default) |

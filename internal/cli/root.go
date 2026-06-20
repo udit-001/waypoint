@@ -33,7 +33,7 @@ var rootCmd = &cobra.Command{
 	Long: `A CLI tool to manage and track your job applications.
 
 Data is stored in a local SQLite database. Use 'waypoint init'
-to create one, then add, list, upgrade, and delete your job entries.
+to create one, then add, list, update, and delete your job entries.
 
 Most commands support --json for machine-readable output.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
