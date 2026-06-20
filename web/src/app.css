@@ -103,6 +103,10 @@
  * Monospace and code elements are excluded.
  */
 [data-font="serif"] body,
+[data-font="serif"] #app {
+  font-size: 1.0625rem;
+}
+[data-font="serif"] body,
 [data-font="serif"] #app,
 [data-font="serif"] #app * {
   font-family: 'PT Serif', Georgia, 'Times New Roman', serif;
