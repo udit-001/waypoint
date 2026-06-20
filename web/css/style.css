@@ -490,6 +490,17 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .cat-cmd:hover { border-color: var(--accent); }
 .cat-cmd-danger:hover { border-color: var(--danger); }
+
+/* Table category filter */
+.cat-filter-select {
+  padding: 6px 10px; border: 1px solid var(--border-color);
+  border-radius: var(--radius); background: var(--card-bg);
+  font-size: 13px; color: var(--text-primary); cursor: pointer;
+}
+.cat-filter-select:focus { outline: none; border-color: var(--accent); }
+.cat-pill-count {
+  opacity: 0.5; font-size: 11px; margin-left: 2px;
+}
 .generated-item {
   background: var(--card-bg); border: 1px solid var(--border-color);
   border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px;

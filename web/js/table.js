@@ -62,18 +62,36 @@ const TableView = {
       });
     }
 
-    // Category filter chips
+    // Category filter: pills when ≤5 categories, dropdown when 6+
     const cats = await DB.getCategories();
-    filtersEl.innerHTML = `<button class="btn btn-sm ${!App.tableCategoryFilter ? 'btn-primary' : 'btn-secondary'}" data-filter-cat="">All</button>`;
-    cats.forEach(c => {
-      filtersEl.innerHTML += `<button class="btn btn-sm ${App.tableCategoryFilter === c.name ? 'btn-primary' : 'btn-secondary'}" data-filter-cat="${c.name}">${c.name}</button>`;
-    });
-    filtersEl.querySelectorAll('[data-filter-cat]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        App.tableCategoryFilter = btn.dataset.filterCat || null;
+    const allJobs = await DB.getJobs();
+    const catCounts = {};
+    allJobs.forEach(j => { const c = j.category || 'General'; catCounts[c] = (catCounts[c] || 0) + 1; });
+
+    if (cats.length > 5) {
+      filtersEl.innerHTML = `
+        <select id="cat-filter-select" class="cat-filter-select">
+          <option value="">All categories</option>
+          ${cats.map(c => `<option value="${UI.escapeHtml(c.name)}"${App.tableCategoryFilter === c.name ? ' selected' : ''}>${UI.escapeHtml(c.name)} (${catCounts[c.name] || 0})</option>`).join('')}
+        </select>
+      `;
+      document.getElementById('cat-filter-select').addEventListener('change', async e => {
+        App.tableCategoryFilter = e.target.value || null;
         await this.render();
       });
-    });
+    } else {
+      filtersEl.innerHTML = `<button class="btn btn-sm ${!App.tableCategoryFilter ? 'btn-primary' : 'btn-secondary'}" data-filter-cat="">All</button>`;
+      cats.forEach(c => {
+        const count = catCounts[c.name] || 0;
+        filtersEl.innerHTML += `<button class="btn btn-sm ${App.tableCategoryFilter === c.name ? 'btn-primary' : 'btn-secondary'}" data-filter-cat="${UI.escapeHtml(c.name)}">${UI.escapeHtml(c.name)} <span class="cat-pill-count">${count}</span></button>`;
+      });
+      filtersEl.querySelectorAll('[data-filter-cat]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          App.tableCategoryFilter = btn.dataset.filterCat || null;
+          await this.render();
+        });
+      });
+    }
 
     document.getElementById('view-title').textContent = 'Table View';
   },
