@@ -49,41 +49,59 @@ number — keep it raw but clean, not normalised.
 
 ### Extraction order
 
-1. **Strip non-numeric decorations** — remove `Rs.`, `$`, `€`, `₹`, commas
-   used as thousand separators, `/year`, `/yr`, `PA`, `LPA`, `/month`, `/mo`.
+Each step preserves enough context for the chart to detect whether the
+salary is monthly or annual and normalise everything to monthly.
+
+1. **Keep informative tokens** — retain the currency prefix (`Rs.`, `$`,
+   `€`, `₹`) and Indian comma formatting (e.g. `37,000`). Keep annual
+   markers (`$`, `LPA`, `PA`, `/yr`, `/year`, `lakh`). Only strip `/month`,
+   `/mo` — monthly is the default unit, so they're redundant.
 2. **Chop suffixes** — drop everything after `+` (removes `+ HRA`,
    `+ 27% HRA`, etc.) and everything in `()`, `[]`, `{}` that looks like a
    qualification note (`GATE/NET`, `NET/GATE`).
 3. **Coalesce `OR` options** — if the string contains ` OR ` (case-insensitive),
    split and keep only the option with the highest numeric value. That's
    the one the applicant would target.
-4. **Expand to full integer** — convert shorthand to raw integer value
-   so the salary field is a clean parseable number, no unit ambiguity:
-   `37k` → `37000`, `70k-100k` → `70000-100000`, `₹15 LPA` → `1500000`,
-   `$100k` → `100000`, `€60k` → `60000`.
+4. **Expand shorthand, standardise qualifier** — convert `k`/`L`/`lakh` to
+   full integers. If the original was annual (detected by `$`, `LPA`, `PA`,
+   `/yr`, `/year`), append `/yr` so the chart divides by 12:
+   `$100k` → `$100000/yr`, `₹15 LPA` → `₹1500000/yr`, `€60k` → `€60000/yr`.
+   If the original had no annual marker, output the clean integer with its
+   currency prefix — the chart treats `Rs.`/`₹` as monthly by default.
 
 ### Examples
 
 | Raw | Extracted | Notes |
 |-----|-----------|-------|
-| `$100k` | `100000` | Clean integer |
-| `€60k` | `60000` | Clean integer |
-| `₹15 LPA` | `1500000` | Annual → monthly |
-| `Rs. 37,000 + HRA` | `37000` | Stripped Rs., commas, +HRA |
-| `Rs. 28,000 + HRA` | `28000` | Same pattern |
-| `Rs. 37,000 + 27% HRA` | `37000` | +27% HRA chopped |
-| `Rs. 37,000 + HRA (GATE/NET) OR Rs. 31,000 + HRA` | `37000` | Coalesced to highest OR option |
-| `Rs. 31,000 + 20% HRA (NET/GATE) OR Rs. 25,000 + HRA` | `31000` | Same |
-| `70k-100k` | `70000-100000` | Range expanded |
-| `50000 - 80000` | `50000-80000` | Already clean |
+| `$100k` | `$100000/yr` | Annual qualifier kept → chart divides by 12 |
+| `€60k` | `€60000/yr` | Annual qualifier kept |
+| `₹15 LPA` | `₹1500000/yr` | Standardised to /yr → chart divides by 12 |
+| `Rs. 37,000 + HRA` | `Rs. 37000` | Monthly default, no qualifier needed |
+| `Rs. 28,000 + HRA` | `Rs. 28000` | Same pattern |
+| `Rs. 37,000 + 27% HRA` | `Rs. 37000` | +27% HRA chopped, prefix kept |
+| `Rs. 37,000 + HRA (GATE/NET) OR Rs. 31,000 + HRA` | `Rs. 37000` | Coalesced highest, prefix kept |
+| `Rs. 31,000 + 20% HRA (NET/GATE) OR Rs. 25,000 + HRA` | `Rs. 31000` | Same |
+| `70k-100k` | `70000-100000/yr` | No currency prefix, but k-format → annual |
+| `50000 - 80000` | `50000-80000` | No prefix, no qualifier → annual (default) |
 
 ### Completion criterion
 
 Salary extraction is done when every salary-like number in the posting
 has been parsed, and the extracted string fits one of the patterns in
-the example table above. If a format doesn't match any example, keep
-the most salary-like number (highest if multiple) as a full integer.
-Don't ask the user — extract what's there and move on.
+the example table above. Check three properties before declaring done:
+
+- **Prefix preserved** — `Rs.`, `$`, `€`, `₹` are still in the output.
+  The chart uses them to detect monthly vs annual.
+- **Annual qualifier standardised** — if the original was annual (`$`, `LPA`,
+  `PA`, `/yr`, `/year`), the output has `/yr` appended. The chart divides
+  annual values by 12 automatically. If the original had no annual marker,
+  none is needed — the chart treats `Rs.`/`₹` as monthly.
+- **Number expanded** — `k`/`L`/`lakh` expanded to full integer.
+
+If a format doesn't match any example, keep the most salary-like
+number (highest if multiple) as a full integer with its currency
+prefix. If it looks annual, add `/yr`. Don't ask the user — extract
+what's there and move on.
 
 ## How to apply
 

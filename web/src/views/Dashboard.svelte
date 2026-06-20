@@ -58,13 +58,20 @@ import { setPage } from '../stores/page.svelte.js';
     return stages.filter(s => statusCounts[s] > 0).map(s => ({ stage: s, count: statusCounts[s] }));
   });
 
-  // Salary chart data
+  // Salary chart data — detects monthly vs annual and normalises to monthly
   let salaryData = $derived.by(() => {
     return (jobs || [])
       .filter(j => j.salary && j.salary.trim())
       .map(j => {
         const parsed = parseSalary(j.salary);
-        return { ...j, ...parsed };
+        const unit = detectSalaryUnit(j.salary);
+        // Convert annual to monthly so all entries share a common axis
+        if (unit === 'annual' && parsed.mid > 0) {
+          parsed.low = Math.round(parsed.low / 12);
+          parsed.high = Math.round(parsed.high / 12);
+          parsed.mid = Math.round(parsed.mid / 12);
+        }
+        return { ...j, ...parsed, unit };
       })
       .filter(j => j.mid > 0)
       .sort((a, b) => b.mid - a.mid)
@@ -358,6 +365,24 @@ import { setPage } from '../stores/page.svelte.js';
     return { low: val, high: val, mid: val };
   }
 
+  // detectSalaryUnit classifies a raw salary string as monthly or annual.
+  // Used to normalise all entries to monthly for the chart.
+  function detectSalaryUnit(str) {
+    // Monthly signals: Indian Rs./HRA format with comma thousands
+    if (/Rs\./i.test(str) || /\+\s*HRA/i.test(str)) return 'monthly';
+    // Monthly signals: comma-formatted Indian number (e.g. "37,000")
+    if (/\d{1,2},\d{3}/.test(str)) return 'monthly';
+    // ₹ without annual qualifier → monthly (Indian salaries default monthly)
+    if (/₹/.test(str) && !/LPA|lakh|\/yr|\/year|\bPA\b/i.test(str)) return 'monthly';
+    // Annual signals: $, LPA, lakh, /year, /yr, PA, L as lakh suffix
+    if (/\$/.test(str)) return 'annual';
+    if (/LPA|lakh|\/yr|\/year|\bPA\b/i.test(str)) return 'annual';
+    // k-format without any Rs./₹ → annual (e.g. "160k-200k", "100k")
+    if (/\d+\s*k/i.test(str)) return 'annual';
+    // No prefix → ambiguous, default annual
+    return 'annual';
+  }
+
   function formatDate(d) {
     if (!d) return '';
     try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
@@ -452,7 +477,7 @@ import { setPage } from '../stores/page.svelte.js';
       {/if}
       {#if salaryData.length > 0}
         <div class="bg-white rounded-lg border border-slate-200 p-3">
-          <h4 class="text-xs uppercase tracking-wide text-slate-400 font-medium mb-2">Salary Range</h4>
+          <h4 class="text-xs uppercase tracking-wide text-slate-400 font-medium mb-2">Salary Range <span class="text-slate-300 font-normal">(monthly)</span></h4>
           <div class="h-64"><canvas id="chart-salary"></canvas></div>
         </div>
       {/if}
