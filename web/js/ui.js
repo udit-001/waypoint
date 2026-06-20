@@ -5,7 +5,6 @@ const UI = {
     this.initModals();
     this.initThemeToggle();
     this.initViewToggles();
-    this.initExportImport();
     this.initSearch();
     this.initKeyboardShortcuts();
     this.addReadOnlyStyles();
@@ -83,10 +82,6 @@ const UI = {
     });
   },
 
-  initExportImport() {
-    // Read-only — disabled
-  },
-
   initSearch() {
     Search.init();
   },
@@ -94,8 +89,7 @@ const UI = {
   initKeyboardShortcuts() {
     document.addEventListener('keydown', e => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-      if (e.ctrlKey && e.key === 'n') { e.preventDefault(); UI.showToast('Use the CLI to add jobs', 'info'); }
-      if (e.ctrlKey && e.key === 'f') {
+      if (e.key === '/') {
         e.preventDefault();
         const input = document.getElementById('search-input');
         input.focus();

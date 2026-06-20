@@ -117,9 +117,7 @@ Read-only dashboard with 9 views. Manage data via CLI.
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+N` | New job (opens CLI hint) |
-| `Ctrl+F` | Focus search |
-| `Ctrl+S` | Export data |
+| `/` | Focus search |
 
 ## Data
 
