@@ -46,6 +46,44 @@ Suggest a natural next step:
 - Interview prep → "Career summary as well?"
 - First artifact → "`waypoint start` to see it in the web UI"
 
+## Exa search (if MCP available)
+
+If `exa` MCP tools are connected, enrich job applications with company/people research before generating content.
+
+### Company research
+
+When user mentions a company, search for intel:
+```
+exa_web_search_advanced_exa { query: "category:company <company name>", numResults: 5 }
+exa_web_search_exa { query: "<company> funding round investors team", numResults: 5 }
+exa_web_search_exa { query: "<company> engineering culture values about", numResults: 5 }
+```
+
+For competitors/alternatives:
+```
+exa_web_search_advanced_exa { query: "category:company companies like <company>", numResults: 8 }
+```
+
+### People search
+
+Find hiring managers, recruiters, team leads:
+```
+exa_web_search_advanced_exa { query: "category:people engineering at <company>", numResults: 10 }
+exa_web_search_advanced_exa { query: "category:people recruiter hiring at <company>", numResults: 10 }
+```
+
+For specific roles:
+```
+exa_web_search_advanced_exa { query: "category:people <role> at <company>", numResults: 10 }
+```
+
+Supplement with non-LinkedIn sources:
+```
+exa_web_search_exa { query: "<company> team page employees about us", numResults: 5 }
+```
+
+Use findings to personalize cover letters, emails, and interview prep. Add relevant contacts to the job via `jobs update <id> --contact "..."` and company intel to `--notes`.
+
 ## Commands
 
 | Cmd | Flags |
