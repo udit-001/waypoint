@@ -116,7 +116,7 @@ import { setPage } from '../stores/page.svelte.js';
 
   <!-- Table -->
   <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-    <table class="w-full text-sm">
+    <table class="w-full text-sm whitespace-nowrap">
       <thead>
         <tr class="border-b border-slate-200">
           {#each columns as col}
@@ -146,7 +146,7 @@ import { setPage } from '../stores/page.svelte.js';
               <td class="px-4 py-2.5 font-medium text-slate-800">{job.company}</td>
               <td class="px-4 py-2.5 text-slate-600">{job.position}</td>
               <td class="px-4 py-2.5">
-                <span class="inline-block px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap {statusColors[job.status] || 'bg-slate-100 text-slate-600'}">{job.status}</span>
+                <span class="inline-block px-2 py-0.5 rounded text-xs font-medium {statusColors[job.status] || 'bg-slate-100 text-slate-600'}">{job.status}</span>
               </td>
               <td class="px-4 py-2.5 text-slate-600">{job.category || 'General'}</td>
               <td class="px-4 py-2.5 text-slate-500 tabular-nums">{formatDate(job.date)}</td>
