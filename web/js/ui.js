@@ -39,59 +39,7 @@ const UI = {
   },
 
   async renderCategories() {
-    const list = document.getElementById('category-list');
-    const cats = await DB.getCategories();
-    list.innerHTML = '';
-
-    const allLink = document.createElement('a');
-    allLink.className = 'nav-item' + (App.currentCategory === 'all' ? ' active' : '');
-    allLink.dataset.category = 'all';
-    allLink.href = '#';
-    allLink.textContent = 'All Jobs';
-    allLink.addEventListener('click', async e => {
-      e.preventDefault();
-      App.currentCategory = 'all';
-      document.querySelectorAll('[data-category]').forEach(n => n.classList.remove('active'));
-      allLink.classList.add('active');
-      await App.renderCurrentView();
-    });
-    list.appendChild(allLink);
-
-    cats.forEach(c => {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'nav-item' + (App.currentCategory === c ? ' active' : '');
-      wrapper.dataset.category = c;
-      wrapper.style.cssText = 'display:flex;align-items:center;padding:0';
-      wrapper.addEventListener('click', async e => {
-        if (e.target.tagName === 'BUTTON') return;
-        e.preventDefault();
-        App.currentCategory = c;
-        document.querySelectorAll('[data-category]').forEach(n => n.classList.remove('active'));
-        wrapper.classList.add('active');
-        await App.renderCurrentView();
-      });
-
-      const a = document.createElement('a');
-      a.href = '#';
-      a.textContent = c;
-      a.style.cssText = 'flex:1;padding:6px 12px;color:inherit;text-decoration:none;display:block';
-
-      const del = document.createElement('button');
-      del.textContent = '×';
-      del.title = 'Delete category';
-      del.style.cssText = 'background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 8px;font-size:16px;line-height:1;display:none';
-      del.addEventListener('click', e => {
-        e.stopPropagation();
-        UI.showToast('Use the CLI to delete categories', 'info');
-      });
-
-      wrapper.addEventListener('mouseenter', () => { del.style.display = 'block'; });
-      wrapper.addEventListener('mouseleave', () => { del.style.display = 'none'; });
-
-      wrapper.appendChild(a);
-      wrapper.appendChild(del);
-      list.appendChild(wrapper);
-    });
+    // Removed — categories now have their own page
   },
 
   initModals() {
@@ -162,7 +110,7 @@ const UI = {
       <div class="advanced-search">
         <div class="form-group"><label>Company</label><input id="adv-company" placeholder="Search company..." /></div>
         <div class="form-group"><label>Position</label><input id="adv-position" placeholder="Search position..." /></div>
-        <div class="form-group"><label>Category</label><select id="adv-category"><option value="">Any</option>${cats.map(c => `<option value="${c}">${c}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Category</label><select id="adv-category"><option value="">Any</option>${cats.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}</select></div>
         <div class="form-group"><label>Status</label><select id="adv-status"><option value="">Any</option>${statuses.map(s => `<option value="${s}">${s}</option>`).join('')}</select></div>
         <div class="form-group"><label>Date From</label><input type="date" id="adv-date-from" /></div>
         <div class="form-group"><label>Date To</label><input type="date" id="adv-date-to" /></div>

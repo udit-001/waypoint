@@ -5,32 +5,17 @@ const Timeline = {
     const allHistory = await DB.getHistory();
     let jobs = await DB.getJobs();
 
-    if (App.currentCategory && App.currentCategory !== 'all') {
-      const catJobIds = new Set(jobs.filter(j => j.category === App.currentCategory).map(j => j.id));
-      if (App.searchQuery) {
-        const q = App.searchQuery.toLowerCase();
-        jobs = jobs.filter(j => catJobIds.has(j.id) && (
-          j.company.toLowerCase().includes(q) ||
-          j.position.toLowerCase().includes(q) ||
-          (j.notes && j.notes.toLowerCase().includes(q))
-        ));
-      }
-      const filteredIds = new Set(jobs.map(j => j.id));
-      const relevantHistory = allHistory.filter(h => filteredIds.has(h.jobId));
-      this.renderTimeline(container, relevantHistory, jobs);
-    } else if (App.searchQuery) {
+    if (App.searchQuery) {
       const q = App.searchQuery.toLowerCase();
       jobs = jobs.filter(j =>
         j.company.toLowerCase().includes(q) ||
         j.position.toLowerCase().includes(q) ||
         (j.notes && j.notes.toLowerCase().includes(q))
       );
-      const filteredIds = new Set(jobs.map(j => j.id));
-      const relevantHistory = allHistory.filter(h => filteredIds.has(h.jobId));
-      this.renderTimeline(container, relevantHistory, jobs);
-    } else {
-      this.renderTimeline(container, allHistory, jobs);
     }
+    const filteredIds = new Set(jobs.map(j => j.id));
+    const relevantHistory = allHistory.filter(h => filteredIds.has(h.jobId));
+    this.renderTimeline(container, relevantHistory, jobs);
 
     document.getElementById('view-title').textContent = 'Timeline';
   },

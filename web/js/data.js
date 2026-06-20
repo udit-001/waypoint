@@ -43,8 +43,8 @@ const DB = {
 
   async getCategories() {
     const data = await this._api('/categories');
-    if (!Array.isArray(data)) return ['General'];
-    return data.map(c => c.name);
+    if (!Array.isArray(data)) return [{ id: 1, name: 'General' }];
+    return data;
   },
 
   addCategory(name) {

@@ -7,7 +7,7 @@ const App = {
   advancedFilters: null,
   tableCategoryFilter: null,
 
-  _views: ['dashboard', 'kanban', 'table', 'timeline', 'skills', 'generated', 'settings', 'job'],
+  _views: ['dashboard', 'kanban', 'table', 'timeline', 'categories', 'skills', 'generated', 'settings', 'job'],
 
   async init() {
     const settings = await DB.getSettings();
@@ -23,7 +23,6 @@ const App = {
       document.documentElement.dataset.font = savedFont;
     }
 
-    await UI.renderCategories();
     UI.init();
     Skills.init();
     Notes.initPreview();
@@ -81,7 +80,7 @@ const App = {
     // Title
     const titles = {
       dashboard: 'Dashboard', kanban: 'Kanban Board', table: 'Table View',
-      timeline: 'Timeline', skills: 'AI Integration', generated: 'Generated Content',
+      timeline: 'Timeline', categories: 'Categories', skills: 'AI Integration', generated: 'Generated Content',
       settings: 'Settings', job: this.currentJobId ? 'Job #' + this.currentJobId : 'Job Detail',
     };
     document.title = (titles[view] || 'Dashboard') + ' — Waypoint';
@@ -124,6 +123,7 @@ const App = {
       case 'kanban': await Kanban.render(); break;
       case 'table': await TableView.render(); break;
       case 'timeline': await Timeline.render(); break;
+      case 'categories': await CategoriesView.render(); break;
       case 'skills': await Skills.renderList(); break;
       case 'generated': await GeneratedContentView.render(); break;
       case 'settings': await Settings.render(); break;
@@ -215,7 +215,7 @@ const App = {
   },
 
   async updateCounts() {
-    await UI.renderCategories();
+    // Refresh handled by individual views
   },
 
   openJobForm() {

@@ -447,6 +447,49 @@ textarea { resize: vertical; min-height: 80px; }
 
 /* === Generated Content === */
 .generated-container { max-width: 800px; margin: 0 auto; }
+
+/* === Categories Page === */
+.cat-cli-box {
+  background: var(--card-bg); border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 8px;
+}
+.cat-cli-box h4 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.cat-cli-pre {
+  background: var(--bg); border: 1px solid var(--border-color);
+  border-radius: var(--radius); padding: 12px;
+  font-size: 12px; line-height: 1.6; overflow-x: auto;
+  margin: 0;
+}
+.cat-cli-pre code { font-family: var(--font-mono, monospace); }
+
+.cat-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.cat-table th {
+  text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border-color);
+  font-weight: 600; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+}
+.cat-table td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border-color);
+}
+.cat-table tr:hover { background: var(--bg-secondary); }
+.cat-default-badge {
+  background: var(--accent); color: #fff; font-size: 10px;
+  padding: 1px 6px; border-radius: 99px; font-weight: 500; vertical-align: middle;
+}
+.cat-job-link {
+  color: var(--accent); text-decoration: none; font-weight: 600;
+}
+.cat-job-link:hover { text-decoration: underline; }
+.cat-actions { display: flex; gap: 6px; }
+.cat-cmd {
+  background: var(--bg); border: 1px solid var(--border-color);
+  border-radius: 4px; padding: 2px 8px; font-size: 11px;
+  cursor: pointer; font-family: var(--font-mono, monospace);
+  transition: border-color var(--transition);
+}
+.cat-cmd:hover { border-color: var(--accent); }
+.cat-cmd-danger:hover { border-color: var(--danger); }
 .generated-item {
   background: var(--card-bg); border: 1px solid var(--border-color);
   border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px;

@@ -66,7 +66,7 @@ const TableView = {
     const cats = await DB.getCategories();
     filtersEl.innerHTML = `<button class="btn btn-sm ${!App.tableCategoryFilter ? 'btn-primary' : 'btn-secondary'}" data-filter-cat="">All</button>`;
     cats.forEach(c => {
-      filtersEl.innerHTML += `<button class="btn btn-sm ${App.tableCategoryFilter === c ? 'btn-primary' : 'btn-secondary'}" data-filter-cat="${c}">${c}</button>`;
+      filtersEl.innerHTML += `<button class="btn btn-sm ${App.tableCategoryFilter === c.name ? 'btn-primary' : 'btn-secondary'}" data-filter-cat="${c.name}">${c.name}</button>`;
     });
     filtersEl.querySelectorAll('[data-filter-cat]').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -82,8 +82,6 @@ const TableView = {
     let jobs = await DB.getJobs();
     if (App.tableCategoryFilter) {
       jobs = jobs.filter(j => j.category === App.tableCategoryFilter);
-    } else if (App.currentCategory && App.currentCategory !== 'all') {
-      jobs = jobs.filter(j => j.category === App.currentCategory);
     }
     if (App.searchQuery) {
       const q = App.searchQuery.toLowerCase();

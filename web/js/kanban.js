@@ -52,9 +52,6 @@ const Kanban = {
 
   async getFilteredJobs() {
     let jobs = await DB.getJobs();
-    if (App.currentCategory && App.currentCategory !== 'all') {
-      jobs = jobs.filter(j => j.category === App.currentCategory);
-    }
     if (App.searchQuery) {
       const q = App.searchQuery.toLowerCase();
       jobs = jobs.filter(j =>
