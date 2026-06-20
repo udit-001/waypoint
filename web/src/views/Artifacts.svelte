@@ -1,6 +1,7 @@
 <script>
 import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
+  import Spinner from '../components/Spinner.svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
@@ -30,7 +31,10 @@ import { setPage } from '../stores/page.svelte.js';
   }
 </script>
 
-<div class="space-y-4">
+{#if api.artifacts.loading && artifactsList.length === 0}
+  <Spinner text="Loading artifacts..." />
+{:else}
+  <div class="space-y-4">
 
   {#if artifactsList.length === 0}
     <p class="text-sm text-slate-400">No artifacts generated yet.</p>
@@ -59,3 +63,4 @@ import { setPage } from '../stores/page.svelte.js';
     {/each}
   {/if}
 </div>
+{/if}

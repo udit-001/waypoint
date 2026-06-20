@@ -2,6 +2,7 @@
 import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
+  import Spinner from '../components/Spinner.svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
@@ -35,7 +36,10 @@ import { setPage } from '../stores/page.svelte.js';
   }
 </script>
 
-<div class="max-w-3xl mx-auto space-y-4">
+{#if api.categories.loading && cats.length === 0}
+  <Spinner text="Loading categories..." />
+{:else}
+  <div class="max-w-3xl mx-auto space-y-4">
   <p class="text-sm text-slate-400 mb-4">
     Organize your applications into categories. Manage them via the CLI.
   </p>
@@ -108,3 +112,4 @@ import { setPage } from '../stores/page.svelte.js';
     {/if}
   </div>
 </div>
+{/if}

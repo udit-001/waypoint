@@ -2,6 +2,7 @@
 import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
+  import Spinner from '../components/Spinner.svelte';
   import * as api from '../stores/api.svelte.js';
 
   let settingsData = $state(null);
@@ -49,7 +50,7 @@ import { setPage } from '../stores/page.svelte.js';
         </div>
       </div>
     {:else}
-      <p class="text-sm text-slate-400">Loading...</p>
+      <Spinner text="Loading settings..." />
     {/if}
   </div>
 

@@ -1,6 +1,7 @@
 <script>
 import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
+  import Spinner from '../components/Spinner.svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
@@ -87,7 +88,10 @@ import { setPage } from '../stores/page.svelte.js';
   }
 </script>
 
-<div class="space-y-4">
+{#if api.jobs.loading && filteredJobs.length === 0}
+  <Spinner text="Loading jobs..." />
+{:else}
+  <div class="space-y-4">
   <!-- Filters -->
   <div class="flex flex-wrap items-center gap-2">
     <input
@@ -168,3 +172,4 @@ import { setPage } from '../stores/page.svelte.js';
     </table>
   </div>
 </div>
+{/if}

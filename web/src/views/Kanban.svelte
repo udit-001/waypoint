@@ -1,6 +1,7 @@
 <script>
 import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
+  import Spinner from '../components/Spinner.svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
@@ -39,7 +40,10 @@ import { setPage } from '../stores/page.svelte.js';
   }
 </script>
 
-<div class="flex gap-4 min-h-[calc(100vh-12rem)] pb-4 overflow-x-auto">
+{#if api.jobs.loading && allJobs.length === 0}
+  <Spinner text="Loading jobs..." />
+{:else}
+  <div class="flex gap-4 min-h-[calc(100vh-12rem)] pb-4 overflow-x-auto">
   {#each statuses as status}
     <div class="flex flex-col flex-1 min-w-[280px] max-w-[320px] bg-slate-50/50 rounded-xl border-t-2 {statusStyles[status]} p-3">
       <div class="flex items-center justify-between px-2 pb-3">
@@ -71,3 +75,4 @@ import { setPage } from '../stores/page.svelte.js';
     </div>
   {/each}
 </div>
+{/if}

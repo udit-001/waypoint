@@ -1,6 +1,7 @@
 <script>
 import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
+  import Spinner from '../components/Spinner.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
@@ -314,9 +315,7 @@ import { setPage } from '../stores/page.svelte.js';
 </script>
 
 {#if !loaded}
-  <div class="flex items-center justify-center py-20">
-    <p class="text-slate-400">Loading dashboard...</p>
-  </div>
+  <Spinner text="Loading dashboard..." />
 {:else if jobs.length === 0}
   <!-- Empty state -->
   <div class="text-center py-20 text-slate-400">

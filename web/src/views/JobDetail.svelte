@@ -6,6 +6,7 @@
   import { setPage } from '../stores/page.svelte.js';
   import { skillLabel } from '../stores/skillMeta.js';
   import { marked } from 'marked';
+  import Spinner from '../components/Spinner.svelte';
 
   function renderMarkdown(text) {
     if (!text) return '';
@@ -56,7 +57,7 @@
 </script>
 
 {#if loading}
-  <p class="text-sm text-slate-400">Loading...</p>
+  <Spinner text="Loading job..." />
 {:else if job}
   <div class="max-w-3xl mx-auto">
     <!-- Header -->

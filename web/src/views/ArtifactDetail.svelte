@@ -4,8 +4,8 @@
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
   import { setPage } from '../stores/page.svelte.js';
-
   import { skillLabel } from '../stores/skillMeta.js';
+  import Spinner from '../components/Spinner.svelte';
 
   let { id } = $props();
 
@@ -55,7 +55,7 @@
 </script>
 
 {#if loading}
-  <p class="text-sm text-slate-400">Loading...</p>
+  <Spinner text="Loading artifact..." />
 {:else if art}
   <div class="max-w-3xl mx-auto">
     <div class="mb-6">
