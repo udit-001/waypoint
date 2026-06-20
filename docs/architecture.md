@@ -18,10 +18,9 @@ All data lives in a SQLite database at `~/.waypoint/waypoint.db`.
 
 - **Backend:** Go 1.25 — standard library `net/http`, REST API
 - **CLI:** Cobra CLI framework
-- **Database:** SQLite (pure Go via `modernc.org/sqlite`)
-- **Frontend:** Vanilla HTML/CSS/JS (ES6+), no frameworks
-- **Charts:** Chart.js 4.4.1
-- **Markdown:** marked 11.1.1
+- **Database:** SQLite (pure Go via `modernc.org/sqlite`, no CGO)
+- **Frontend:** Svelte 5, Vite 8, Tailwind CSS 4, Chart.js 4.5
+- **Frontend embed:** Embedded into Go binary via `//go:embed` — `web/dist/` is tracked in git
 - **Typography:** Inter & PT Serif
 - **PWA:** Service worker for offline caching
 
@@ -35,12 +34,30 @@ All data lives in a SQLite database at `~/.waypoint/waypoint.db`.
 │   ├── server/                # HTTP server, API handlers
 │   ├── skills/                # AI skill definitions
 │   └── version/               # Build version
-├── web/                       # Static frontend (HTML, JS, CSS)
-│   ├── css/
-│   ├── js/
-│   ├── fonts/
-│   └── icons/
+├── web/                       # Svelte frontend
+│   ├── src/                   # Svelte components & app code
+│   ├── dist/                  # Pre-built output (tracked in git)
+│   ├── public/                # Static assets (icons, sw.js)
+│   ├── web.go                 # //go:embed dist entry point
+│   ├── vite.config.js
+│   └── package.json
+├── Makefile                   # Build automation
 └── docs/                      # Documentation
+```
+
+## Frontend Embedding
+
+The Svelte frontend is pre-built into `web/dist/` and checked into git.
+At compile time, `web/web.go` uses `//go:embed dist` to include all
+assets in the binary. This makes `go install` produce a fully functional
+binary without requiring Node.js at install time.
+
+To rebuild the frontend during development:
+
+```bash
+cd web && pnpm install && pnpm build
+# or
+make frontend
 ```
 
 ## API

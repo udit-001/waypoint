@@ -4,12 +4,22 @@
 
 # Waypoint — Job Tracker
 
-A job application tracker with a Go backend and vanilla JS frontend.
+A job application tracker with a Go backend and Svelte frontend.
 Data mutations happen through the CLI; the web UI is a read-only dashboard.
+The entire web UI is compiled into a single self-contained binary.
 
 ## Install
 
-From a release:
+### Recommended: `go install` (works everywhere, no binary downloads)
+
+```bash
+go install github.com/SwatiBio/waypoint/cmd/waypoint@latest
+```
+
+This compiles Waypoint from source with the web UI embedded. No pre-built
+binaries to download, no Windows SmartScreen warnings, no trust decisions.
+
+### From a release (if you don't have Go installed)
 
 ```bash
 curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh
@@ -21,19 +31,37 @@ Install a specific version:
 curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh -s -- v0.4.0
 ```
 
-With Go:
-
-```bash
-go install github.com/SwatiBio/waypoint/cmd/waypoint@latest
-```
-
-From source:
+### From source
 
 ```bash
 git clone https://github.com/SwatiBio/waypoint.git
 cd waypoint
+make build     # builds frontend + Go binary
+```
+
+Or step by step:
+
+```bash
+cd web && pnpm install && pnpm build && cd ..
 go build -o waypoint ./cmd/waypoint
 ```
+
+### How it works
+
+The Svelte frontend is pre-built and committed to `web/dist/`, which is embedded
+into the Go binary at compile time via `//go:embed`. This means:
+- `go install` downloads source + pre-built frontend from git → fully functional binary
+- No `node_modules` or build tools needed to install
+- Frontend rebuild is only needed when modifying UI code
+
+### Upgrade
+
+```bash
+waypoint upgrade
+```
+
+This runs `go install github.com/SwatiBio/waypoint/cmd/waypoint@latest` internally,
+stopping and restarting the server if it's running.
 
 ## Quick Start
 
