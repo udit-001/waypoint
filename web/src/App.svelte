@@ -13,6 +13,7 @@
   import ArtifactDetail from './views/ArtifactDetail.svelte';
   import Search from './views/Search.svelte';
   import FilterSidebar from './components/FilterSidebar.svelte';
+  import FilterBar from './components/FilterBar.svelte';
   import { getRouter } from './stores/router.svelte.js';
   import { setPage } from './stores/page.svelte.js';
 
@@ -44,6 +45,7 @@
   <Sidebar {sidebarClosed} onToggle={toggleSidebar} />
   <main class="flex flex-col flex-1 overflow-hidden">
     <TopBar {sidebarClosed} onToggleSidebar={toggleSidebar} />
+    <FilterBar />
     <div class="flex-1 p-6 overflow-y-auto">
       {#if router.current.route === 'dashboard'}
         <Dashboard />
