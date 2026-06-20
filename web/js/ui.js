@@ -250,7 +250,9 @@ const UI = {
   renderMarkdown(text) {
     if (!text) return '';
     if (typeof marked !== 'undefined') {
-      try { return marked.parse(text); } catch { return text; }
+      try {
+        return marked.parse(text, { gfm: true, breaks: true });
+      } catch { return text; }
     }
     return text.replace(/\n/g, '<br>');
   },
