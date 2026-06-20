@@ -53,6 +53,17 @@ Job resolved + profile complete → `read` skill reference and generate.
 - **Exa MCP** → `read` [exa-search](references/exa-search.md) for company/people intel. Save via `jobs update --contact` / `--notes`
 - **PDFs** → `read` [pdf-extract](references/pdf-extract.md) if `pdftotext` available
 
+If `exa` MCP not connected, offer to set it up — it enables company research, hiring signals, and people search that significantly enrich cover letters and interview prep:
+
+```json
+"exa": {
+  "type": "streamable-http",
+  "url": "https://mcp.exa.ai/mcp?tools=web_search_exa,web_fetch_exa,web_search_advanced_exa"
+}
+```
+
+Add to the agent's MCP config (e.g. `~/.pi/agent/mcp.json` for pi, `.cursor/mcp.json` for Cursor). No API key needed (free tier). Restart agent after adding.
+
 ## Commands
 
 | Cmd | Flags |
