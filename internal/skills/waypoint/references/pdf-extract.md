@@ -1,7 +1,5 @@
 # PDF Text Extraction
 
-## Prerequisites
-
 Needs poppler (`pdftotext`, `pdftoppm`). If missing:
 
 | OS | Install |
@@ -29,9 +27,9 @@ Empty/garbled → step 2.
 If `pdftoppm` + vision model available:
 
 ```bash
-pdftoppm -png -r 200 file.pdf /tmp/pdf-page   # all pages
-pdftoppm -png -r 200 -f 1 -l 1 file.pdf /tmp/pdf-page  # page 1 only
-pdftoppm -png -r 200 -f 1 -l 3 file.pdf /tmp/pdf-page  # pages 1-3
+pdftoppm -png -r 200 file.pdf /tmp/pdf-page              # all pages
+pdftoppm -png -r 200 -f 1 -l 1 file.pdf /tmp/pdf-page   # page 1
+pdftoppm -png -r 200 -f 1 -l 3 file.pdf /tmp/pdf-page   # pages 1-3
 ```
 
 Send PNGs to vision model: "Extract all text. Include headings, lists, tables."
@@ -40,7 +38,7 @@ Send PNGs to vision model: "Extract all text. Include headings, lists, tables."
 
 ```bash
 waypoint jobs update <id> --notes "$(pdftotext file.pdf - | head -100)"
-pdftotext file.pdf /tmp/posting.txt && waypoint artifacts add --skill resume-optimizer --title "Job Posting" -f /tmp/posting.txt --job <id>
+pdftotext file.pdf /tmp/out.txt && waypoint artifacts add --skill resume-optimizer --title "Job Posting" -f /tmp/out.txt --job <id>
 ```
 
 ## Remote PDFs
