@@ -88,17 +88,19 @@ const UI = {
   },
 
   initSearch() {
-    document.getElementById('search-input').addEventListener('input', App.filterJobs);
-    document.getElementById('search-btn').addEventListener('click', () => {
-      UI.showAdvancedSearch();
-    });
+    Search.init();
   },
 
   initKeyboardShortcuts() {
     document.addEventListener('keydown', e => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
       if (e.ctrlKey && e.key === 'n') { e.preventDefault(); UI.showToast('Use the CLI to add jobs', 'info'); }
-      if (e.ctrlKey && e.key === 'f') { e.preventDefault(); document.getElementById('search-input').focus(); }
+      if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        const input = document.getElementById('search-input');
+        input.focus();
+        input.select();
+      }
     });
   },
 
@@ -136,8 +138,28 @@ const UI = {
         notes: document.getElementById('adv-notes').value.toLowerCase(),
       };
       App.advancedFilters = filters;
+
+      // If there's text in company, position, or notes, build an FTS query
+      // to pre-filter server-side, then apply remaining filters client-side
+      const ftsTerms = [];
+      if (filters.company) ftsTerms.push(filters.company);
+      if (filters.position) ftsTerms.push(filters.position);
+      if (filters.notes) ftsTerms.push(filters.notes);
+
+      if (ftsTerms.length > 0) {
+        // Use FTS for the broad search, then refine client-side
+        const ftsQuery = ftsTerms.join(' OR ');
+        App.searchQuery = ftsQuery;
+        // Clear the specific FTS fields so they don't double-filter client-side
+        // (FTS already matched them)
+        App._advancedFtsFields = { company: filters.company, position: filters.position, notes: filters.notes };
+        filters.company = '';
+        filters.position = '';
+        filters.notes = '';
+      }
+
       modal.classList.remove('active');
-      await App.renderCurrentView();
+      await App.switchView('table');
     });
   },
 

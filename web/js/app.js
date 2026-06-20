@@ -323,8 +323,16 @@ const App = {
 
   async filterJobs() {
     const input = document.getElementById('search-input');
-    this.searchQuery = input.value;
+    this.searchQuery = input.value.trim();
+    this.advancedFilters = null;
     await this.renderCurrentView();
+    // Show global dropdown if not on a list view
+    const view = this.currentView;
+    if (this.searchQuery.length >= 2 && view !== 'kanban' && view !== 'table') {
+      await Search._showGlobalResults(this.searchQuery);
+    } else {
+      Search._hideDropdown();
+    }
   },
 
   async updateCounts() {

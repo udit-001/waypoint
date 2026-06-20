@@ -186,12 +186,28 @@ func (s *Store) DeleteJob(id int64) error {
 	return nil
 }
 
-// SearchJobs searches jobs by company, position, or notes.
-func (s *Store) SearchJobs(query string) ([]Job, error) {
-	like := "%" + query + "%"
+// SearchJobs performs full-text search across company, position, notes, location, contact, and category.
+// Optionally filters by status and/or category on top of the FTS results.
+func (s *Store) SearchJobs(query string, status, category string) ([]Job, error) {
+	var conditions []string
+	var args []any
+
+	conditions = append(conditions, "jobs_fts MATCH ?")
+	args = append(args, query)
+
+	if status != "" {
+		conditions = append(conditions, "j.status = ?")
+		args = append(args, status)
+	}
+	if category != "" {
+		conditions = append(conditions, "c.name = ?")
+		args = append(args, category)
+	}
+
+	where := strings.Join(conditions, " AND ")
 	rows, err := s.Query(
-		fmt.Sprintf("SELECT %s %s WHERE j.company LIKE ? OR j.position LIKE ? OR j.notes LIKE ? ORDER BY j.id DESC", jobColumns, jobFrom),
-		like, like, like,
+		fmt.Sprintf("SELECT %s %s JOIN jobs_fts f ON j.id = f.rowid WHERE %s ORDER BY rank", jobColumns, jobFrom, where),
+		args...,
 	)
 	if err != nil {
 		return nil, err

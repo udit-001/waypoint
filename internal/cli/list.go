@@ -36,7 +36,7 @@ Examples:
 
 		switch {
 		case listFlags.search != "":
-			jobs, err = store.SearchJobs(listFlags.search)
+			jobs, err = store.SearchJobs(listFlags.search, listFlags.status, listFlags.category)
 		case listFlags.status != "" || listFlags.category != "":
 			jobs, err = store.FilterJobs(listFlags.status, listFlags.category)
 		default:

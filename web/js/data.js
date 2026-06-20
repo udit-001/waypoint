@@ -20,6 +20,20 @@ const DB = {
     return Array.isArray(data) ? data : [];
   },
 
+  async searchJobs(query, status, category) {
+    const params = new URLSearchParams();
+    params.set('search', query);
+    if (status) params.set('status', status);
+    if (category) params.set('category', category);
+    const data = await this._api('/jobs?' + params.toString());
+    return Array.isArray(data) ? data : [];
+  },
+
+  async searchAll(query) {
+    const data = await this._api('/search?q=' + encodeURIComponent(query));
+    return Array.isArray(data) ? data : [];
+  },
+
   async getJob(id) {
     return this._api(`/jobs/${id}`);
   },
@@ -128,6 +142,11 @@ const DB = {
     const qs = params.toString();
     if (qs) path += '?' + qs;
     const data = await this._api(path);
+    return Array.isArray(data) ? data : [];
+  },
+
+  async searchArtifacts(query) {
+    const data = await this._api('/artifacts?search=' + encodeURIComponent(query));
     return Array.isArray(data) ? data : [];
   },
 

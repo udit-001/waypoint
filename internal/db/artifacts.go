@@ -159,3 +159,89 @@ func joinStrings(parts []string, sep string) string {
 	}
 	return out
 }
+
+// SearchArtifacts performs full-text search across artifact title and skill_id.
+func (s *Store) SearchArtifacts(query string) ([]Artifact, error) {
+	var arts []Artifact
+	err := s.Select(&arts,
+		`SELECT a.id, a.skill_id, a.job_id, a.title, a.options, a.variants, a.archived, a.created_at, a.updated_at
+		 FROM artifacts a JOIN artifacts_fts f ON a.id = f.rowid
+		 WHERE artifacts_fts MATCH ?
+		 ORDER BY rank`,
+		query,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("search artifacts: %w", err)
+	}
+	return arts, nil
+}
+
+// SearchResultItem is a unified search result from any entity.
+type SearchResultItem struct {
+	Type    string `json:"type"`    // "job" or "artifact"
+	ID      int64  `json:"id"`
+	Title   string `json:"title"`
+	Sub     string `json:"sub"`
+	Match   string `json:"match"`  // which field matched
+}
+
+// SearchAll performs full-text search across jobs and artifacts, returning unified results.
+func (s *Store) SearchAll(query string) ([]SearchResultItem, error) {
+	var results []SearchResultItem
+
+	// Search jobs
+	jobRows, err := s.Query(
+		`SELECT j.id, j.company, j.position, j.status, c.name
+		 FROM jobs j
+		 JOIN categories c ON j.category_id = c.id
+		 JOIN jobs_fts f ON j.id = f.rowid
+		 WHERE jobs_fts MATCH ?
+		 ORDER BY rank
+		 LIMIT 20`,
+		query,
+	)
+	if err == nil {
+		for jobRows.Next() {
+			var id int64
+			var company, position, status, catName string
+			if err := jobRows.Scan(&id, &company, &position, &status, &catName); err == nil {
+				results = append(results, SearchResultItem{
+					Type:  "job",
+					ID:    id,
+					Title: company + " — " + position,
+				Sub:   status,
+				Match: catName,
+				})
+			}
+		}
+		jobRows.Close()
+	}
+
+	// Search artifacts
+	artRows, err := s.Query(
+		`SELECT a.id, a.title, a.skill_id
+		 FROM artifacts a JOIN artifacts_fts f ON a.id = f.rowid
+		 WHERE artifacts_fts MATCH ?
+		 ORDER BY rank
+		 LIMIT 20`,
+		query,
+	)
+	if err == nil {
+		for artRows.Next() {
+			var id int64
+			var title, skillID string
+			if err := artRows.Scan(&id, &title, &skillID); err == nil {
+				results = append(results, SearchResultItem{
+					Type:  "artifact",
+					ID:    id,
+					Title: title,
+					Sub:   skillID,
+					Match: "artifact",
+				})
+			}
+		}
+		artRows.Close()
+	}
+
+	return results, nil
+}

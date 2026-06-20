@@ -97,6 +97,17 @@ const TableView = {
   },
 
   async getFilteredJobs() {
+    // Server-side FTS when there's a search query
+    if (App.searchQuery && App.searchQuery.length >= 2) {
+      const serverJobs = await Search.getServerSideJobs(
+        App.searchQuery,
+        App.advancedFilters?.status || '',
+        App.tableCategoryFilter || App.advancedFilters?.category || '',
+      );
+      if (serverJobs !== null) return serverJobs;
+    }
+
+    // Fallback: client-side filtering
     let jobs = await DB.getJobs();
     if (App.tableCategoryFilter) {
       jobs = jobs.filter(j => j.category === App.tableCategoryFilter);

@@ -39,6 +39,7 @@ func Start(cfg Config) error {
 	mux.HandleFunc("GET /api/categories", handleCategories(cfg.DB))
 	mux.HandleFunc("GET /api/artifacts", handleListArtifacts(cfg.DB))
 	mux.HandleFunc("GET /api/artifacts/{id}", handleGetArtifact(cfg.DB))
+	mux.HandleFunc("GET /api/search", handleSearch(cfg.DB))
 
 	// Profile & Settings
 	mux.HandleFunc("GET /api/profile", handleGetProfile(cfg.DB))
@@ -172,7 +173,7 @@ func handleListJobs(store *db.Store) http.HandlerFunc {
 
 		switch {
 		case search != "":
-			jobs, err = store.SearchJobs(search)
+			jobs, err = store.SearchJobs(search, status, category)
 		case status != "" || category != "":
 			jobs, err = store.FilterJobs(status, category)
 		default:
@@ -306,9 +307,23 @@ func handleCategories(store *db.Store) http.HandlerFunc {
 
 func handleListArtifacts(store *db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		search := r.URL.Query().Get("search")
 		skill := r.URL.Query().Get("skill")
 		jobStr := r.URL.Query().Get("job")
 		all := r.URL.Query().Get("all") == "true"
+
+		if search != "" {
+			arts, err := store.SearchArtifacts(search)
+			if err != nil {
+				jsonError(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if arts == nil {
+				arts = []db.Artifact{}
+			}
+			jsonResponse(w, arts)
+			return
+		}
 
 		var jobID int64
 		if jobStr != "" {
@@ -318,7 +333,7 @@ func handleListArtifacts(store *db.Store) http.HandlerFunc {
 		arts, err := store.GetArtifacts(skill, jobID, all)
 		if err != nil {
 			jsonError(w, err.Error(), http.StatusInternalServerError)
-			return
+				return
 		}
 		if arts == nil {
 			arts = []db.Artifact{}
@@ -342,5 +357,25 @@ func handleGetArtifact(store *db.Store) http.HandlerFunc {
 			return
 		}
 		jsonResponse(w, art)
+	}
+}
+
+func handleSearch(store *db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("q")
+		if q == "" {
+			jsonError(w, "missing query parameter 'q'", http.StatusBadRequest)
+			return
+		}
+
+		results, err := store.SearchAll(q)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if results == nil {
+			results = []db.SearchResultItem{}
+		}
+		jsonResponse(w, results)
 	}
 }
