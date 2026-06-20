@@ -16,10 +16,10 @@ const UI = {
     const toggleBtn = document.getElementById('sidebar-toggle');
     const sidebar = document.getElementById('sidebar');
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === 'false') {
-      sidebar.classList.remove('closed');
-    } else {
+    if (saved === 'true') {
       sidebar.classList.add('closed');
+    } else {
+      sidebar.classList.remove('closed');
     }
     toggleBtn.addEventListener('click', () => {
       sidebar.classList.toggle('closed');
