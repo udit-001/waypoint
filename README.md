@@ -18,7 +18,7 @@ curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | 
 To install a specific version:
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh -s -- v0.2.1
+curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh -s -- v0.3.0
 ```
 
 ### With Go (recommended)
@@ -80,12 +80,20 @@ Alias: `waypoint cat`
 
 | Command | Description |
 |---------|-------------|
+| `waypoint artifacts add` | Add an artifact. Flags: `--skill`, `--title`, `--title-file`, `-f`/`--variant-file`, `--variant-content`, `--variant-label`, `--variants`, `--variants-file`, `--options`, `--options-file`, `--job` |
 | `waypoint artifacts list` | List generated content. Flags: `--skill`, `--job`, `--all` |
 | `waypoint artifacts get <id>` | Show artifact with all variants |
 | `waypoint artifacts delete <id>` | Delete an artifact. Flag: `--force` |
 | `waypoint artifacts archive <id>` | Soft-delete (hide from default list) |
 
 Alias: `waypoint artifact`
+
+The `-f`/`--variant-file` flag reads content from a file — ideal for multiline text and AI agent workflows:
+
+```bash
+waypoint artifacts add --skill cover-letter --title "Cover for Google" -f /tmp/cover.txt --job 3
+waypoint artifacts add --skill email-generator --title "Follow-up" --variants-file /tmp/variants.json --job 3
+```
 
 ### Other
 
@@ -106,7 +114,7 @@ Nine views, all read-only (mutations via CLI):
 - **Dashboard** — Stats cards + charts (status doughnut, category bar, monthly trend)
 - **Kanban** — Columnar board grouped by status
 - **Table** — Sortable table with category filter (pills or dropdown)
-- **Timeline** — Chronological activity history
+- **Search** — Full-text search across jobs and artifacts with instant dropdown results
 - **Categories** — Manage categories table with CLI actions
 - **Profile** — View personal info, skills, education, experience
 - **AI Integration** — Browse 6 built-in skills + install command for AI agents
@@ -157,6 +165,7 @@ All data lives in a SQLite database (`~/.waypoint/waypoint.db`). Tables:
 - `history` — Activity log (action audit trail)
 - `profile` — User profile (name, skills, experience, etc.)
 - `settings` — App preferences (theme, reminders, default view)
+- `jobs_fts` / `artifacts_fts` — FTS5 full-text search indices
 
 ## Keyboard Shortcuts
 
