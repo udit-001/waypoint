@@ -72,7 +72,7 @@ Examples:
 		rows := make([][]string, 0, len(arts))
 		for _, a := range arts {
 			var variants []db.ArtifactVariant
-			_ = json.Unmarshal(a.Variants, &variants)
+			_ = json.Unmarshal([]byte(a.Variants), &variants)
 			rows = append(rows, []string{
 				strconv.FormatInt(a.ID, 10),
 				a.SkillID,
@@ -127,7 +127,7 @@ Examples:
 		fmt.Printf("  Updated:  %s\n", formatDateTime(art.UpdatedAt))
 
 		var variants []db.ArtifactVariant
-		if err := json.Unmarshal(art.Variants, &variants); err != nil {
+		if err := json.Unmarshal([]byte(art.Variants), &variants); err != nil {
 			return fmt.Errorf("parse variants: %w", err)
 		}
 
