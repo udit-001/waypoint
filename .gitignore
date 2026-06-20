@@ -27,4 +27,5 @@ waypoint
 *.swp
 .playwright-mcp/
 .pi/
+.docs/
 *.tar.gz
