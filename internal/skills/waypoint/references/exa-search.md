@@ -60,12 +60,12 @@ exa_web_search_exa { query: "<person> <company> years longtime known since", num
 
 ## Deep-reading
 
-Snippets often enough. Fetch full page when snippet lacks value or need judgment call:
+Snippets often enough. Fetch full page when snippet lacks the value or you need a judgment call:
 
 ```
 exa_web_fetch_exa { urls: ["<url1>", "<url2>"], maxCharacters: 5000 }
 ```
 
-## Save
+## Save into waypoint
 
 Via `jobs update <id> --contact "..."` / `--notes`.

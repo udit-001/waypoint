@@ -12,7 +12,7 @@ Needs poppler (`pdftotext`, `pdftoppm`). If missing:
 
 Check: `pdftotext -v 2>&1 | head -1`
 
-## 1. pdftotext
+## Step 1 — pdftotext
 
 ```bash
 pdftotext <file.pdf> -              # stdout
@@ -20,9 +20,11 @@ pdftotext <file.pdf> - | head -200  # first N lines
 pdftotext <file.pdf> /tmp/out.txt   # to file
 ```
 
-Empty/garbled → step 2.
+**Done when**: text is readable and contains the job posting content.
 
-## 2. PDF → image → vision model
+If empty/garbled → step 2.
+
+## Step 2 — PDF → image → vision model
 
 If `pdftoppm` + vision model available:
 
@@ -34,7 +36,9 @@ pdftoppm -png -r 200 -f 1 -l 3 file.pdf /tmp/pdf-page   # pages 1-3
 
 Send PNGs to vision model: "Extract all text. Include headings, lists, tables."
 
-## 3. Into waypoint
+**Done when**: all pages extracted, text is readable.
+
+## Step 3 — into waypoint
 
 ```bash
 waypoint jobs update <id> --notes "$(pdftotext file.pdf - | head -100)"

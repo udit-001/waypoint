@@ -1,23 +1,28 @@
-# Cover letter
+# Cover Letter
 
 Cover letters in 4 tones.
 
 ## Options
-- tone: Formal|Casual|Creative|Executive (Formal)
-- length: Short|Medium|Detailed (Medium) — caps 250/500/800 chars
-- emphasize skill (optional)
-- include education: bool (yes)
 
-Always: contact header + signature.
+- **tone**: Formal | Casual | Creative | Executive
+- **length**: Short (250) | Medium (500) | Detailed (800 chars)
+- **emphasize skill**: optional
+- **include education**: bool
 
-## Structures (in order)
-- **Formal** — "Dear Hiring Manager": address-block → date → salutation → intro → experience → skills → education → closing → signature. Words: proven, established, seasoned.
-- **Casual** — "Hi there": intro → highlights → fit → culture → closing. Words: passionate, enthusiastic, curious.
-- **Creative** — "To the {{company}} Team": hook → story → skills → vision → CTA. Words: innovative, bold, dynamic.
-- **Executive** — "Dear {{company}} Leadership Team": title-ref → strategic intro → leadership → vision → culture-fit → closing. Words: strategic, visionary, transformational.
+**Always**: contact header + signature. Swap `{{company}}` `{{position}}` `{{contactName}}`.
+
+## Structures
+
+- **Formal** — "Dear Hiring Manager": address-block → date → salutation → intro → experience → skills → education → closing → signature. Words: _proven, established, seasoned_.
+- **Casual** — "Hi there": intro → highlights → fit → culture → closing. Words: _passionate, enthusiastic, curious_.
+- **Creative** — "To the {{company}} Team": hook → story → skills → vision → CTA. Words: _innovative, bold, dynamic_.
+- **Executive** — "Dear {{company}} Leadership Team": title-ref → strategic intro → leadership → vision → culture-fit → closing. Words: _strategic, visionary, transformational_.
 
 ## Steps
-1. `waypoint jobs get <id>`
-2. read profile
-3. pick tone + length
-4. draft following structure; swap `{{company}}`
+
+1. `waypoint jobs get <id>` — pull company, position, contact
+2. `waypoint profile show --json` — pull name, skills, experience
+3. Pick tone + length from user request
+4. Draft following structure; enforce length cap
+
+**Done when**: letter follows the tone's structure, respects length cap, swaps all placeholders.

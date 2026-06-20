@@ -1,16 +1,18 @@
-# Career summary
+# Career Summary
 
-Resume summary / professional bio, 5 styles.
+Resume summary / professional bio. 5 styles.
 
 ## Options
-- style: Standard|Impact|Technical|Executive|Entry-Level (Standard)
-- emphasize: Skills|Experience|Achievements|Balanced (Balanced)
-- length: Brief|Short|Detailed (Short) — caps 120/280/500 chars
-- include contact: bool (no)
 
-Always include target role.
+- **style**: Standard | Impact | Technical | Executive | Entry-Level
+- **emphasize**: Skills | Experience | Achievements | Balanced
+- **length**: Brief (120) | Short (280) | Detailed (500 chars)
+- **include contact**: bool
+
+**Always** include target role from profile.
 
 ## Structures
+
 - **Standard**: title · years-exp · core-skills · achievements · goal
 - **Impact**: hook · key-result · value-prop · closing
 - **Technical**: name-title · competencies · tools · exp-highlights · value-prop
@@ -18,7 +20,10 @@ Always include target role.
 - **Entry-Level**: education · relevant-skills · internships/projects · motivation · potential
 
 ## Steps
-1. read profile (skills, exp, edu)
-2. pick style + emphasis
-3. draft following structure; ≤300 chars/version
-4. multi-version? → gen one per style to compare
+
+1. `waypoint profile show --json` — pull skills, experience, education
+2. Pick style + emphasis from user request
+3. Draft following the structure above; stay within length cap
+4. If user wants comparison → generate one per style
+
+**Done when**: summary fits the structure, stays within length cap, includes target role.

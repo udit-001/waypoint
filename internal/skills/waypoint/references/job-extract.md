@@ -41,29 +41,8 @@ curl -sL "<url>" | sed 's/<[^>]*>//g' | sed '/^$/d' | head -300 > /tmp/job-page.
 
 Ambiguous → ask user. Don't guess.
 
-## Examples
-
-URL:
-```
-exa_web_fetch_exa { urls: ["https://careers.google.com/jobs/123"] }
-→ parse → jobs add "Google" "Senior SWE" --location "Mountain View" --url "..." --category Tech
-→ exa people/news → jobs update <id> --contact "..." / --notes "..."
-```
-
-PDF:
-```
-pdftotext dossier.pdf - | head -200
-→ parse → jobs add "GBRC" "Research Scientist" --location "Gujarat"
-```
-
-Company name:
-```
-exa search for company + open roles → ask which role → jobs add "Stripe" "<role>"
-→ exa people/news → jobs update <id> --contact / --notes
-```
-
 ## After adding
 
-- "Research company/people?" → exa-search
-- "Draft cover letter?" → cover-letter
+- "Research company/people?" → [exa-search](exa-search.md)
+- "Draft cover letter?" → [cover-letter](cover-letter.md)
 - "More jobs to add?"

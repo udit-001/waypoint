@@ -1,25 +1,31 @@
-# Email generator
+# Email Generator
 
-Drafts job emails from job + profile data.
+Drafts job-search emails from job + profile data.
 
 ## Types
+
 `application` · `followUp` · `thankYou` · `networking` · `referralRequest` · `offerAcceptance` · `rejectionResponse`
 
 ## Options
-- tone: Formal|Casual|Creative|Concise (Formal)
-- include salary: bool (no)
-- focus: Skills|Experience|Education|Mixed (Mixed)
-- personal note/hook: bool (yes)
+
+- **tone**: Formal | Casual | Creative | Concise
+- **include salary**: bool
+- **focus**: Skills | Experience | Education | Mixed
+- **personal note/hook**: bool
 
 ## Steps
-1. `waypoint jobs get <id>` → pull job
-2. read profile (name, skills, exp)
-3. pick type from request
-4. draft from template below
-5. rules: subject ≤78 chars · personal note ≤200 chars · always sign off
 
-## Templates
-| type | subject |
+1. `waypoint jobs get <id>` — pull company, position, contact
+2. `waypoint profile show --json` — pull name, skills, experience
+3. Pick type + tone from user request
+4. Draft from subject template + tone adjectives below
+5. Rules: subject ≤78 chars · personal note ≤200 chars · always sign off
+
+**Done when**: email has correct subject, swaps all placeholders, respects char limits, signs off.
+
+## Subject templates
+
+| Type | Subject |
 |------|---------|
 | application | `Application for {{position}} at {{company}}` |
 | followUp | `Follow-Up: {{position}} Application` |
@@ -29,8 +35,9 @@ Drafts job emails from job + profile data.
 | offerAcceptance | `Offer Acceptance: {{position}} at {{company}}` |
 | rejectionResponse | `Thank You — {{position}} at {{company}}` |
 
-Tone adjectives: Formal (proven, established, seasoned) · Casual (passionate, enthusiastic, curious) · Creative (innovative, bold, dynamic) · Concise (none, keep short).
+## Tone adjectives
 
-Closings: Best regards / Sincerely / Cheers / Yours faithfully.
-
-Swap `{{company}}` `{{position}}` `{{contactName}}` w/ real values.
+- **Formal**: _proven, established, seasoned_. Closing: _Best regards / Sincerely_
+- **Casual**: _passionate, enthusiastic, curious_. Closing: _Cheers / Best_
+- **Creative**: _innovative, bold, dynamic_. Closing: _Looking forward / Onward_
+- **Concise**: none — keep short. Closing: _Best_
