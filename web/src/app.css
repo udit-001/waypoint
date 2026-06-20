@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+@custom-variant dark (&[data-theme="dark"]);
+
+/* ── Nord-themed color tokens ──
+ * Light: Aurora / Snow Storm on Polar Night accents
+ * Dark:  Polar Night surfaces with Frost + Aurora accents
+ * All existing bg-slate-*, text-slate-*, border-*, bg-white classes
+ * automatically switch via CSS variable overrides.
+ */
+
+/* ── Light mode defaults (Tailwind's defaults, just ensuring purity) ── */
+:root {
+  --color-white:  #ffffff;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --color-slate-50:  #f8fafc;
+  --color-slate-100: #eceff4;   /* nord5 — page bg */
+  --color-slate-200: #e5e9f0;   /* nord4 — border color */
+  --color-slate-300: #d8dee9;   /* nord4 — subtle divider */
+
+  --color-stone-50:  #f8fafc;
+
+  --color-red-100:   #fce4e4;
+  --color-red-600:   #bf616a;   /* nord11 */
+  --color-blue-100:  #e3edf7;
+  --color-blue-700:  #5e81ac;   /* nord9 */
+  --color-emerald-100: #e6f0e6;
+  --color-emerald-600: #a3be8c; /* nord14 */
+  --color-amber-100: #fff4e0;
+  --color-amber-500: #ebcb8b;   /* nord13 */
+  --color-amber-600: #d08770;   /* nord12 */
+}
+
+/* ── Dark mode: Polar Night (nord0–3) + Frost (nord7–10) ── */
+[data-theme="dark"] {
+  /* Surfaces — Polar Night */
+  --color-white:  #3b4252;    /* nord1 — card / panel surface */
+  --color-slate-50:  #2e3440; /* nord0 — deepest page bg */
+  --color-slate-100: #353b4a; /* slightly darker than cards — page bg, tag bg */
+  --color-slate-200: #434c5e; /* nord2 — borders */
+  --color-slate-300: #4c566a; /* nord3 — tertiary / input bg */
+
+  /* Override stone-50 used by TopBar */
+  --color-stone-50: #2e3440;  /* nord0 */
+
+  /* Text — Snow Storm */
+  --color-slate-400: #81a1c1; /* nord10 — muted text (AA on nord1) */
+  --color-slate-500: #94adcb; /* secondary muted (AA on nord1) */
+  --color-slate-600: #88c0d0; /* nord8 — accent */
+  --color-slate-700: #aebbcf; /* secondary text (between nord4 & nord10) */
+  --color-slate-800: #d8dee9; /* nord4 — primary text */
+  --color-slate-900: #eceff4; /* nord6 — heading / bold text */
+  --color-slate-950: #f0f4f8; /* bright text for pressing needs */
+
+  /* Interactive */
+  --color-slate-950: #dfe7ee; /* light tint for hover (on nord1) */
+
+  /* Status — Aurora */
+  --color-emerald-100: #2e3440;
+  --color-emerald-600: #a3be8c;  /* nord14 */
+  --color-emerald-700: #8fbcbb;  /* nord7 */
+
+  --color-amber-100: #434c5e;
+  --color-amber-200: #4c566a;
+  --color-amber-500: #ebcb8b;  /* nord13 */
+  --color-amber-600: #d08770;  /* nord12 */
+
+  --color-red-100: #4c566a;
+  --color-red-600: #bf616a;    /* nord11 */
+  --color-red-700: #d35f5f;
+
+  --color-blue-100: #4c566a;
+  --color-blue-700: #81a1c1;   /* nord10 */
+}
+
+/* ── Custom scrollbar ──
+ * Uses CSS variables so color adapts to theme automatically.
+ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-slate-200);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-slate-400);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-slate-200) transparent;
+}
+
+/* ── Font toggle (Settings page) ──
+ * data-font="serif" applies PT Serif everywhere (body level).
+ * Monospace and code elements are excluded.
+ */
+[data-font="serif"] body,
+[data-font="serif"] #app {
+  font-size: 1.0625rem;
+}
+[data-font="serif"] body,
+[data-font="serif"] #app,
+[data-font="serif"] #app * {
+  font-family: 'PT Serif', Georgia, 'Times New Roman', serif;
+}
+[data-font="serif"] .font-mono,
+[data-font="serif"] code,
+[data-font="serif"] pre {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+}

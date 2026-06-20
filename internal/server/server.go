@@ -45,8 +45,8 @@ func Start(cfg Config) error {
 	mux.HandleFunc("GET /api/profile", handleGetProfile(cfg.DB))
 	mux.HandleFunc("GET /api/settings", handleGetSettings(cfg.DB))
 
-	// Embedded static UI
-	staticFS, err := fs.Sub(web.Files, ".")
+	// Embedded static UI (Svelte build output)
+	staticFS, err := fs.Sub(web.Files, "dist")
 	if err != nil {
 		return fmt.Errorf("static subfs: %w", err)
 	}

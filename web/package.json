@@ -1,0 +1,22 @@
+{
+  "name": "waypoint",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tailwindcss/vite": "^4.3.1",
+    "svelte": "^5.55.5",
+    "tailwindcss": "^4.3.1",
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1",
+    "marked": "^18.0.5"
+  }
+}
