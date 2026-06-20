@@ -16,7 +16,7 @@ const Export = {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `job-tracker-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `waypoint-backup-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
     UI.showToast('Data exported successfully!', 'success');

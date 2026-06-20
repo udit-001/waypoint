@@ -17,6 +17,12 @@ const App = {
     document.documentElement.dataset.theme = theme;
     document.getElementById('theme-toggle').innerHTML = icon(theme === 'dark' ? 'sun' : 'moon', 18);
 
+    // Font init
+    const savedFont = localStorage.getItem('waypoint_font');
+    if (savedFont) {
+      document.documentElement.dataset.font = savedFont;
+    }
+
     await UI.renderCategories();
     UI.init();
     Skills.init();
@@ -78,7 +84,7 @@ const App = {
       timeline: 'Timeline', skills: 'Skills', generated: 'Generated Content',
       settings: 'Settings', job: this.currentJobId ? 'Job #' + this.currentJobId : 'Job Detail',
     };
-    document.title = (titles[view] || 'Dashboard') + ' — Job Tracker';
+    document.title = (titles[view] || 'Dashboard') + ' — Waypoint';
 
     // View panes
     document.querySelectorAll('.view-pane').forEach(p => p.classList.remove('active'));
@@ -190,9 +196,9 @@ const App = {
         <div class="job-detail-section">
           <h4>CLI Quick Actions</h4>
           <pre style="background:var(--bg-secondary);padding:12px;border-radius:6px;font-size:13px;line-height:1.6">
-  job-tracker update ${jobId} --status "Offer" --notes "New status"
-  job-tracker update ${jobId} --notes "Add a note here"
-  job-tracker delete ${jobId}</pre>
+  waypoint update ${jobId} --status "Offer" --notes "New status"
+  waypoint update ${jobId} --notes "Add a note here"
+  waypoint delete ${jobId}</pre>
         </div>
       </div>
     `;

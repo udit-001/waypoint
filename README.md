@@ -1,4 +1,8 @@
-# Job Application Tracker
+<p align="center">
+  <img src="web/icons/icon-192.svg" width="120" height="120" alt="Waypoint logo">
+</p>
+
+# Waypoint — Job Tracker
 
 A Notion-like job application tracker with a Go backend (SQLite + REST API) and a pure vanilla JS frontend.  
 Data mutations happen through the CLI; the web UI is a read-only dashboard.
@@ -17,10 +21,10 @@ To install a specific version:
 curl -sfL https://raw.githubusercontent.com/SwatiBio/Job-tracker/main/install.sh | sh -s -- v0.1.0
 ```
 
-### With Go (recommended — avoids Windows SmartScreen flags)
+### With Go (recommended)
 
 ```bash
-go install github.com/SwatiBio/job-tracker/cmd/job-tracker@latest
+go install github.com/SwatiBio/waypoint/cmd/waypoint@latest
 ```
 
 ### From source
@@ -28,17 +32,17 @@ go install github.com/SwatiBio/job-tracker/cmd/job-tracker@latest
 ```bash
 git clone https://github.com/SwatiBio/Job-tracker.git
 cd Job-tracker
-go build -o job-tracker ./cmd/job-tracker
+go build -o waypoint ./cmd/waypoint
 ```
 
 ## Quick Start
 
 ```bash
 # Initialize the database
-./job-tracker init
+./waypoint init
 
 # Start the web UI (opens on http://localhost:8080)
-./job-tracker start
+./waypoint start
 ```
 
 ## CLI Commands
@@ -76,7 +80,7 @@ The web UI fetches data from the Go REST API (`GET /api/*`). All mutations (add/
 ## AI Integration (Optional)
 
 1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
-2. Set it via CLI: `job-tracker update settings --gemini-key <key>`
+2. Set it via CLI: `waypoint update settings --gemini-key <key>`
 3. Generators will use Gemini AI with automatic fallback to built-in templates
 
 ## Tech Stack
@@ -87,7 +91,7 @@ The web UI fetches data from the Go REST API (`GET /api/*`). All mutations (add/
 - **Frontend:** Vanilla HTML/CSS/JS (ES6+), no frameworks
 - **Charts:** Chart.js 4.4.1 (`web/vendor/`)
 - **Markdown:** marked 11.1.1 (`web/vendor/`)
-- **Typography:** PT Serif (`web/fonts/`)
+- **Typography:** Inter & PT Serif (`web/fonts/`)
 - **PWA:** Service worker for offline caching
 
 ## Data Storage

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'job-tracker-v2';
+const CACHE_NAME = 'waypoint-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
