@@ -81,7 +81,7 @@ const App = {
     // Title
     const titles = {
       dashboard: 'Dashboard', kanban: 'Kanban Board', table: 'Table View',
-      timeline: 'Timeline', skills: 'Skills', generated: 'Generated Content',
+      timeline: 'Timeline', skills: 'AI Integration', generated: 'Generated Content',
       settings: 'Settings', job: this.currentJobId ? 'Job #' + this.currentJobId : 'Job Detail',
     };
     document.title = (titles[view] || 'Dashboard') + ' — Waypoint';
