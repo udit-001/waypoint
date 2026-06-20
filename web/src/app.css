@@ -36,7 +36,7 @@
   /* Surfaces — Polar Night */
   --color-white:  #3b4252;    /* nord1 — card / panel surface */
   --color-slate-50:  #2e3440; /* nord0 — deepest page bg */
-  --color-slate-100: #3b4252; /* nord1 — secondary surface */
+  --color-slate-100: #353b4a; /* slightly darker than cards — page bg, tag bg */
   --color-slate-200: #434c5e; /* nord2 — borders */
   --color-slate-300: #4c566a; /* nord3 — tertiary / input bg */
 
@@ -44,8 +44,8 @@
   --color-stone-50: #2e3440;  /* nord0 */
 
   /* Text — Snow Storm */
-  --color-slate-400: #616c82; /* muted text (raised from nord10 for legibility) */
-  --color-slate-500: #7b88a1; /* secondary muted */
+  --color-slate-400: #81a1c1; /* nord10 — muted text (AA on nord1) */
+  --color-slate-500: #94adcb; /* secondary muted (AA on nord1) */
   --color-slate-600: #88c0d0; /* nord8 — accent */
   --color-slate-700: #aebbcf; /* secondary text (between nord4 & nord10) */
   --color-slate-800: #d8dee9; /* nord4 — primary text */
