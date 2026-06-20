@@ -3,11 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Job Tracker</title>
+  <title>Waypoint</title>
   <meta name="theme-color" content="#5E81AC">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/style.css">
   <script src="vendor/chart.umd.min.js" defer></script>
@@ -19,7 +21,21 @@
     <!-- Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-header">
-        <a class="app-name" data-view="dashboard" href="/">Job Tracker</a>
+        <a class="app-name" data-view="dashboard" href="/">
+          <svg class="sidebar-logo" viewBox="0 0 100 100" width="28" height="28" aria-hidden="true">
+            <g fill="none" stroke="currentColor" stroke-linecap="round">
+              <circle cx="50" cy="50" r="32" stroke-width="4"/>
+              <circle cx="50" cy="50" r="16" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.4"/>
+              <circle cx="50" cy="18" r="4" fill="currentColor" stroke="none"/>
+              <circle cx="82" cy="50" r="4" fill="currentColor" stroke="none"/>
+              <circle cx="50" cy="82" r="4" fill="currentColor" stroke="none"/>
+              <circle cx="18" cy="50" r="4" fill="currentColor" stroke="none"/>
+              <polygon points="50,40 60,50 50,60 40,50" fill="currentColor" stroke="none"/>
+              <path d="M 50 18 A 32 32 0 0 1 82 50" stroke-width="2.5" opacity="0.5"/>
+              <circle cx="50" cy="50" r="2" fill="currentColor" stroke="none"/>
+            </g>
+          </svg>
+          Waypoint</a>
       </div>
       <nav class="sidebar-nav">
         <div class="nav-section">
