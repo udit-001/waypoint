@@ -31,7 +31,7 @@ No job ID? Search:
 ```bash
 waypoint jobs list --search "<company or role>" --json
 ```
-Found → use ID. Multiple → ask user. None → `read` [job-extract](references/job-extract.md) to parse from URL, PDF, or text, then `jobs add`.
+Found → use ID. Multiple → ask user. None → `read` [data/job-extract](references/data/job-extract.md) to parse from URL, PDF, or text, then `jobs add`.
 
 Profile `name`, `title`, `skills` must be non-empty. Missing → ask before generating.
 ```bash
@@ -42,7 +42,16 @@ waypoint profile set --name "Jane Doe" --title "Senior Engineer" --skills '["Go"
 
 ### Step 3 — Generate
 
-Job resolved + profile complete → `read` the relevant skill reference and generate content.
+Every generation follows the same **draft**: pull data → pick options → draft → review. `read` the relevant gen-* reference for its options, structures, and done criteria.
+
+1. `waypoint jobs get <id>` — pull company, position, notes, URL
+2. `waypoint profile show --json` — pull name, skills, experience, education
+3. `read` the gen-* reference for options (tone, style, type, etc.)
+4. Pick options from user request; ask if ambiguous
+5. Draft following the reference's structure
+6. Validate against its done criteria
+
+**Done when**: all items in the reference's done criteria pass.
 
 ### Step 4 — Save
 
@@ -64,30 +73,30 @@ Suggest a natural next step:
 
 ## Data sources
 
-- **Exa MCP** (company/people intel) → `read` [exa-search](references/exa-search.md). Save via `jobs update --contact` / `--notes`. If exa not connected, offer setup — see `references/exa-setup.md`
-- **PDFs** → `read` [pdf-extract](references/pdf-extract.md) if `pdftotext` available
-- **Job parsing** → `read` [job-extract](references/job-extract.md)
+- **Exa MCP** → `read` [data/exa-search](references/data/exa-search.md). Save via `jobs update --contact` / `--notes`. If exa not connected, offer setup — see [data/exa-setup](references/data/exa-setup.md)
+- **PDFs** → `read` [data/pdf-extract](references/data/pdf-extract.md) if `pdftotext` available
+- **Job parsing** → `read` [data/job-extract](references/data/job-extract.md)
 
 ## References
 
-### Generation skills
+### Generation skills — `read` the gen-* reference for options, structures, and done criteria
 
 | Ref | Output |
 |-----|--------|
-| [email-generator](references/email-generator.md) | 4 email types × 4 tones |
-| [cover-letter](references/cover-letter.md) | cover letter in 4 styles |
-| [resume-optimizer](references/resume-optimizer.md) | match %, missing keywords, action verbs |
-| [interview-prep](references/interview-prep.md) | role Q&A + research checklist |
-| [career-summary](references/career-summary.md) | resume summary in 5 styles |
-| [statement-of-purpose](references/statement-of-purpose.md) | SOP in 4 tones |
+| [gen-email-generator](references/gen-email-generator.md) | 4 email types × 4 tones |
+| [gen-cover-letter](references/gen-cover-letter.md) | cover letter in 4 styles |
+| [gen-resume-optimizer](references/gen-resume-optimizer.md) | match %, missing keywords, action verbs |
+| [gen-interview-prep](references/gen-interview-prep.md) | role Q&A + research checklist |
+| [gen-career-summary](references/gen-career-summary.md) | resume summary in 5 styles |
+| [gen-statement-of-purpose](references/gen-statement-of-purpose.md) | SOP in 4 tones |
 
-### Data skills
+### Data extraction — `read` the data/* reference
 
 | Ref | Output |
 |-----|--------|
-| [job-extract](references/job-extract.md) | parse job from URL/PDF/text → jobs add |
-| [exa-search](references/exa-search.md) | company/people/news research (if exa MCP) |
-| [pdf-extract](references/pdf-extract.md) | extract text from PDFs (if pdftotext) |
+| [data/job-extract](references/data/job-extract.md) | parse job from URL/PDF/text → jobs add |
+| [data/exa-search](references/data/exa-search.md) | company/people/news research (if exa MCP) |
+| [data/pdf-extract](references/data/pdf-extract.md) | extract text from PDFs (if pdftotext) |
 
 Skill IDs: `email-generator` `cover-letter` `resume-optimizer` `interview-prep` `career-summary` `statement-of-purpose`
 

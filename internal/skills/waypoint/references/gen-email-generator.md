@@ -1,27 +1,13 @@
 # Email Generator
 
-Drafts job-search emails from job + profile data.
-
 ## Types
-
 `application` · `followUp` · `thankYou` · `networking` · `referralRequest` · `offerAcceptance` · `rejectionResponse`
 
 ## Options
-
 - **tone**: Formal | Casual | Creative | Concise
 - **include salary**: bool
 - **focus**: Skills | Experience | Education | Mixed
 - **personal note/hook**: bool
-
-## Steps
-
-1. `waypoint jobs get <id>` — pull company, position, contact
-2. `waypoint profile show --json` — pull name, skills, experience
-3. Pick type + tone from user request
-4. Draft from subject template + tone adjectives below
-5. Rules: subject ≤78 chars · personal note ≤200 chars · always sign off
-
-**Done when**: email has correct subject, swaps all placeholders, respects char limits, signs off.
 
 ## Subject templates
 
@@ -35,9 +21,19 @@ Drafts job-search emails from job + profile data.
 | offerAcceptance | `Offer Acceptance: {{position}} at {{company}}` |
 | rejectionResponse | `Thank You — {{position}} at {{company}}` |
 
-## Tone adjectives
+## Tone adjectives & closings
+- **Formal**: _proven, established, seasoned_ → _Best regards / Sincerely_
+- **Casual**: _passionate, enthusiastic, curious_ → _Cheers / Best_
+- **Creative**: _innovative, bold, dynamic_ → _Looking forward / Onward_
+- **Concise**: none — keep short → _Best_
 
-- **Formal**: _proven, established, seasoned_. Closing: _Best regards / Sincerely_
-- **Casual**: _passionate, enthusiastic, curious_. Closing: _Cheers / Best_
-- **Creative**: _innovative, bold, dynamic_. Closing: _Looking forward / Onward_
-- **Concise**: none — keep short. Closing: _Best_
+## Rules
+- Subject ≤78 chars
+- Personal note ≤200 chars
+- Always sign off
+
+## Done when
+- Correct subject template used
+- Subject ≤78 chars, personal note ≤200 chars
+- All placeholders swapped
+- Signed off
