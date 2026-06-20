@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/SwatiBio/job-tracker/internal/db"
+	"github.com/SwatiBio/waypoint/internal/db"
 	"github.com/spf13/cobra"
 )
 
@@ -18,9 +18,9 @@ var getCmd = &cobra.Command{
 	Long: `Show full details of a job application by its ID.
 
 Examples:
-  job-tracker get 42
-  job-tracker get 42 --history    # Include activity history
-  job-tracker get 42 --json`,
+  waypoint get 42
+  waypoint get 42 --history    # Include activity history
+  waypoint get 42 --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := strconv.ParseInt(args[0], 10, 64)

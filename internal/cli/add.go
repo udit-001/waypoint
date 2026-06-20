@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/SwatiBio/job-tracker/internal/db"
+	"github.com/SwatiBio/waypoint/internal/db"
 	"github.com/spf13/cobra"
 )
 
@@ -32,9 +32,9 @@ Required arguments:
 Use flags to add details like status, category, salary, etc.
 
 Examples:
-  job-tracker add "Acme Corp" "Senior Engineer"
-  job-tracker add "Acme Corp" "Senior Engineer" --status Applied --salary "$150k"
-  job-tracker add "Acme Corp" "Senior Engineer" --notes "Applied via referral"`,
+  waypoint add "Acme Corp" "Senior Engineer"
+  waypoint add "Acme Corp" "Senior Engineer" --status Applied --salary "$150k"
+  waypoint add "Acme Corp" "Senior Engineer" --notes "Applied via referral"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		job := db.Job{

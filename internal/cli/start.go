@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/SwatiBio/job-tracker/internal/server"
+	"github.com/SwatiBio/waypoint/internal/server"
 	"github.com/spf13/cobra"
 )
 
@@ -32,15 +32,15 @@ var startCmd = &cobra.Command{
 	Short: "Start the web UI server",
 	Long: `Start a local web server with the read-only dashboard and API.
 
-Opens the Job Tracker UI in your browser. The dashboard shows your
+Opens the Waypoint UI in your browser. The dashboard shows your
 job applications, stats, and filters — all read-only. Use the CLI
-commands to add, update, or delete jobs.
+commands to add, upgrade, or delete jobs.
 
 Examples:
-  job-tracker start
-  job-tracker start --port 8080
-  job-tracker start --foreground  # Run in foreground
-  job-tracker start --no-open     # Don't auto-open browser`,
+  waypoint start
+  waypoint start --port 8080
+  waypoint start --foreground  # Run in foreground
+  waypoint start --no-open     # Don't auto-open browser`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		background := startFlags.background && !startFlags.foreground
@@ -61,16 +61,16 @@ Examples:
 			}
 			_ = os.WriteFile(pidFilePath(), []byte(fmt.Sprintf("%d", c.Process.Pid)), 0644)
 			fmt.Println()
-			fmt.Printf("  Job Tracker server started in background (PID: %d)\n", c.Process.Pid)
+			fmt.Printf("  Waypoint server started in background (PID: %d)\n", c.Process.Pid)
 			fmt.Printf("  http://127.0.0.1:%d\n", startFlags.port)
-			fmt.Printf("  Use 'job-tracker stop' to stop\n")
+			fmt.Printf("  Use 'waypoint stop' to stop\n")
 			fmt.Println()
 			return nil
 		}
 
 		if !startFlags.daemon {
 			fmt.Println()
-			fmt.Printf("  Starting Job Tracker server...\n")
+			fmt.Printf("  Starting Waypoint server...\n")
 			fmt.Println()
 		}
 
