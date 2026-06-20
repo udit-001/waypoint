@@ -3,6 +3,16 @@
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
+  import { marked } from 'marked';
+
+  function renderMarkdown(text) {
+    if (!text) return '';
+    try {
+      return marked.parse(text, { gfm: true, breaks: true });
+    } catch {
+      return text;
+    }
+  }
 
   let { id } = $props();
 
@@ -64,7 +74,7 @@
     {#if job.notes}
       <div class="mb-6">
         <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2 mb-3">Notes</h4>
-        <div class="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{job.notes}</div>
+        <div class="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 leading-relaxed notes-content">{@html renderMarkdown(job.notes)}</div>
       </div>
     {/if}
 
@@ -99,3 +109,57 @@
     </div>
   </div>
 {/if}
+
+<style>
+  .notes-content h1, .notes-content h2, .notes-content h3, .notes-content h4 {
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 16px 0 8px;
+  }
+  .notes-content h1 { font-size: 1.25rem; }
+  .notes-content h2 { font-size: 1.1rem; border-bottom: 1px solid var(--color-slate-200); padding-bottom: 4px; }
+  .notes-content h3 { font-size: 1rem; }
+  .notes-content h4 { font-size: 0.925rem; }
+  .notes-content h1:first-child, .notes-content h2:first-child, .notes-content h3:first-child { margin-top: 0; }
+  .notes-content p { margin: 0 0 8px; }
+  .notes-content p:last-child { margin: 0; }
+  .notes-content ul, .notes-content ol { margin: 0 0 8px; padding-left: 20px; }
+  .notes-content li { margin-bottom: 4px; }
+  .notes-content li > ul, .notes-content li > ol { margin-bottom: 0; }
+  .notes-content blockquote {
+    border-left: 3px solid var(--color-slate-600);
+    background: var(--color-slate-100);
+    border-radius: 0 4px 4px 0;
+    margin: 8px 0;
+    padding: 8px 12px;
+    font-style: italic;
+  }
+  .notes-content table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 0.875rem; }
+  .notes-content th, .notes-content td { text-align: left; border-bottom: 1px solid var(--color-slate-200); padding: 6px 10px; }
+  .notes-content th {
+    color: var(--color-slate-600);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .notes-content code {
+    background: var(--color-slate-100);
+    border-radius: 3px;
+    padding: 2px 5px;
+    font-size: 0.8rem;
+  }
+  .notes-content pre {
+    background: var(--color-slate-100);
+    border-radius: 6px;
+    margin: 8px 0;
+    padding: 12px;
+    font-size: 0.8rem;
+    overflow-x: auto;
+  }
+  .notes-content pre code { background: none; padding: 0; }
+  .notes-content a { color: var(--color-slate-600); text-decoration: none; }
+  .notes-content a:hover { text-decoration: underline; }
+  .notes-content hr { border: none; border-top: 1px solid var(--color-slate-200); margin: 12px 0; }
+  .notes-content input[type="checkbox"] { accent-color: var(--color-slate-600); margin-right: 6px; }
+</style>
