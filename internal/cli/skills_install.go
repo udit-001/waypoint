@@ -249,22 +249,76 @@ func offerSkillInstall() {
 	}
 }
 
+// skillFilesMap walks the embedded skill directory and returns a map of
+// relative path → file contents. Used by offerSkillUpgrade to detect
+// changes in any skill file, not just SKILL.md.
+func skillFilesMap() (map[string][]byte, error) {
+	files := make(map[string][]byte)
+	prefix := skills.SkillName + "/"
+	err := fs.WalkDir(skills.Files, skills.SkillName, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel := strings.TrimPrefix(path, prefix)
+		data, err := skills.Files.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files[rel] = data
+		return nil
+	})
+	return files, err
+}
+
+// skillFilesChanged returns true if any file in the embedded skill differs
+// from the installed copy at dir. Compares every file (SKILL.md and all
+// references), not just the top-level SKILL.md.
+func skillFilesChanged(dir string, embedded map[string][]byte) bool {
+	for rel, want := range embedded {
+		got, err := os.ReadFile(filepath.Join(dir, rel))
+		if err != nil {
+			// Installed dir is missing a file the embedded version has ⇒ outdated.
+			// A missing file under .pi/skills/waypoint/ references/ means the agent
+			// has an older install that didn't include that file.
+			return true
+		}
+		if string(got) != string(want) {
+			return true
+		}
+	}
+	// Also detect if the installed dir has extra files the embedded version
+	// doesn't — counts as changed so stale cruft doesn't linger.
+	installedCount := 0
+	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			installedCount++
+		}
+		return nil
+	})
+	return installedCount != len(embedded)
+}
+
 // offerSkillUpgrade checks for installed waypoint skills that differ from
 // the embedded version and offers to update them. Shared with upgrade.
 func offerSkillUpgrade() {
+	embedded, err := skillFilesMap()
+	if err != nil {
+		return
+	}
+
 	// Find which agents have the skill installed and outdated.
 	var outdated []agentTarget
 	for _, a := range agents {
-		skillFile := filepath.Join(a.dir, "SKILL.md")
-		installed, err := os.ReadFile(skillFile)
-		if err != nil {
+		if !isSkillInstalled(a.dir) {
 			continue
 		}
-		embedded, err := fs.ReadFile(skills.Files, filepath.Join(skills.SkillName, "SKILL.md"))
-		if err != nil {
-			continue
-		}
-		if string(installed) != string(embedded) {
+		if skillFilesChanged(a.dir, embedded) {
 			outdated = append(outdated, a)
 		}
 	}
@@ -297,6 +351,14 @@ func offerSkillUpgrade() {
 		}
 	}
 }
+
+// isSkillInstalled returns true if the SKILL.md exists at dir.
+func isSkillInstalled(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "SKILL.md"))
+	return err == nil
+}
+
+
 
 // promptYes reads a y/N prompt. Returns true only on explicit "y" or "yes".
 func promptYes() bool {
