@@ -32,9 +32,9 @@ Required arguments:
 Use flags to add details like status, category, salary, etc.
 
 Examples:
-  waypoint add "Acme Corp" "Senior Engineer"
-  waypoint add "Acme Corp" "Senior Engineer" --status Applied --salary "$150k"
-  waypoint add "Acme Corp" "Senior Engineer" --notes "Applied via referral"`,
+  waypoint jobs add "Acme Corp" "Senior Engineer"
+  waypoint jobs add "Acme Corp" "Senior Engineer" --status Applied --salary "$150k"
+  waypoint jobs add "Acme Corp" "Senior Engineer" --notes "Applied via referral"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		job := db.Job{
@@ -89,7 +89,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(addCmd)
+	jobsCmd.AddCommand(addCmd)
 
 	addCmd.Flags().StringVar(&addFlags.status, "status", "Not Applied", "Application status")
 	addCmd.Flags().StringVar(&addFlags.category, "category", "General", "Job category")

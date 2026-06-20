@@ -47,9 +47,9 @@ Examples:
 		fmt.Printf("  ✓ Initialized job tracker database at %s\n", storePath)
 		fmt.Println()
 		fmt.Println("  Next steps:")
-		fmt.Println("    waypoint add \"Company Name\" \"Position Title\"")
-		fmt.Println("    waypoint list")
-		fmt.Println("    waypoint stats")
+		fmt.Println("    waypoint jobs add \"Company Name\" \"Position Title\"")
+		fmt.Println("    waypoint jobs list")
+		fmt.Println("    waypoint jobs stats")
 		fmt.Println()
 		return nil
 	},

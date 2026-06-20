@@ -22,11 +22,11 @@ var listCmd = &cobra.Command{
 	Long: `List job applications with optional filtering.
 
 Examples:
-  waypoint list                    # All jobs
-  waypoint list --status Applied   # Only applied jobs
-  waypoint list --category Tech    # Tech category
-  waypoint list --search "google"  # Search company/position/notes
-  waypoint list --json             # Machine-readable output`,
+  waypoint jobs list                    # All jobs
+  waypoint jobs list --status Applied   # Only applied jobs
+  waypoint jobs list --category Tech    # Tech category
+  waypoint jobs list --search "google"  # Search company/position/notes
+  waypoint jobs list --json             # Machine-readable output`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var (
@@ -100,7 +100,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(listCmd)
+	jobsCmd.AddCommand(listCmd)
 
 	listCmd.Flags().StringVar(&listFlags.status, "status", "", "Filter by status")
 	listCmd.Flags().StringVar(&listFlags.category, "category", "", "Filter by category")

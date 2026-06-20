@@ -18,9 +18,9 @@ var getCmd = &cobra.Command{
 	Long: `Show full details of a job application by its ID.
 
 Examples:
-  waypoint get 42
-  waypoint get 42 --history    # Include activity history
-  waypoint get 42 --json`,
+  waypoint jobs get 42
+  waypoint jobs get 42 --history    # Include activity history
+  waypoint jobs get 42 --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := strconv.ParseInt(args[0], 10, 64)
@@ -116,6 +116,6 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(getCmd)
+	jobsCmd.AddCommand(getCmd)
 	getCmd.Flags().BoolVar(&getFlags.history, "history", false, "Show activity history")
 }

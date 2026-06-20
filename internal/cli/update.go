@@ -30,9 +30,9 @@ var updateCmd = &cobra.Command{
 Only the flags you provide are changed — all other fields remain untouched.
 
 Examples:
-  waypoint update 42 --status Offer --notes "Got the offer!"
-  waypoint update 42 --company "Google LLC" --position "Senior Engineer"
-  waypoint update 42 --salary "$180k" --location "Mountain View, CA"`,
+  waypoint jobs update 42 --status Offer --notes "Got the offer!"
+  waypoint jobs update 42 --company "Google LLC" --position "Senior Engineer"
+  waypoint jobs update 42 --salary "$180k" --location "Mountain View, CA"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := strconv.ParseInt(args[0], 10, 64)
@@ -118,7 +118,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(updateCmd)
+	jobsCmd.AddCommand(updateCmd)
 	updateCmd.Flags().StringVar(&updateFlags.company, "company", "", "Company or institution name")
 	updateCmd.Flags().StringVar(&updateFlags.position, "position", "", "Job title or position")
 	updateCmd.Flags().StringVar(&updateFlags.status, "status", "", "Application status")

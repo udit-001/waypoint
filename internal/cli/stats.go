@@ -12,8 +12,8 @@ var statsCmd = &cobra.Command{
 	Long: `Show summary statistics of your job applications.
 
 Examples:
-  waypoint stats
-  waypoint stats --json`,
+  waypoint jobs stats
+  waypoint jobs stats --json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jobs, err := store.GetJobs()
@@ -79,5 +79,5 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(statsCmd)
+	jobsCmd.AddCommand(statsCmd)
 }
