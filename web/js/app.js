@@ -7,7 +7,7 @@ const App = {
   advancedFilters: null,
   tableCategoryFilter: null,
 
-  _views: ['dashboard', 'kanban', 'table', 'timeline', 'categories', 'skills', 'generated', 'settings', 'job'],
+  _views: ['dashboard', 'kanban', 'table', 'timeline', 'categories', 'profile', 'skills', 'generated', 'settings', 'job'],
 
   async init() {
     const settings = await DB.getSettings();
@@ -80,7 +80,7 @@ const App = {
     // Title
     const titles = {
       dashboard: 'Dashboard', kanban: 'Kanban Board', table: 'Table View',
-      timeline: 'Timeline', categories: 'Categories', skills: 'AI Integration', generated: 'Generated Content',
+      timeline: 'Timeline', categories: 'Categories', profile: 'Profile', skills: 'AI Integration', generated: 'Generated Content',
       settings: 'Settings', job: this.currentJobId ? 'Job #' + this.currentJobId : 'Job Detail',
     };
     document.title = (titles[view] || 'Dashboard') + ' — Waypoint';
@@ -124,6 +124,7 @@ const App = {
       case 'table': await TableView.render(); break;
       case 'timeline': await Timeline.render(); break;
       case 'categories': await CategoriesView.render(); break;
+      case 'profile': await ProfileView.render(); break;
       case 'skills': await Skills.renderList(); break;
       case 'generated': await GeneratedContentView.render(); break;
       case 'settings': await Settings.render(); break;

@@ -491,6 +491,16 @@ textarea { resize: vertical; min-height: 80px; }
 .cat-cmd:hover { border-color: var(--accent); }
 .cat-cmd-danger:hover { border-color: var(--danger); }
 
+/* === Profile Page === */
+.profile-container { max-width: 800px; margin: 0 auto; }
+.profile-section {
+  background: var(--card-bg); border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px;
+}
+.profile-section h3 { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+.profile-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.profile-list { padding-left: 18px; margin: 0; font-size: 13px; line-height: 1.8; }
+
 /* Table category filter */
 .cat-filter-select {
   padding: 6px 10px; border: 1px solid var(--border-color);
