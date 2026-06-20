@@ -1,45 +1,51 @@
 <script>
-  import { navigate } from 'svelte-routing';
+  import { getRouter } from '../stores/router.svelte.js';
+  import { iconSvg } from '../lib/icons.js';
 
   let { sidebarClosed, onToggle } = $props();
+  const router = getRouter();
 
   const navSections = [
     {
       title: 'Views',
       items: [
-        { view: 'dashboard', label: 'Dashboard', icon: '◉' },
-        { view: 'kanban', label: 'Kanban', icon: '▦' },
-        { view: 'table', label: 'Table', icon: '⊟' },
+        { view: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+        { view: 'kanban', label: 'Kanban', icon: 'kanban' },
+        { view: 'table', label: 'Table', icon: 'table' },
       ],
     },
     {
       title: 'Organize',
       items: [
-        { view: 'categories', label: 'Categories', icon: '◻' },
-        { view: 'profile', label: 'Profile', icon: '◇' },
+        { view: 'categories', label: 'Categories', icon: 'box' },
+        { view: 'profile', label: 'Profile', icon: 'user' },
       ],
     },
     {
       title: 'AI',
       items: [
-        { view: 'skills', label: 'AI Integration', icon: '⬡' },
-        { view: 'artifacts', label: 'Artifacts', icon: '⊡' },
+        { view: 'skills', label: 'AI Integration', icon: 'bot' },
+        { view: 'artifacts', label: 'Artifacts', icon: 'folder' },
       ],
     },
   ];
 
   function handleNav(view) {
-    navigate('/' + (view === 'dashboard' ? '' : view));
+    router.navigate('/' + (view === 'dashboard' ? '' : view));
+  }
+
+  function isActive(view) {
+    return router.current.route === view;
   }
 </script>
 
 <aside
-  class="flex flex-col border-r border-slate-200 bg-slate-100 transition-all duration-200 overflow-hidden {sidebarClosed ? 'w-0 min-w-0 border-r-0' : 'w-60 min-w-60'}"
+  class="flex flex-col border-r border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-900 transition-all duration-200 overflow-hidden {sidebarClosed ? 'w-0 min-w-0 border-r-0' : 'w-60 min-w-60'}"
 >
-  <div class="flex items-center gap-2.5 px-5 py-4 border-b border-slate-200">
+  <div class="flex items-center gap-2.5 px-5 py-2 border-b border-slate-200 dark:border-slate-600">
     <a
       href="/"
-      class="flex items-center gap-2 text-sm font-semibold text-slate-800 hover:text-slate-600 no-underline"
+      class="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:text-slate-600 no-underline"
       onclick={(e) => { e.preventDefault(); handleNav('dashboard'); }}
     >
       <svg class="shrink-0" viewBox="0 0 100 100" width="28" height="28" aria-hidden="true">
@@ -63,30 +69,30 @@
     {#each navSections as section}
       <div class="mb-2">
         {#if section.title}
-          <span class="block px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <span class="block px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             {section.title}
           </span>
         {/if}
         {#each section.items as item}
           <a
             href="/{item.view === 'dashboard' ? '' : item.view}"
-            class="flex items-center gap-2 px-3 py-1.5 rounded text-sm text-slate-700 hover:bg-slate-200 hover:text-slate-900 no-underline cursor-pointer"
+            class="flex items-center gap-2 px-3 py-1.5 rounded text-sm no-underline cursor-pointer {isActive(item.view) ? 'bg-slate-700 text-white dark:bg-slate-600 font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900'}"
             onclick={(e) => { e.preventDefault(); handleNav(item.view); }}
           >
-            <span class="w-5 text-center text-base">{item.icon}</span>
+            <span class="w-5 text-center flex items-center justify-center">{@html iconSvg(item.icon, 18)}</span>
             {item.label}
           </a>
         {/each}
       </div>
     {/each}
 
-    <div class="border-t border-slate-200 mt-auto pt-2">
+    <div class="border-t border-slate-200 dark:border-slate-600 mt-auto pt-2">
       <a
         href="/settings"
-        class="flex items-center gap-2 px-3 py-1.5 rounded text-sm text-slate-700 hover:bg-slate-200 no-underline cursor-pointer"
+        class="flex items-center gap-2 px-3 py-1.5 rounded text-sm no-underline cursor-pointer {isActive('settings') ? 'bg-slate-700 text-white dark:bg-slate-600 font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}"
         onclick={(e) => { e.preventDefault(); handleNav('settings'); }}
       >
-        <span class="w-5 text-center text-base">⚙</span>
+        <span class="w-5 text-center flex items-center justify-center">{@html iconSvg('sliders', 18)}</span>
         Settings
       </a>
     </div>

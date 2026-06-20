@@ -1,7 +1,9 @@
 <script>
+  import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
-  import { navigate } from 'svelte-routing';
-  import * as api from '../stores/api.js';
+  import { getRouter } from '../stores/router.svelte.js';
+  const router = getRouter();
+  import * as api from '../stores/api.svelte.js';
 
   let cats = $state([]);
   let jobCounts = $state({});
@@ -21,7 +23,7 @@
 
   function goToTable(category) {
     // TODO: pass category filter to table view via store/query param
-    navigate('/table');
+    router.navigate('/table');
   }
 
   async function copyCmd(cmd) {
@@ -38,7 +40,7 @@
   <!-- CLI Commands -->
   <div class="bg-white rounded-xl border border-slate-200 p-5">
     <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-2">
-      <span>⌘</span> CLI Commands
+      <span>{@html iconSvg('copy', 16)}</span> CLI Commands
     </h4>
     <pre class="bg-slate-50 p-4 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint categories list              # List all categories
 waypoint categories add "Remote"       # Add a category
@@ -49,7 +51,7 @@ waypoint categories delete 3           # Delete by ID (jobs → General)</pre>
   <!-- All Categories -->
   <div>
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">
-      <span>◻</span> All Categories
+      {@html iconSvg("box", 14)} All Categories
     </h3>
 
     {#if cats.length === 0}

@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
-  import { navigate } from 'svelte-routing';
-  import * as api from '../stores/api.js';
+  import { getRouter } from '../stores/router.svelte.js';
+  const router = getRouter();
+  import * as api from '../stores/api.svelte.js';
 
   let { id } = $props();
 
@@ -12,7 +13,7 @@
   onMount(async () => {
     loading = true;
     job = await api.getJob(parseInt(id));
-    if (!job) { navigate('/'); return; }
+    if (!job) { router.navigate('/'); return; }
     history = await api.getJobHistory(job.id);
     loading = false;
   });

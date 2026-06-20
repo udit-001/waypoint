@@ -1,5 +1,4 @@
 <script>
-  import { Router, Route, navigate } from 'svelte-routing';
   import Sidebar from './components/Sidebar.svelte';
   import TopBar from './components/TopBar.svelte';
   import Dashboard from './views/Dashboard.svelte';
@@ -12,7 +11,10 @@
   import Settings from './views/Settings.svelte';
   import JobDetail from './views/JobDetail.svelte';
   import ArtifactDetail from './views/ArtifactDetail.svelte';
+  import Search from './views/Search.svelte';
+  import { getRouter } from './stores/router.svelte.js';
 
+  const router = getRouter();
   let sidebarClosed = $state(false);
 
   function toggleSidebar() {
@@ -20,24 +22,34 @@
   }
 </script>
 
-<div id="app" class="flex h-screen overflow-hidden">
+<div id="app" class="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
   <Sidebar {sidebarClosed} onToggle={toggleSidebar} />
   <main class="flex flex-col flex-1 overflow-hidden">
     <TopBar {sidebarClosed} onToggleSidebar={toggleSidebar} />
     <div class="flex-1 p-6 overflow-y-auto">
-      <Router url="/">
-        <Route path="/" component={Dashboard} />
-        <Route path="/dashboard" component={Dashboard} />
-        <Route path="/kanban" component={Kanban} />
-        <Route path="/table" component={TableView} />
-        <Route path="/categories" component={Categories} />
-        <Route path="/profile" component={Profile} />
-        <Route path="/skills" component={Skills} />
-        <Route path="/artifacts" component={Artifacts} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/job/:id" component={JobDetail} />
-        <Route path="/artifact/:id" component={ArtifactDetail} />
-      </Router>
+      {#if router.current.route === 'dashboard'}
+        <Dashboard />
+      {:else if router.current.route === 'kanban'}
+        <Kanban />
+      {:else if router.current.route === 'table'}
+        <TableView />
+      {:else if router.current.route === 'categories'}
+        <Categories />
+      {:else if router.current.route === 'profile'}
+        <Profile />
+      {:else if router.current.route === 'skills'}
+        <Skills />
+      {:else if router.current.route === 'artifacts'}
+        <Artifacts />
+      {:else if router.current.route === 'settings'}
+        <Settings />
+      {:else if router.current.route === 'search'}
+        <Search />
+      {:else if router.current.route === 'job'}
+        <JobDetail id={router.current.params.id} />
+      {:else if router.current.route === 'artifact'}
+        <ArtifactDetail id={router.current.params.id} />
+      {/if}
     </div>
   </main>
 </div>

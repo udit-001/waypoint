@@ -1,7 +1,9 @@
 <script>
+  import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
-  import { navigate } from 'svelte-routing';
-  import * as api from '../stores/api.js';
+  import { getRouter } from '../stores/router.svelte.js';
+  const router = getRouter();
+  import * as api from '../stores/api.svelte.js';
 
   const skillLabels = {
     'email-generator': 'Email',
@@ -41,7 +43,7 @@
   }
 
   function openResult(type, id) {
-    navigate(type === 'job' ? `/job/${id}` : `/artifact/${id}`);
+    router.navigate(type === 'job' ? `/job/${id}` : `/artifact/${id}`);
   }
 </script>
 
@@ -80,7 +82,7 @@
             onclick={() => openResult(result.type, result.id)}
           >
             <div class="flex items-center gap-3">
-              <span class="text-lg">{result.type === 'job' ? '💼' : '📄'}</span>
+              {@html iconSvg(result.type === 'job' ? 'briefcase' : 'file-text', 18)}
               <div class="flex-1 min-w-0">
                 <div class="text-sm font-medium text-slate-800 truncate">
                   {@html highlight(result.title || 'Untitled', query)}

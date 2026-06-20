@@ -1,75 +1,81 @@
 <script>
-  import { navigate } from 'svelte-routing';
+  import { onMount } from 'svelte';
+  import { getRouter } from '../stores/router.svelte.js';
+  import { iconSvg } from '../lib/icons.js';
 
   let { sidebarClosed, onToggleSidebar } = $props();
+  const router = getRouter();
 
   let searchQuery = $state('');
+  let isDark = $state(false);
+
+  onMount(() => {
+    isDark = document.documentElement.dataset.theme === 'dark';
+  });
+
+  const viewTitles = {
+    dashboard: 'Dashboard',
+    kanban: 'Kanban Board',
+    table: 'Table View',
+    categories: 'Categories',
+    profile: 'Profile',
+    skills: 'AI Integration',
+    artifacts: 'Artifacts',
+    settings: 'Settings',
+    search: 'Search',
+    job: 'Job Detail',
+    artifact: 'Artifact Detail',
+  };
 
   function handleSearch() {
     if (searchQuery.length >= 2) {
-      navigate('/table?q=' + encodeURIComponent(searchQuery));
-    }
-  }
-
-  function handleKeydown(e) {
-    if (e.key === 'Enter') handleSearch();
-    if (e.key === '/') {
-      e.preventDefault();
-      document.getElementById('topbar-search')?.focus();
+      router.navigate('/table');
     }
   }
 
   function toggleTheme() {
     const html = document.documentElement;
-    const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+    const next = isDark ? 'light' : 'dark';
     html.dataset.theme = next;
     localStorage.setItem('jobtracker_theme', next);
+    isDark = !isDark;
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<header class="flex items-center justify-between gap-4 min-h-14 px-6 py-3 bg-stone-50 border-b border-slate-200">
+<header class="flex items-center justify-between gap-4 min-h-10 px-6 py-1.5 bg-stone-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
   <div class="flex items-center gap-4">
     <button
-      class="p-1 rounded hover:bg-slate-200 text-slate-600 cursor-pointer"
+      class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
       onclick={onToggleSidebar}
       title="Toggle Sidebar"
     >
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-        <path d="M2 4.5h16M2 10h16M2 15.5h16" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-      </svg>
+      {@html iconSvg('menu', 20)}
     </button>
-    <h2 class="text-lg font-semibold text-slate-800 whitespace-nowrap">Dashboard</h2>
+    <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">{viewTitles[router.current.route] || 'Dashboard'}</h2>
   </div>
 
   <div class="flex items-center gap-2">
-    <div class="flex items-center bg-slate-100 rounded-lg px-2">
+    <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg px-2">
       <input
-        id="topbar-search"
         type="text"
         bind:value={searchQuery}
         placeholder="Search jobs & artifacts... (/)"
-        class="bg-transparent border-none outline-none w-56 py-1.5 px-2 text-sm text-slate-700 placeholder-slate-400 focus:w-72 transition-all"
-        onkeydown={(e) => { if (e.key === 'Enter') handleSearch(); if (e.key === 'Escape') { e.target.blur(); } }}
+        class="bg-transparent border-none outline-none w-56 py-1.5 px-2 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:w-72 transition-all"
+        onkeydown={(e) => { if (e.key === 'Enter') handleSearch(); if (e.key === 'Escape') e.target.blur(); }}
       />
       {#if searchQuery}
         <button
-          class="text-slate-400 hover:text-slate-600 cursor-pointer"
+          class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
           onclick={() => searchQuery = ''}
         >×</button>
       {/if}
     </div>
     <button
-      class="p-1.5 rounded hover:bg-slate-200 text-slate-600 cursor-pointer"
+      class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
       onclick={toggleTheme}
       title="Toggle Theme"
     >
-      {#if typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark'}
-        ☀
-      {:else}
-        ☾
-      {/if}
+      {@html iconSvg(isDark ? 'sun' : 'moon', 18)}
     </button>
   </div>
 </header>

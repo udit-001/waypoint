@@ -1,7 +1,9 @@
 <script>
+  import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
-  import { navigate } from 'svelte-routing';
-  import * as api from '../stores/api.js';
+  import { getRouter } from '../stores/router.svelte.js';
+  const router = getRouter();
+  import * as api from '../stores/api.svelte.js';
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -114,7 +116,7 @@
 {:else if jobs.length === 0}
   <!-- Empty state -->
   <div class="text-center py-20 text-slate-400">
-    <div class="text-5xl mb-4 opacity-50">◉</div>
+    <div class="text-5xl mb-4 opacity-50 flex items-center justify-center">{@html iconSvg("dashboard", 64)}</div>
     <h3 class="text-xl font-semibold text-slate-700 mb-2">Welcome to Waypoint</h3>
     <p class="max-w-sm mx-auto mb-6 leading-relaxed">Your job applications appear here. Use the CLI to add them:</p>
     <pre class="inline-block bg-slate-100 px-5 py-3 rounded-lg text-sm mb-6">waypoint jobs add "Company" "Position"</pre>
@@ -177,7 +179,7 @@
               {#each staleApps as app}
                 <button
                   class="w-full flex justify-between items-baseline py-1.5 border-b border-slate-100 last:border-0 text-left cursor-pointer bg-transparent hover:bg-slate-50 px-1 rounded transition-colors"
-                  onclick={() => navigate('/job/' + app.id)}
+                  onclick={() => router.navigate('/job/' + app.id)}
                 >
                   <div>
                     <span class="text-sm font-semibold text-slate-700">{app.company}</span>
@@ -200,7 +202,7 @@
               {#each upcoming as job}
                 <button
                   class="w-full flex justify-between items-baseline py-1.5 border-b border-slate-100 last:border-0 text-left cursor-pointer bg-transparent hover:bg-slate-50 px-1 rounded transition-colors"
-                  onclick={() => navigate('/job/' + job.id)}
+                  onclick={() => router.navigate('/job/' + job.id)}
                 >
                   <div>
                     <span class="text-sm font-semibold text-slate-700">{job.company}</span>
@@ -262,7 +264,7 @@
                     <span class="text-xs text-slate-600">
                       <button
                         class="font-semibold text-slate-700 hover:text-slate-500 cursor-pointer bg-transparent border-none p-0 text-xs"
-                        onclick={() => navigate('/job/' + job.id)}
+                        onclick={() => router.navigate('/job/' + job.id)}
                       >{job.company}</button>
                       {h.from} → {h.to}
                     </span>

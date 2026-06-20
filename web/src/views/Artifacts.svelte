@@ -1,16 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import { navigate } from 'svelte-routing';
-  import * as api from '../stores/api.js';
+  import { getRouter } from '../stores/router.svelte.js';
+  const router = getRouter();
+  import * as api from '../stores/api.svelte.js';
 
-  const skillLabels = {
-    'email-generator': 'Email',
-    'cover-letter': 'Cover Letter',
-    'resume-optimizer': 'Resume Optimizer',
-    'interview-prep': 'Interview Prep',
-    'career-summary': 'Career Summary',
-    'statement-of-purpose': 'SOP',
-  };
+  import { skillLabel } from '../stores/skillMeta.js';
 
   let artifactsList = $state([]);
 
@@ -35,11 +29,11 @@
     {#each artifactsList as art}
       <button
         class="w-full text-left bg-white rounded-xl border border-slate-200 p-4 cursor-pointer hover:border-slate-400 hover:shadow-sm transition-all"
-        onclick={() => navigate('/artifact/' + art.id)}
+        onclick={() => router.navigate('/artifact/' + art.id)}
       >
         <div class="flex items-start justify-between mb-2">
           <span class="text-sm font-semibold text-slate-800">{art.title || 'Untitled'}</span>
-          <span class="bg-slate-700 text-white rounded-full px-2 py-0.5 text-[10px] font-medium">{skillLabels[art.skillId] || art.skillId}</span>
+          <span class="bg-slate-700 text-white rounded-full px-2 py-0.5 text-[10px] font-medium">{skillLabel(art.skillId)}</span>
         </div>
         <div class="text-xs text-slate-400">
           {art.variants?.length || 0} variant{(art.variants?.length || 0) === 1 ? '' : 's'}

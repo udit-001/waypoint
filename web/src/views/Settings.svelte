@@ -1,6 +1,7 @@
 <script>
+  import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
-  import * as api from '../stores/api.js';
+  import * as api from '../stores/api.svelte.js';
 
   let settingsData = $state(null);
   let currentFont = $state('serif');
@@ -22,7 +23,7 @@
   <!-- App Settings -->
   <div class="bg-white rounded-xl border border-slate-200 p-5">
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
-      <span class="text-lg">⚙</span> App Settings
+      {@html iconSvg('sliders', 20)} App Settings
     </h3>
     <p class="text-sm text-slate-400 mb-6">Settings are managed via the CLI.</p>
     {#if settingsData}
@@ -80,7 +81,7 @@
   <!-- CLI Reference -->
   <div class="bg-white rounded-xl border border-slate-200 p-5">
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">
-      <span class="text-lg">⌘</span> CLI Quick Reference
+      <span class="text-lg">{@html iconSvg('copy', 20)}</span> CLI Quick Reference
     </h3>
     <pre class="bg-slate-50 p-4 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">  waypoint jobs add "Company" "Position" --status Applied --category Tech
   waypoint jobs list --status Applied

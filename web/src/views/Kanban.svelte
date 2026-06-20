@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
-  import { navigate } from 'svelte-routing';
-  import * as api from '../stores/api.js';
+  import { getRouter } from '../stores/router.svelte.js';
+  const router = getRouter();
+  import * as api from '../stores/api.svelte.js';
 
   const statuses = ['Not Applied', 'Applied', 'Offer', 'Rejected', 'Withdrawn'];
 
@@ -31,7 +32,7 @@
   }
 
   function showJob(id) {
-    navigate('/job/' + id);
+    router.navigate('/job/' + id);
   }
 </script>
 

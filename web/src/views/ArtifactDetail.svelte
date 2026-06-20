@@ -1,16 +1,10 @@
 <script>
   import { onMount } from 'svelte';
-  import { navigate } from 'svelte-routing';
-  import * as api from '../stores/api.js';
+  import { getRouter } from '../stores/router.svelte.js';
+  const router = getRouter();
+  import * as api from '../stores/api.svelte.js';
 
-  const skillLabels = {
-    'email-generator': 'Email',
-    'cover-letter': 'Cover Letter',
-    'resume-optimizer': 'Resume Optimizer',
-    'interview-prep': 'Interview Prep',
-    'career-summary': 'Career Summary',
-    'statement-of-purpose': 'SOP',
-  };
+  import { skillLabel } from '../stores/skillMeta.js';
 
   let { id } = $props();
 
@@ -22,7 +16,7 @@
   onMount(async () => {
     loading = true;
     art = await api.getArtifact(parseInt(id));
-    if (!art) { navigate('/artifacts'); return; }
+    if (!art) { router.navigate('/artifacts'); return; }
     loading = false;
   });
 
@@ -47,7 +41,7 @@
     <div class="mb-6">
       <h2 class="text-xl font-bold text-slate-800">{art.title || 'Untitled'}</h2>
       <div class="flex items-center gap-2 mt-1 text-xs text-slate-400">
-        <span class="bg-slate-700 text-white rounded-full px-2 py-0.5 text-[10px] font-medium">{skillLabels[art.skillId] || art.skillId}</span>
+        <span class="bg-slate-700 text-white rounded-full px-2 py-0.5 text-[10px] font-medium">{skillLabel(art.skillId)}</span>
         <span>{formatDate(art.createdAt)}</span>
       </div>
     </div>

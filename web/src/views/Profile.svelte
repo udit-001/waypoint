@@ -1,6 +1,7 @@
 <script>
+  import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
-  import * as api from '../stores/api.js';
+  import * as api from '../stores/api.svelte.js';
 
   let profileData = $state(null);
 
@@ -25,7 +26,7 @@
   <!-- CLI Commands -->
   <div class="bg-white rounded-xl border border-slate-200 p-5">
     <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-2">
-      <span>⌘</span> CLI Commands
+      <span>{@html iconSvg('copy', 16)}</span> CLI Commands
     </h4>
     <pre class="bg-slate-50 p-4 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint profile show                                    # View profile
 waypoint profile set --name "Jane Doe" --title "SWE"     # Update fields
@@ -37,7 +38,7 @@ waypoint profile set --greeting-style casual             # Email style</pre>
     <!-- Personal Info -->
     <div class="bg-white rounded-xl border border-slate-200 p-5">
       <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-4">
-        <span>◇</span> Personal Info
+        {@html iconSvg("user", 18)} Personal Info
       </h3>
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -70,7 +71,7 @@ waypoint profile set --greeting-style casual             # Email style</pre>
     <!-- Skills -->
     <div class="bg-white rounded-xl border border-slate-200 p-5">
       <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">
-        <span>⚡</span> Skills
+        <span>{@html iconSvg('zap', 18)}</span> Skills
       </h3>
       {#if profileData.skills?.length}
         <div class="flex flex-wrap gap-1.5">
@@ -86,7 +87,7 @@ waypoint profile set --greeting-style casual             # Email style</pre>
     <!-- Education -->
     <div class="bg-white rounded-xl border border-slate-200 p-5">
       <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">
-        <span>🎓</span> Education
+        {@html iconSvg('grad', 18)} Education
       </h3>
       {#if profileData.education?.length}
         <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
@@ -102,7 +103,7 @@ waypoint profile set --greeting-style casual             # Email style</pre>
     <!-- Experience -->
     <div class="bg-white rounded-xl border border-slate-200 p-5">
       <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">
-        <span>💼</span> Experience
+        {@html iconSvg('briefcase', 18)} Experience
       </h3>
       {#if profileData.experience?.length}
         <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1">
@@ -118,7 +119,7 @@ waypoint profile set --greeting-style casual             # Email style</pre>
     <!-- Email Preferences -->
     <div class="bg-white rounded-xl border border-slate-200 p-5">
       <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-4">
-        <span>✉</span> Email Preferences
+        {@html iconSvg('mail', 18)} Email Preferences
       </h3>
       <div>
         <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Sign-Off</label>
