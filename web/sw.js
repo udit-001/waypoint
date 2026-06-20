@@ -21,6 +21,8 @@ const STATIC_ASSETS = [
   '/js/search.js',
   '/js/notes.js',
   '/js/generated.js',
+  '/js/categories.js',
+  '/js/profile.js',
   '/js/export.js',
   '/js/settings.js',
   '/js/notifications.js',

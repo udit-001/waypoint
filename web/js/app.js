@@ -7,7 +7,7 @@ const App = {
   advancedFilters: null,
   tableCategoryFilter: null,
 
-  _views: ['dashboard', 'kanban', 'table', 'timeline', 'categories', 'profile', 'skills', 'generated', 'settings', 'job'],
+  _views: ['dashboard', 'kanban', 'table', 'timeline', 'categories', 'profile', 'skills', 'artifacts', 'settings', 'job'],
 
   async init() {
     const settings = await DB.getSettings();
@@ -80,7 +80,7 @@ const App = {
     // Title
     const titles = {
       dashboard: 'Dashboard', kanban: 'Kanban Board', table: 'Table View',
-      timeline: 'Timeline', categories: 'Categories', profile: 'Profile', skills: 'AI Integration', generated: 'Artifacts',
+      timeline: 'Timeline', categories: 'Categories', profile: 'Profile', skills: 'AI Integration', artifacts: 'Artifacts',
       settings: 'Settings', job: this.currentJobId ? 'Job #' + this.currentJobId : 'Job Detail',
     };
     document.title = (titles[view] || 'Dashboard') + ' — Waypoint';
@@ -126,7 +126,7 @@ const App = {
       case 'categories': await CategoriesView.render(); break;
       case 'profile': await ProfileView.render(); break;
       case 'skills': await Skills.renderList(); break;
-      case 'generated': await GeneratedContentView.render(); break;
+      case 'artifacts': await GeneratedContentView.render(); break;
       case 'settings': await Settings.render(); break;
       case 'job': await this.renderJobDetail(); break;
     }
@@ -255,7 +255,7 @@ const App = {
 
     section.querySelectorAll('.job-artifact-item').forEach(el => {
       el.addEventListener('click', () => {
-        this.switchView('generated');
+        this.switchView('artifacts');
       });
     });
   },

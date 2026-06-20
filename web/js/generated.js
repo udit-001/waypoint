@@ -3,7 +3,7 @@ const GeneratedContentView = {
   activeSkillFilter: null,
 
   async render() {
-    const container = document.getElementById('generated-container');
+    const container = document.getElementById('artifacts-container');
     const items = await DB.getArtifacts(this.activeSkillFilter);
 
     // Fetch jobs to resolve job links
