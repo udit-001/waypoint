@@ -1,8 +1,34 @@
 <!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Waypoint</title></head>
+<html lang="en" data-theme="light">
+<head>
+  <!-- Blocking theme init — runs before Svelte mounts, prevents flash -->
+  <script>
+    (function() {
+      var theme = localStorage.getItem('jobtracker_theme');
+      if (!theme) {
+        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.dataset.theme = theme;
+
+      var font = localStorage.getItem('waypoint_font');
+      if (font) {
+        document.documentElement.dataset.font = font;
+      }
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Waypoint</title>
+  <meta name="theme-color" content="#5E81AC" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+  <script type="module" crossorigin src="/assets/index-mr_C6t7B.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CL2z7rWD.css">
+</head>
 <body>
-  <h1>Waypoint</h1>
-  <p>Frontend not built. Run: cd web && pnpm install && pnpm build</p>
+  <div id="app"></div>
 </body>
 </html>
