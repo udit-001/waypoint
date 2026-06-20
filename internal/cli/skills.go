@@ -20,15 +20,17 @@ var skillsInstallCmd = &cobra.Command{
 The skill teaches the agent how to use the waypoint CLI commands.
 
 Supported agents:
-  opencode     Installs to .opencode/skills/waypoint/SKILL.md
-  claude-code  Installs to .claude/skills/waypoint/SKILL.md
-  codex        Installs to .codex/skills/waypoint/SKILL.md
-  pi.dev       Installs to .pi/skills/waypoint/SKILL.md
+  opencode     Installs to .opencode/skills/waypoint/
+  claude-code  Installs to .claude/skills/waypoint/
+  codex        Installs to .codex/skills/waypoint/
+  pi.dev       Installs to .pi/skills/waypoint/
+
+Installs the full skill (SKILL.md + references/).
 
 Run without flags for interactive mode, or pass --agent to skip prompts.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runSkillsInstall(cmd)
+		return runSkillsInstall(cmd, args)
 	},
 }
 

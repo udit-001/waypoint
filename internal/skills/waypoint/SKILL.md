@@ -3,44 +3,43 @@ name: waypoint
 description: Manage job applications using the waypoint CLI
 ---
 
-You have access to the `waypoint` CLI to manage job applications. Data is stored in a local SQLite database (`jobtracker.db`).
+Manage job applications with the `waypoint` CLI. Data in local SQLite (`jobtracker.db`).
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `waypoint add <company> <position>` | Add a job. Flags: `--status`, `--category`, `--salary`, `--location`, `--contact`, `--url`, `--notes`, `--date`, `--applied-date`, `--reminder` |
-| `waypoint list` | List jobs. Flags: `--status`, `--category`, `--search`, `--limit`, `--all` |
-| `waypoint get <id>` | View job details. Flag: `--history` |
-| `waypoint update <id>` | Update job. Same flags as `add` |
-| `waypoint delete <id>` | Delete a job. Flag: `--force` |
-| `waypoint stats` | Show statistics |
-| `waypoint start` | Start web UI. Flag: `--port` (default 8080) |
-| `waypoint init` | Init database. Flag: `--force` |
+| Cmd | Does | Flags |
+|-----|------|-------|
+| `add <company> <position>` | add job | `--status` `--category` `--salary` `--location` `--contact` `--url` `--notes` `--date` `--applied-date` `--reminder` |
+| `list` | list jobs | `--status` `--category` `--search` `--limit` `--all` |
+| `get <id>` | job details | `--history` |
+| `update <id>` | update | same as `add` |
+| `delete <id>` | delete | `--force` |
+| `stats` | stats | |
+| `start` | web UI | `--port` (8080) |
+| `init` | init db | `--force` |
 
-All commands accept `--db <path>` for a custom database and `--json` for machine-readable output.
+All cmds: `--db <path>`, `--json`.
 
-## Database tables
+## Tables
+`jobs` · `categories` · `history` · `profile` (name, skills, exp) · `settings`
 
-- `jobs` — company, position, status, category, salary, location, contact, url, notes, dates
-- `categories` — custom labels
-- `history` — activity log per job
-- `profile` — user name, skills, experience
-- `settings` — theme, reminders, default view
+## Generation references
+
+Job-search content generation. Load on demand — each pulls job + profile via CLI, outputs drafted content.
+
+| Ref | Use for |
+|-----|---------|
+| [email-generator](references/email-generator.md) | application / follow-up / thank-you / networking emails |
+| [cover-letter](references/cover-letter.md) | cover letters (formal, casual, creative, exec) |
+| [resume-optimizer](references/resume-optimizer.md) | keyword match score + gap analysis vs a posting |
+| [interview-prep](references/interview-prep.md) | interview questions, answers, research checklist |
+| [career-summary](references/career-summary.md) | resume summary / professional bio |
+
+When asked for that content, `read` the matching reference, then `waypoint get <id>` for fresh data.
 
 ## Examples
-
-Add a job you just applied to:
-`waypoint add "Google" "Software Engineer" --status Applied --date 2026-06-20`
-
-List active applications:
-`waypoint list --status "Not Applied" --status Applied --status Offer`
-
-Update status when rejected:
-`waypoint update 1 --status Rejected`
-
-Show stats:
-`waypoint stats`
-
-Launch the dashboard:
-`waypoint start --port 8080`
+Add applied job → `waypoint add "Google" "SWE" --status Applied --date 2026-06-20`
+Active apps → `waypoint list --status Applied --status Offer`
+Mark rejected → `waypoint update 1 --status Rejected`
+Stats → `waypoint stats`
+Dashboard → `waypoint start --port 8080`

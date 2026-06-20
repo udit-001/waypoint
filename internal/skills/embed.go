@@ -1,9 +1,9 @@
 package skills
 
-import _ "embed"
+import "embed"
 
-//go:embed waypoint/SKILL.md
-var SkillFile []byte
+// Files embeds the waypoint skill directory (SKILL.md + references/*).
+//go:embed waypoint
+var Files embed.FS
 
 const SkillName = "waypoint"
-
