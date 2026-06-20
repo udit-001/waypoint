@@ -4,10 +4,14 @@ job tracker prompt.txt
 generated-content/
 user-profile/
 
+# Trash
+.trash/
+
 # Go
 job-tracker
-!cmd/job-tracker/
-!internal/skills/job-tracker/
+waypoint
+!cmd/waypoint/
+!internal/skills/waypoint/
 *.exe
 *.test
 *.out
