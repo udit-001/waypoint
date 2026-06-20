@@ -57,7 +57,7 @@ Examples:
 		fmt.Printf("  Company:     %s\n", job.Company)
 		fmt.Printf("  Position:    %s\n", job.Position)
 		fmt.Printf("  Status:      %s\n", job.Status)
-		fmt.Printf("  Category:    %s\n", job.Category)
+		fmt.Printf("  Category:    %s\n", job.CategoryName)
 		if job.Salary != "" {
 			fmt.Printf("  Salary:      %s\n", job.Salary)
 		}

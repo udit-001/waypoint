@@ -41,7 +41,6 @@ Examples:
 			Company:      args[0],
 			Position:     args[1],
 			Status:       addFlags.status,
-			Category:     addFlags.category,
 			Salary:       addFlags.salary,
 			Location:     addFlags.location,
 			Contact:      addFlags.contact,
@@ -51,6 +50,16 @@ Examples:
 			AppliedDate:  addFlags.appliedDate,
 			ReminderDate: nil,
 		}
+
+		// Resolve category name → ID
+		catID, err := store.CategoryIDByName(addFlags.category)
+		if err != nil {
+			return formatError("failed to resolve category", err)
+		}
+		if catID == 0 {
+			return fmt.Errorf("category %q not found — use 'waypoint categories list' to see available categories", addFlags.category)
+		}
+		job.CategoryID = catID
 
 		if addFlags.reminderDate != "" {
 			job.ReminderDate = &addFlags.reminderDate
@@ -70,7 +79,7 @@ Examples:
 		fmt.Printf("  ✓ Job added: %s — %s\n", created.Company, created.Position)
 		fmt.Printf("    ID: %d\n", created.ID)
 		fmt.Printf("    Status: %s\n", created.Status)
-		fmt.Printf("    Category: %s\n", created.Category)
+		fmt.Printf("    Category: %s\n", created.CategoryName)
 		if created.Salary != "" {
 			fmt.Printf("    Salary: %s\n", created.Salary)
 		}

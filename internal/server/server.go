@@ -239,8 +239,8 @@ func handleStats(store *db.Store) http.HandlerFunc {
 		byCategory := make(map[string]int)
 		for _, j := range jobs {
 			byStatus[j.Status]++
-			if j.Category != "" {
-				byCategory[j.Category]++
+			if j.CategoryName != "" {
+				byCategory[j.CategoryName]++
 			}
 		}
 
