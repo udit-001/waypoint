@@ -291,23 +291,6 @@ textarea { resize: vertical; min-height: 80px; }
 .table-controls { margin-bottom: 16px; }
 .table-filters { display: flex; gap: 8px; flex-wrap: wrap; }
 
-/* === Timeline === */
-.timeline-container { max-width: 800px; margin: 0 auto; }
-.timeline-item {
-  display: flex; gap: 16px; padding: 16px 0; border-left: 2px solid var(--border-color);
-  padding-left: 20px; margin-left: 20px; position: relative;
-}
-.timeline-item::before {
-  content: ''; position: absolute; left: -6px; top: 20px;
-  width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
-  border: 2px solid var(--bg-primary);
-}
-.timeline-item .timeline-date { min-width: 120px; font-size: 12px; color: var(--text-muted); }
-.timeline-item .timeline-content { flex: 1; }
-.timeline-item .timeline-company { font-weight: 600; }
-.timeline-item .timeline-position { color: var(--text-secondary); font-size: 13px; }
-.timeline-item .timeline-status { display: inline-block; margin-top: 4px; }
-
 /* === Dashboard === */
 .dashboard-stats {
   display: grid;

@@ -8,7 +8,7 @@ const App = {
   advancedFilters: null,
   tableCategoryFilter: null,
 
-  _views: ['dashboard', 'kanban', 'table', 'timeline', 'categories', 'profile', 'skills', 'artifacts', 'settings', 'job', 'artifact'],
+  _views: ['dashboard', 'kanban', 'table', 'categories', 'profile', 'skills', 'artifacts', 'settings', 'job', 'artifact'],
 
   async init() {
     const settings = await DB.getSettings();
@@ -96,7 +96,7 @@ const App = {
     // Title
     const titles = {
       dashboard: 'Dashboard', kanban: 'Kanban Board', table: 'Table View',
-      timeline: 'Timeline', categories: 'Categories', profile: 'Profile', skills: 'AI Integration', artifacts: 'Artifacts',
+      categories: 'Categories', profile: 'Profile', skills: 'AI Integration', artifacts: 'Artifacts',
       settings: 'Settings', job: this.currentJobId ? 'Job #' + this.currentJobId : 'Job Detail',
       artifact: this.currentArtifactId ? 'Artifact #' + this.currentArtifactId : 'Artifact',
     };
@@ -113,17 +113,20 @@ const App = {
     }
     if (pane) pane.classList.add('active');
 
-    // Nav items (skip for job detail — no active nav)
+    // Nav items (skip for detail pages — no active nav)
     if (view !== 'job' && view !== 'artifact') {
       document.querySelectorAll('.nav-item[data-view]').forEach(n => n.classList.remove('active'));
       document.querySelectorAll(`.nav-item[data-view="${view}"]`).forEach(n => n.classList.add('active'));
     }
 
-    // View toggles
+    // View toggles (header bar)
     const toggles = document.getElementById('view-toggles');
-    toggles.style.display = (view === 'dashboard' || view === 'kanban' || view === 'table' || view === 'timeline') ? 'flex' : 'none';
+    toggles.style.display = (view === 'dashboard' || view === 'kanban' || view === 'table') ? 'flex' : 'none';
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+    const activeBtn = toggles.querySelector(`.view-btn[data-view="${view}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
 
-    if (view !== 'kanban' && view !== 'table' && view !== 'timeline') {
+    if (view !== 'kanban' && view !== 'table') {
       this.advancedFilters = null;
     }
 
@@ -180,7 +183,6 @@ const App = {
       case 'dashboard': await Dashboard.render(); break;
       case 'kanban': await Kanban.render(); break;
       case 'table': await TableView.render(); break;
-      case 'timeline': await Timeline.render(); break;
       case 'categories': await CategoriesView.render(); break;
       case 'profile': await ProfileView.render(); break;
       case 'skills': await Skills.renderList(); break;
