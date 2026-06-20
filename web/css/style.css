@@ -171,6 +171,23 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .top-bar-left { display: flex; align-items: center; gap: 16px; }
 #view-title { font-size: 18px; font-weight: 600; white-space: nowrap; }
+
+/* Breadcrumbs in top bar */
+#breadcrumb-bar { display: flex; align-items: center; gap: 0; min-width: 0; }
+#breadcrumb-bar.breadcrumb-mode { gap: 6px; }
+#breadcrumb-bar.breadcrumb-mode #view-title { display: none; }
+.breadcrumb { display: none; align-items: center; gap: 4px; font-size: 14px; min-width: 0; }
+#breadcrumb-bar.breadcrumb-mode .breadcrumb { display: flex; }
+.breadcrumb-link {
+  color: var(--text-muted); text-decoration: none; white-space: nowrap;
+  transition: color var(--transition);
+}
+.breadcrumb-link:hover { color: var(--accent); }
+.breadcrumb-sep { color: var(--text-muted); opacity: 0.4; flex-shrink: 0; display: inline-flex; }
+.breadcrumb-current {
+  color: var(--text-primary); font-weight: 600; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
 .view-toggles { display: flex; gap: 2px; background: var(--bg-tertiary); border-radius: var(--radius-md); padding: 2px; align-items: center; }
 .view-btn {
   width: 32px; height: 32px; padding: 0; border-radius: var(--radius-sm); font-size: 16px;

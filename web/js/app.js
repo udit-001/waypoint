@@ -69,6 +69,11 @@ const App = {
     const prevView = this.currentView;
     this.currentView = view;
 
+    // Clear breadcrumbs for list views (detail views set their own)
+    if (view !== 'job' && view !== 'artifact') {
+      this.setBreadcrumb(null);
+    }
+
     // Resolve pending IDs from URL
     if (view === 'job' && this._pendingJobId) {
       this.currentJobId = this._pendingJobId;
@@ -129,6 +134,47 @@ const App = {
     await this._switchToView(view, true);
   },
 
+  // Breadcrumb management
+  setBreadcrumb(items) {
+    const bar = document.getElementById('breadcrumb-bar');
+    const title = document.getElementById('view-title');
+    if (!items || items.length === 0) {
+      // Simple title mode — no breadcrumbs
+      bar.classList.remove('breadcrumb-mode');
+      return;
+    }
+    bar.classList.add('breadcrumb-mode');
+    const existing = bar.querySelector('.breadcrumb');
+    if (existing) existing.remove();
+
+    const nav = document.createElement('nav');
+    nav.className = 'breadcrumb';
+    items.forEach((item, i) => {
+      if (i > 0) {
+        const sep = document.createElement('span');
+        sep.className = 'breadcrumb-sep';
+        sep.innerHTML = icon('chevron-r', 12);
+        nav.appendChild(sep);
+      }
+      if (i < items.length - 1) {
+        const a = document.createElement('a');
+        a.href = item.href || '#';
+        a.className = 'breadcrumb-link';
+        a.textContent = item.label;
+        if (item.action) {
+          a.addEventListener('click', e => { e.preventDefault(); item.action(); });
+        }
+        nav.appendChild(a);
+      } else {
+        const span = document.createElement('span');
+        span.className = 'breadcrumb-current';
+        span.textContent = item.label;
+        nav.appendChild(span);
+      }
+    });
+    bar.appendChild(nav);
+  },
+
   async renderCurrentView() {
     switch (this.currentView) {
       case 'dashboard': await Dashboard.render(); break;
@@ -157,11 +203,13 @@ const App = {
     const titleEl = document.getElementById('view-title');
     titleEl.textContent = `${job.company} — ${job.position}`;
 
+    this.setBreadcrumb([
+      { label: 'Jobs', action: () => this.switchView('table') },
+      { label: `${job.company} — ${job.position}` },
+    ]);
+
     pane.innerHTML = `
       <div class="job-detail-page">
-        <button class="btn btn-sm btn-secondary job-back-btn" style="margin-bottom:16px">
-          ${icon('arrow-left', 16)} Back
-        </button>
 
         <div class="job-detail-header">
           <div>
@@ -222,9 +270,6 @@ const App = {
       </div>
     `;
 
-    pane.querySelector('.job-back-btn').addEventListener('click', () => {
-      window.history.length > 1 ? window.history.back() : this.switchView('dashboard');
-    });
 
     // Load linked artifacts
     this._renderJobArtifacts(jobId);
@@ -312,6 +357,17 @@ const App = {
     const titleEl = document.getElementById('view-title');
     titleEl.textContent = art.title || 'Artifact';
 
+    // Build breadcrumb trail
+    const crumbs = [{ label: 'Artifacts', action: () => this.switchView('artifacts') }];
+    if (art.jobId) {
+      const job = await DB.getJob(art.jobId);
+      if (job) {
+        crumbs.push({ label: job.company, action: () => this.showJobDetail(job.id) });
+      }
+    }
+    crumbs.push({ label: art.title || 'Artifact' });
+    this.setBreadcrumb(crumbs);
+
     let variants = [];
     try { variants = JSON.parse(art.variants || '[]'); } catch { variants = []; }
 
@@ -334,9 +390,6 @@ const App = {
 
     pane.innerHTML = `
       <div class="artifact-detail-page">
-        <button class="btn btn-sm btn-secondary artifact-back-btn" style="margin-bottom:16px">
-          ${icon('arrow-left', 16)} Back
-        </button>
 
         <div class="artifact-detail-header">
           <div>
@@ -372,10 +425,6 @@ waypoint artifacts delete ${artifactId}</pre>
       </div>
     `;
 
-    // Back button
-    pane.querySelector('.artifact-back-btn').addEventListener('click', () => {
-      window.history.length > 1 ? window.history.back() : this.switchView('artifacts');
-    });
 
     // Job link
     pane.querySelectorAll('.gen-job-link').forEach(a => {
