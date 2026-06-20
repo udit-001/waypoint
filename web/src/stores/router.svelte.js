@@ -6,7 +6,7 @@ const subscribers = new Set();
 let current = $state(parsePath(window.location.pathname));
 
 function parsePath(pathname) {
-  const path = pathname.replace(/^\/+|\/+$/g, '');
+  const path = pathname.replace(/^\/+|\/+$/g, '').split('?')[0];
 
   // /job/:id
   const jobMatch = path.match(/^job\/(\d+)$/);
