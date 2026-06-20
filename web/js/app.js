@@ -313,7 +313,7 @@ const App = {
 
     section.querySelectorAll('.job-artifact-item').forEach(el => {
       el.addEventListener('click', () => {
-        this.showArtifactDetail(parseInt(a.id));
+        this.showArtifactDetail(parseInt(el.dataset.artifactId));
       });
     });
   },
