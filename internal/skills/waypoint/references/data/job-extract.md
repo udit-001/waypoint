@@ -41,6 +41,39 @@ curl -sL "<url>" | sed 's/<[^>]*>//g' | sed '/^$/d' | head -300 > /tmp/job-page.
 
 Ambiguous → ask user. Don't guess.
 
+## How to apply
+
+Detect the **method** the posting asks for, then route by it. The method is how the applicant submits: email, form, portal, site, or other. Each method has a destination.
+
+| Method | Detect | Route |
+|--------|--------|-------|
+| Email | "send your resume to", "email …@", an address near "apply" | `--contact` if it's a person; instructions → notes |
+| Form | "fill out this form", `google.com/forms`, `typeform.com` | apply URL → notes |
+| Portal / site | "apply at", `careers.`, an ATS domain (`greenhouse.io`, `lever.co`, `workday`) | apply URL → notes |
+| Other | "in person", "referral", "by mail" | method + details → notes |
+
+`url` is the **posting** (where you read the job). The **apply** link, if separate, goes in notes — never overwrite `url` with it.
+
+Write apply details as a `## How to apply` section in notes (it renders as markdown — see `SKILL.md`). Method first, then destination and instructions:
+
+```bash
+waypoint jobs update 5 --contact "mike.r@stripe.com" --notes "## How to apply
+Email **mike.r@stripe.com** — subject line 'SWE Application — [Name]'.
+
+> Attach: resume, cover letter. Rolling deadline."
+```
+
+Form or portal (no contact person, apply link separate from posting):
+
+```bash
+waypoint jobs update 8 --notes "## How to apply
+Submit via [Greenhouse form](https://boards.greenhouse.io/figma/jobs/123).
+
+> Portfolio PDF required."
+```
+
+**Done when**: every detected apply piece routed — email to `contact` (if a person) else notes, apply URL and instructions to a `## How to apply` notes section; `url` unchanged as the posting. If no method is stated, skip.
+
 ## After adding
 
 - "Research company/people?" → [exa-search](exa-search.md)

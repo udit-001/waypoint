@@ -40,6 +40,24 @@ waypoint profile set --name "Jane Doe" --title "Senior Engineer" --skills '["Go"
 
 **Done when**: job ID resolved, profile complete.
 
+### Notes render markdown
+
+The `--notes` field renders as GitHub-flavoured markdown in the web UI (and the form preview). Write **structured markdown**, not flat prose: headings, bullet/numbered lists, tables, blockquotes, bold/italic, task lists, and inline code all render. This applies wherever notes are written — `jobs add --notes`, `jobs update --notes`, and saved research.
+
+Good:
+```bash
+waypoint jobs update 5 --notes "## Interview process
+1. ~~Recruiter screen~~
+2. **On-site** pending
+
+> Follow up by Jun 25 if no reply."
+```
+
+Bad (renders as one run-on paragraph):
+```bash
+waypoint jobs update 5 --notes "Interview process. Recruiter screen done. On site pending. Follow up by Jun 25 if no reply."
+```
+
 ### Step 3 — Generate
 
 Every generation follows the same **draft**: pull data → pick options → draft → review. `read` the relevant gen-* reference for its options, structures, and done criteria.
