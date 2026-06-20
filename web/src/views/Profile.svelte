@@ -22,7 +22,7 @@ import { setPage } from '../stores/page.svelte.js';
   }
 </script>
 
-<div class="max-w-3xl mx-auto space-y-4">
+<div class="space-y-4">
   <p class="text-sm text-slate-400 mb-4">
     Your profile personalizes AI-generated content. Manage it via the CLI.
   </p>

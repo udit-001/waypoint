@@ -23,7 +23,7 @@ import { setPage } from '../stores/page.svelte.js';
   }
 </script>
 
-<div class="max-w-3xl mx-auto space-y-4">
+<div class="space-y-4">
   <!-- App Settings -->
   <div class="bg-white rounded-xl border border-slate-200 p-5">
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">

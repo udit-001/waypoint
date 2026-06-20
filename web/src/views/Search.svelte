@@ -49,7 +49,7 @@
   }
 </script>
 
-<div class="max-w-3xl mx-auto">
+<div class="max-w-3xl">
 
   <div class="flex gap-2 mb-6">
     <input

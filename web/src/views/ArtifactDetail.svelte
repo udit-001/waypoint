@@ -57,7 +57,7 @@
 {#if loading}
   <Spinner text="Loading artifact..." />
 {:else if art}
-  <div class="max-w-3xl mx-auto">
+  <div class="max-w-3xl">
     <div class="mb-6">
       <h2 class="text-xl font-bold text-slate-800">{art.title || 'Untitled'}</h2>
       <div class="flex items-center gap-2 mt-1 text-xs text-slate-400 flex-wrap">

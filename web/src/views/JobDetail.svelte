@@ -59,7 +59,7 @@
 {#if loading}
   <Spinner text="Loading job..." />
 {:else if job}
-  <div class="max-w-3xl mx-auto">
+  <div class="max-w-3xl">
     <!-- Header -->
     <div class="flex justify-between items-start gap-4 mb-6 border-b border-slate-200 pb-4">
       <div>

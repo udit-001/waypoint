@@ -33,7 +33,7 @@
   }
 </script>
 
-<div class="max-w-3xl mx-auto space-y-6">
+<div class="space-y-6">
   <p class="text-sm text-slate-400">
     Connect your AI coding agent to Waypoint — it learns the CLI commands and can generate job-search content on demand.
   </p>
