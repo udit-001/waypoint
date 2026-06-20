@@ -57,30 +57,32 @@ number — keep it raw but clean, not normalised.
 3. **Coalesce `OR` options** — if the string contains ` OR ` (case-insensitive),
    split and keep only the option with the highest numeric value. That's
    the one the applicant would target.
-4. **Normalise the unit** — convert full-length numbers to `k` shorthand:
-   `37000` → `37k`, `1500000` → `15L` (lakhs), `70000` → `70k`.
+4. **Expand to full integer** — convert shorthand to raw integer value
+   so the salary field is a clean parseable number, no unit ambiguity:
+   `37k` → `37000`, `70k-100k` → `70000-100000`, `₹15 LPA` → `1500000`,
+   `$100k` → `100000`, `€60k` → `60000`.
 
 ### Examples
 
 | Raw | Extracted | Notes |
 |-----|-----------|-------|
-| `$100k` | `$100k` | Already clean |
-| `€60k` | `€60k` | Already clean |
-| `₹15 LPA` | `₹15L` | Annual → lakhs |
-| `Rs. 37,000 + HRA` | `37k` | Stripped Rs., commas, +HRA |
-| `Rs. 28,000 + HRA` | `28k` | Same pattern |
-| `Rs. 37,000 + 27% HRA` | `37k` | +27% HRA chopped |
-| `Rs. 37,000 + HRA (GATE/NET) OR Rs. 31,000 + HRA` | `37k` | Coalesced to highest OR option, cleaned |
-| `Rs. 31,000 + 20% HRA (NET/GATE) OR Rs. 25,000 + HRA` | `31k` | Same |
-| `70k-100k` | `70k-100k` | Range kept as-is |
-| `50000 - 80000` | `50k-80k` | Full numbers → k |
+| `$100k` | `100000` | Clean integer |
+| `€60k` | `60000` | Clean integer |
+| `₹15 LPA` | `1500000` | Annual → monthly |
+| `Rs. 37,000 + HRA` | `37000` | Stripped Rs., commas, +HRA |
+| `Rs. 28,000 + HRA` | `28000` | Same pattern |
+| `Rs. 37,000 + 27% HRA` | `37000` | +27% HRA chopped |
+| `Rs. 37,000 + HRA (GATE/NET) OR Rs. 31,000 + HRA` | `37000` | Coalesced to highest OR option |
+| `Rs. 31,000 + 20% HRA (NET/GATE) OR Rs. 25,000 + HRA` | `31000` | Same |
+| `70k-100k` | `70000-100000` | Range expanded |
+| `50000 - 80000` | `50000-80000` | Already clean |
 
 ### Completion criterion
 
 Salary extraction is done when every salary-like number in the posting
 has been parsed, and the extracted string fits one of the patterns in
 the example table above. If a format doesn't match any example, keep
-the most salary-like number (highest if multiple) in `k` shorthand.
+the most salary-like number (highest if multiple) as a full integer.
 Don't ask the user — extract what's there and move on.
 
 ## How to apply
