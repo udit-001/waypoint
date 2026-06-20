@@ -263,7 +263,8 @@ import { setPage } from '../stores/page.svelte.js';
             callbacks: {
               label: (ctx) => {
                 const raw = ctx.raw;
-                return `$${raw[0]}k – $${raw[1]}k`;
+                const sym = salaryData.some(j => /rs\.?/i.test(j.salary)) ? '₹' : '$';
+                return `${sym}${raw[0]}k – ${sym}${raw[1]}k`;
               }
             }
           },
@@ -274,7 +275,10 @@ import { setPage } from '../stores/page.svelte.js';
             border: { color: gridColor },
             ticks: {
               color: textColor,
-              callback: v => `$${v}k`,
+              callback: v => {
+                const sym = salaryData.some(j => /rs\.?/i.test(j.salary)) ? '₹' : '$';
+                return `${sym}${v}k`;
+              },
               padding: 4,
             },
             suggestedMin: Math.max(0, Math.min(...lows) - 10),
@@ -293,18 +297,65 @@ import { setPage } from '../stores/page.svelte.js';
 
   function parseSalary(str) {
     if (!str) return { low: 0, high: 0, mid: 0 };
-    const nums = str.replace(/[,$]/g, '').match(/(\d+)k/gi);
-    if (!nums || nums.length < 2) {
-      const single = str.replace(/[,$]/g, '').match(/(\d+)k/i);
-      if (single) {
-        const v = parseInt(single[1]);
-        return { low: v, high: v, mid: v };
+
+    // Handle "OR" patterns (e.g., "Rs. 37,000 + HRA (GATE/NET) OR Rs. 31,000 + HRA")
+    if (/\s+OR\s+/i.test(str)) {
+      const parts = str.split(/\s+OR\s+/i);
+      const parsedOptions = parts.map(p => parseSalary(p)).filter(p => p.mid > 0);
+      if (parsedOptions.length > 0) {
+        const lows = parsedOptions.map(p => p.low);
+        const highs = parsedOptions.map(p => p.high);
+        // Pick the best (highest mid) as the primary, show full range
+        const best = parsedOptions.reduce((a, b) => a.mid > b.mid ? a : b);
+        return {
+          low: Math.min(...lows),
+          high: Math.max(...highs),
+          mid: best.mid,
+        };
       }
-      return { low: 0, high: 0, mid: 0 };
     }
-    const low = parseInt(nums[0]);
-    const high = parseInt(nums[1]);
-    return { low, high, mid: Math.round((low + high) / 2) };
+
+    // Normalize: strip currency symbols, thousand-separator commas, suffixes like "+ HRA"
+    let clean = str
+      .replace(/Rs\.?\s*/gi, '')
+      .replace(/\$\s*/g, '')
+      .replace(/,\s*/g, '')
+      .replace(/\s*\+.*/g, '')
+      .trim();
+
+    // Try matching k-format first (e.g., "70k-100k", "$100k") — backward compatible
+    const kMatch = clean.match(/(\d+)\s*k/gi);
+    if (kMatch) {
+      const nums = kMatch.map(s => parseInt(s.match(/(\d+)/)[1]));
+      if (nums.length >= 2) {
+        return { low: nums[0], high: nums[1], mid: Math.round((nums[0] + nums[1]) / 2) };
+      }
+      return { low: nums[0], high: nums[0], mid: nums[0] };
+    }
+
+    // Extract all numbers, then decide what they mean
+    const allNums = clean.match(/\d+/g);
+    if (!allNums) return { low: 0, high: 0, mid: 0 };
+
+    const vals = allNums.map(s => parseInt(s, 10));
+
+    // Check for a range like "25000-35000" or "25000 – 35000"
+    const rangeMatch = clean.match(/(\d+)\s*[-–]\s*(\d+)/);
+    if (rangeMatch) {
+      let low = parseInt(rangeMatch[1], 10);
+      let high = parseInt(rangeMatch[2], 10);
+      // Convert full INR (e.g., 37000) to k
+      if (low > 1000) low = Math.round(low / 1000);
+      if (high > 1000) high = Math.round(high / 1000);
+      if (low > high) [low, high] = [high, low]; // swap if reversed
+      return { low, high, mid: Math.round((low + high) / 2) };
+    }
+
+    // Single number: pick the most salary-like candidate (largest value)
+    const salaryNum = Math.max(...vals);
+    let val = salaryNum;
+    if (val > 1000) val = Math.round(val / 1000);
+    return { low: val, high: val, mid: val };
   }
 
   function formatDate(d) {
