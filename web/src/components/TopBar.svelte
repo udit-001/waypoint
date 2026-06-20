@@ -2,11 +2,13 @@
   import { onMount } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
   import { getPage } from '../stores/page.svelte.js';
+  import { getFilter } from '../stores/filter.svelte.js';
   import { iconSvg } from '../lib/icons.js';
 
   let { sidebarClosed, onToggleSidebar } = $props();
   const router = getRouter();
   const page = getPage();
+  const filter = getFilter();
 
   let searchQuery = $state('');
   let isDark = $state(false);
@@ -77,6 +79,16 @@
         >×</button>
       {/if}
     </div>
+    <button
+      class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer relative"
+      onclick={filter.toggle}
+      title="Toggle Filters"
+    >
+      {@html iconSvg('filter', 18)}
+      {#if filter.category}
+        <span class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-slate-700 rounded-full"></span>
+      {/if}
+    </button>
     <button
       class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
       onclick={toggleTheme}

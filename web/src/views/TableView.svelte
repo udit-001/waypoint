@@ -5,6 +5,9 @@ import { setPage } from '../stores/page.svelte.js';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
+  import { getFilter } from '../stores/filter.svelte.js';
+
+  const filter = getFilter();
 
   const columns = [
     { field: 'company', label: 'Company' },
@@ -21,9 +24,7 @@ import { setPage } from '../stores/page.svelte.js';
   let filteredJobs = $state([]);
   let sortField = $state('date');
   let sortDir = $state(-1);
-  let categoryFilter = $state('');
   let searchQuery = $state('');
-  let cats = $state([]);
 
   const statusColors = {
     'Not Applied': 'bg-slate-100 text-slate-600',
@@ -36,10 +37,14 @@ import { setPage } from '../stores/page.svelte.js';
   onMount(async () => {
     setPage({ title: 'TableView' });
 
-    await Promise.all([api.jobs.ensure(), api.categories.ensure()]);
-    cats = api.categories.value || [];
+    await api.jobs.ensure();
     jobs = api.jobs.value || [];
     applyFilters();
+  });
+
+  // Re-apply filters when the shared filter changes
+  $effect(() => {
+    if (filter.category !== undefined) applyFilters();
   });
 
   function sortBy(field) {
@@ -52,8 +57,8 @@ import { setPage } from '../stores/page.svelte.js';
     let result = [...jobs];
 
     // Category filter
-    if (categoryFilter) {
-      result = result.filter(j => j.category === categoryFilter);
+    if (filter.category) {
+      result = result.filter(j => j.category === filter.category);
     }
 
     // Search filter
@@ -101,29 +106,6 @@ import { setPage } from '../stores/page.svelte.js';
       class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-48 focus:border-slate-400 focus:outline-none"
       oninput={applyFilters}
     />
-    {#if cats.length <= 5}
-      <button
-        class="px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors {!categoryFilter ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
-        onclick={() => { categoryFilter = ''; applyFilters(); }}
-      >All</button>
-      {#each cats as cat}
-        <button
-          class="px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors {categoryFilter === cat.name ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
-          onclick={() => { categoryFilter = cat.name; applyFilters(); }}
-        >{cat.name}</button>
-      {/each}
-    {:else}
-      <select
-        bind:value={categoryFilter}
-        class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm cursor-pointer focus:border-slate-400 focus:outline-none"
-        onchange={applyFilters}
-      >
-        <option value="">All categories</option>
-        {#each cats as cat}
-          <option value={cat.name}>{cat.name}</option>
-        {/each}
-      </select>
-    {/if}
   </div>
 
   <!-- Table -->

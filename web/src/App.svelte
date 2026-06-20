@@ -12,6 +12,7 @@
   import JobDetail from './views/JobDetail.svelte';
   import ArtifactDetail from './views/ArtifactDetail.svelte';
   import Search from './views/Search.svelte';
+  import FilterSidebar from './components/FilterSidebar.svelte';
   import { getRouter } from './stores/router.svelte.js';
   import { setPage } from './stores/page.svelte.js';
 
@@ -69,4 +70,5 @@
       {/if}
     </div>
   </main>
+  <FilterSidebar />
 </div>

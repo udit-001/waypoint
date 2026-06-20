@@ -5,6 +5,9 @@ import { setPage } from '../stores/page.svelte.js';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
+  import { getFilter } from '../stores/filter.svelte.js';
+
+  const filter = getFilter();
 
   const statuses = ['Not Applied', 'Applied', 'Offer', 'Rejected', 'Withdrawn'];
 
@@ -26,7 +29,11 @@ import { setPage } from '../stores/page.svelte.js';
   });
 
   function getJobsByStatus(status) {
-    return allJobs.filter(j => j.status === status);
+    let filtered = allJobs;
+    if (filter.category) {
+      filtered = filtered.filter(j => j.category === filter.category);
+    }
+    return filtered.filter(j => j.status === status);
   }
 
   function formatDate(d) {
