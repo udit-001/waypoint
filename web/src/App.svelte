@@ -15,10 +15,17 @@
   import { getRouter } from './stores/router.svelte.js';
 
   const router = getRouter();
-  let sidebarClosed = $state(false);
+
+  // Sidebar state persisted in localStorage
+  let sidebarClosed = $state(
+    typeof localStorage !== 'undefined'
+      ? localStorage.getItem('jobtracker_sidebar_closed') === 'true'
+      : false
+  );
 
   function toggleSidebar() {
     sidebarClosed = !sidebarClosed;
+    localStorage.setItem('jobtracker_sidebar_closed', sidebarClosed ? 'true' : 'false');
   }
 </script>
 
