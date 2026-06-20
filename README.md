@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="web/icons/icon-192.svg" width="120" height="120" alt="Waypoint logo">
-</p>
+<img src="web/icons/icon-192.svg" width="80" height="80" alt="Waypoint logo" align="left" style="margin-right:16px">
 
 # Waypoint — Job Tracker
 
@@ -53,13 +51,12 @@ go build -o waypoint ./cmd/waypoint
 | `add <company> <position>` | Add a job application |
 | `list` | List jobs (flags: `--status`, `--category`, `--search`, `--limit`, `--all`) |
 | `get <id>` | Show job details (`--history` for activity log) |
-| `update <id>` | Update job fields (`--status`, `--company`, `--position`, etc.) |
 | `delete <id>` | Delete a job (`--force` to skip confirmation) |
 | `stats` | Show aggregate statistics |
 | `start` | Launch the web UI server (background by default) |
 | `stop` | Stop the background web UI server |
 | `skills install` | Install agent skill file for AI coding assistants |
-| `update` | Self-update to the latest release |
+| `upgrade` | Self-update to the latest release |
 
 All commands support `--db` (database path) and `--json` (JSON output).
 
@@ -80,7 +77,7 @@ The web UI fetches data from the Go REST API (`GET /api/*`). All mutations (add/
 ## AI Integration (Optional)
 
 1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
-2. Set it via CLI: `waypoint update settings --gemini-key <key>`
+2. Set your API key in the app Settings page (requires the server to be running)
 3. Generators will use Gemini AI with automatic fallback to built-in templates
 
 ## Tech Stack
