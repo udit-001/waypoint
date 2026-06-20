@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     date TEXT NOT NULL DEFAULT '',
     applied_date TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'Not Applied',
-    category TEXT NOT NULL DEFAULT 'General',
+    category_id INTEGER NOT NULL DEFAULT 1 REFERENCES categories(id),
     salary TEXT NOT NULL DEFAULT '',
     location TEXT NOT NULL DEFAULT '',
     contact TEXT NOT NULL DEFAULT '',
@@ -71,7 +71,8 @@ INSERT OR IGNORE INTO settings (id) VALUES (1);
 `
 
 const seedCategories = `
-INSERT OR IGNORE INTO categories (name) VALUES ('General'), ('Tech'), ('Finance'), ('Healthcare');
+INSERT OR IGNORE INTO categories (name) VALUES ('General');
+INSERT OR IGNORE INTO categories (name) VALUES ('Tech'), ('Finance'), ('Healthcare');
 `
 
 // Store wraps the SQLite database.

@@ -8,7 +8,8 @@ type Job struct {
 	Date         string  `db:"date" json:"date"`
 	AppliedDate  string  `db:"applied_date" json:"appliedDate"`
 	Status       string  `db:"status" json:"status"`
-	Category     string  `db:"category" json:"category"`
+	CategoryID   int64   `db:"category_id" json:"categoryId"`
+	CategoryName string  `db:"-" json:"category"` // joined from categories table, kept for API compat
 	Salary       string  `db:"salary" json:"salary"`
 	Location     string  `db:"location" json:"location"`
 	Contact      string  `db:"contact" json:"contact"`

@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-const jobColumns = `id, company, position, date, applied_date, status, category, salary, location, contact, url, notes, reminder_date, created_at, updated_at`
+const jobColumns = `j.id, j.company, j.position, j.date, j.applied_date, j.status, j.category_id, c.name, j.salary, j.location, j.contact, j.url, j.notes, j.reminder_date, j.created_at, j.updated_at`
 
-// scanJob scans a single job row from a Row.
+// scanJob scans a single job row from a Row (includes JOIN on categories).
 func scanJob(row interface{ Scan(...any) error }) (Job, error) {
 	var j Job
 	err := row.Scan(
 		&j.ID, &j.Company, &j.Position, &j.Date, &j.AppliedDate,
-		&j.Status, &j.Category, &j.Salary, &j.Location, &j.Contact,
+		&j.Status, &j.CategoryID, &j.CategoryName, &j.Salary, &j.Location, &j.Contact,
 		&j.URL, &j.Notes, &j.ReminderDate, &j.CreatedAt, &j.UpdatedAt,
 	)
 	return j, err
@@ -32,9 +32,11 @@ func scanJobs(rows interface{ Next() bool; Scan(...any) error; Close() error; Er
 	return jobs, rows.Err()
 }
 
+const jobFrom = `FROM jobs j JOIN categories c ON j.category_id = c.id`
+
 // GetJobs returns all jobs, sorted by newest first.
 func (s *Store) GetJobs() ([]Job, error) {
-	rows, err := s.Query(fmt.Sprintf("SELECT %s FROM jobs ORDER BY id DESC", jobColumns))
+	rows, err := s.Query(fmt.Sprintf("SELECT %s %s ORDER BY j.id DESC", jobColumns, jobFrom))
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +46,7 @@ func (s *Store) GetJobs() ([]Job, error) {
 
 // GetJob returns a single job by ID.
 func (s *Store) GetJob(id int64) (Job, error) {
-	row := s.QueryRow(fmt.Sprintf("SELECT %s FROM jobs WHERE id = ?", jobColumns), id)
+	row := s.QueryRow(fmt.Sprintf("SELECT %s %s WHERE j.id = ?", jobColumns, jobFrom), id)
 	return scanJob(row)
 }
 
@@ -54,14 +56,14 @@ func (s *Store) AddJob(j Job) (Job, error) {
 	if j.Status == "" {
 		j.Status = "Not Applied"
 	}
-	if j.Category == "" {
-		j.Category = "General"
+	if j.CategoryID == 0 {
+		j.CategoryID = 1 // General
 	}
 
 	result, err := s.Exec(
-		`INSERT INTO jobs (company, position, date, applied_date, status, category, salary, location, contact, url, notes, reminder_date, created_at, updated_at)
+		`INSERT INTO jobs (company, position, date, applied_date, status, category_id, salary, location, contact, url, notes, reminder_date, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		j.Company, j.Position, j.Date, j.AppliedDate, j.Status, j.Category,
+		j.Company, j.Position, j.Date, j.AppliedDate, j.Status, j.CategoryID,
 		j.Salary, j.Location, j.Contact, j.URL, j.Notes, j.ReminderDate,
 		now, now,
 	)
@@ -79,12 +81,10 @@ func (s *Store) AddJob(j Job) (Job, error) {
 		return Job{}, fmt.Errorf("add history: %w", err)
 	}
 
-	return j, nil
+	return s.GetJob(id)
 }
 
 // UpdateJob updates fields of an existing job. Only non-zero fields are applied.
-// Use UpdateJobFields for more granular control. This method is the primary
-// API matching the old JS behavior.
 func (s *Store) UpdateJob(id int64, updates map[string]any) (Job, error) {
 	if len(updates) == 0 {
 		return s.GetJob(id)
@@ -101,17 +101,17 @@ func (s *Store) UpdateJob(id int64, updates map[string]any) (Job, error) {
 	var args []any
 
 	columnMap := map[string]string{
-		"company":       "company",
-		"position":      "position",
-		"date":          "date",
-		"applied_date":  "applied_date",
-		"status":        "status",
-		"category":      "category",
-		"salary":        "salary",
-		"location":      "location",
-		"contact":       "contact",
-		"url":           "url",
-		"notes":         "notes",
+		"company":      "company",
+		"position":     "position",
+		"date":         "date",
+		"applied_date": "applied_date",
+		"status":       "status",
+		"category_id":  "category_id",
+		"salary":       "salary",
+		"location":     "location",
+		"contact":      "contact",
+		"url":          "url",
+		"notes":        "notes",
 		"reminder_date": "reminder_date",
 	}
 
@@ -162,7 +162,6 @@ func (s *Store) UpdateJob(id int64, updates map[string]any) (Job, error) {
 
 // DeleteJob deletes a job by ID.
 func (s *Store) DeleteJob(id int64) error {
-	// Get job for history before deleting
 	job, err := s.GetJob(id)
 	if err != nil {
 		return err
@@ -182,10 +181,8 @@ func (s *Store) DeleteJob(id int64) error {
 		return fmt.Errorf("job %d not found", id)
 	}
 
-	// Clean up history for deleted job
 	_, _ = s.Exec("DELETE FROM history WHERE job_id = ?", id)
-
-	_ = job // used for history before delete
+	_ = job
 	return nil
 }
 
@@ -193,7 +190,7 @@ func (s *Store) DeleteJob(id int64) error {
 func (s *Store) SearchJobs(query string) ([]Job, error) {
 	like := "%" + query + "%"
 	rows, err := s.Query(
-		fmt.Sprintf("SELECT %s FROM jobs WHERE company LIKE ? OR position LIKE ? OR notes LIKE ? ORDER BY id DESC", jobColumns),
+		fmt.Sprintf("SELECT %s %s WHERE j.company LIKE ? OR j.position LIKE ? OR j.notes LIKE ? ORDER BY j.id DESC", jobColumns, jobFrom),
 		like, like, like,
 	)
 	if err != nil {
@@ -209,19 +206,19 @@ func (s *Store) FilterJobs(status, category string) ([]Job, error) {
 	var args []any
 
 	if status != "" {
-		conditions = append(conditions, "status = ?")
+		conditions = append(conditions, "j.status = ?")
 		args = append(args, status)
 	}
 	if category != "" {
-		conditions = append(conditions, "category = ?")
+		conditions = append(conditions, "c.name = ?")
 		args = append(args, category)
 	}
 
-	query := fmt.Sprintf("SELECT %s FROM jobs", jobColumns)
+	query := fmt.Sprintf("SELECT %s %s", jobColumns, jobFrom)
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
-	query += " ORDER BY id DESC"
+	query += " ORDER BY j.id DESC"
 
 	rows, err := s.Query(query, args...)
 	if err != nil {
