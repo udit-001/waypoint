@@ -303,7 +303,7 @@ const App = {
           let variants = [];
           try { variants = JSON.parse(a.variants || '[]'); } catch { variants = []; }
           return `
-            <div class="job-artifact-item" data-artifact-id="${a.id}" style="cursor:pointer">
+            <div class="job-artifact-item" data-artifact-id="${a.id}">
               <span class="gen-skill-badge">${skillLabels[a.skillId] || a.skillId}</span>
               <span class="job-artifact-title">${UI.escapeHtml(a.title)}</span>
               <span class="job-artifact-variants">${variants.length} variant${variants.length === 1 ? '' : 's'}</span>
@@ -414,6 +414,11 @@ const App = {
           </div>
         </div>
 
+        <div style="display:flex;align-items:center;gap:8px;margin:16px 0 8px">
+          <h4 style="margin:0">Content</h4>
+          <button class="btn btn-sm btn-secondary" id="copy-variant-btn">${icon('copy', 14)} Copy</button>
+        </div>
+
         ${variants.length > 1 ? `
           <div class="artifact-variant-tabs">
             ${variants.map((v, i) => `<button class="artifact-variant-tab${i === 0 ? ' active' : ''}" data-variant="${i}">${UI.escapeHtml(v.label || 'Variant ' + (i+1))}</button>`).join('')}
@@ -445,6 +450,19 @@ waypoint artifacts delete ${artifactId}</pre>
         App.showJobDetail(parseInt(a.dataset.jobId));
       });
     });
+
+    // Copy active variant
+    const copyBtn = document.getElementById('copy-variant-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', async () => {
+        const activePane = pane.querySelector('.artifact-variant-pane:not(.hidden)');
+        const content = activePane ? activePane.querySelector('.artifact-variant-content').textContent : '';
+        if (content) {
+          await navigator.clipboard.writeText(content);
+          UI.showToast('Copied to clipboard!', 'success');
+        }
+      });
+    }
 
     // Variant tabs
     pane.querySelectorAll('.artifact-variant-tab').forEach(tab => {
