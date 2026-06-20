@@ -16,6 +16,7 @@ Manage job applications with the `waypoint` CLI. Data in local SQLite (`jobtrack
 | `jobs delete <id>` | delete | `--force` |
 | `jobs stats` | stats | |
 | `categories` | manage categories | subcommands: `list` `add <name>` `rename <id> <name>` `delete <id>` |
+| `profile` | manage profile | subcommands: `show` `set` (name, email, title, skills, etc.) |
 | `start` | web UI | `--port` (8080) |
 | `init` | init db | `--force` |
 
