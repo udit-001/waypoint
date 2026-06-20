@@ -1,4 +1,6 @@
-<img src="web/icons/icon-192.svg" width="80" height="80" alt="Waypoint logo" align="left" style="margin-right:16px">
+<p align="center">
+  <img src="web/icons/icon-192.svg" width="64" height="64" alt="Waypoint logo">
+</p>
 
 # Waypoint — Job Tracker
 
