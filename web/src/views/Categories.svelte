@@ -40,17 +40,6 @@ import { setPage } from '../stores/page.svelte.js';
     Organize your applications into categories. Manage them via the CLI.
   </p>
 
-  <!-- CLI Commands -->
-  <div class="bg-white rounded-xl border border-slate-200 p-5">
-    <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-2">
-      <span>{@html iconSvg('copy', 16)}</span> CLI Commands
-    </h4>
-    <pre class="bg-slate-50 p-4 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint categories list              # List all categories
-waypoint categories add "Remote"       # Add a category
-waypoint categories rename 2 "Tech"    # Rename by ID
-waypoint categories delete 3           # Delete by ID (jobs → General)</pre>
-  </div>
-
   <!-- All Categories -->
   <div>
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">

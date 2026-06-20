@@ -26,17 +26,6 @@ import { setPage } from '../stores/page.svelte.js';
     Your profile personalizes AI-generated content. Manage it via the CLI.
   </p>
 
-  <!-- CLI Commands -->
-  <div class="bg-white rounded-xl border border-slate-200 p-5">
-    <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-800 mb-2">
-      <span>{@html iconSvg('copy', 16)}</span> CLI Commands
-    </h4>
-    <pre class="bg-slate-50 p-4 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint profile show                                    # View profile
-waypoint profile set --name "Jane Doe" --title "SWE"     # Update fields
-waypoint profile set --skills '["Go","React","AWS"]'     # JSON arrays
-waypoint profile set --greeting-style casual             # Email style</pre>
-  </div>
-
   {#if profileData}
     <!-- Personal Info -->
     <div class="bg-white rounded-xl border border-slate-200 p-5">
