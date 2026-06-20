@@ -10,7 +10,7 @@ Needs poppler (`pdftotext`, `pdftoppm`). If missing, install:
 | Ubuntu/Debian | `sudo apt install poppler-utils` |
 | Fedora | `sudo dnf install poppler-utils` |
 | Arch | `sudo pacman -S poppler` |
-| Windows | `choco install poppler` or `scoop install poppler` |
+| Windows | `winget install poppler` or `choco install poppler` or `scoop install poppler` |
 
 Check: `pdftotext -v 2>&1 | head -1`
 
