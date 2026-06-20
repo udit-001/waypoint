@@ -6,19 +6,27 @@
   <title>Waypoint — Offline</title>
   <style>
     :root {
-      --bg: #fafaf7;
+      --bg: #eceff4;
+      --card-bg: #ffffff;
       --text: #2e3440;
-      --muted: #8a857c;
+      --text-secondary: #4c566a;
+      --muted: #81a1c1;
       --accent: #5e81ac;
-      --border: #e5e5e5;
+      --accent-hover: #81a1c1;
+      --border: #e5e9f0;
+      --logo-opacity: 0.15;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #2e3440;
+        --card-bg: #3b4252;
         --text: #eceff4;
-        --muted: #8a857c;
+        --text-secondary: #d8dee9;
+        --muted: #81a1c1;
         --accent: #88c0d0;
-        --border: #3b4252;
+        --accent-hover: #8fbcbb;
+        --border: #434c5e;
+        --logo-opacity: 0.08;
       }
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -30,29 +38,53 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      -webkit-font-smoothing: antialiased;
     }
     .container {
       text-align: center;
-      padding: 40px 24px;
-      max-width: 400px;
+      padding: 40px 32px;
+      max-width: 420px;
     }
     .logo {
-      width: 64px; height: 64px;
-      margin: 0 auto 24px;
-      opacity: 0.4;
+      width: 80px; height: 80px;
+      margin: 0 auto 32px;
+      position: relative;
     }
-    .logo svg { width: 100%; height: 100%; }
+    .logo svg {
+      width: 100%; height: 100%;
+      color: var(--accent);
+      opacity: var(--logo-opacity);
+    }
     h1 {
       font-size: 22px;
       font-weight: 600;
       margin-bottom: 8px;
+      letter-spacing: -0.01em;
     }
     p {
       font-size: 15px;
-      color: var(--muted);
+      color: var(--text-secondary);
       line-height: 1.6;
-      margin-bottom: 24px;
+      margin-bottom: 32px;
     }
+    .retry-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      color: #fff;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .retry-btn:hover { background: var(--accent-hover); }
+    .retry-btn:active { opacity: 0.8; }
+    .retry-btn svg { flex-shrink: 0; }
     .hint {
       font-size: 13px;
       color: var(--muted);
@@ -73,22 +105,6 @@
       0%, 100% { opacity: 0.3; transform: scale(1); }
       50% { opacity: 1; transform: scale(1.2); }
     }
-    .retry-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 20px;
-      font-size: 14px;
-      font-weight: 500;
-      color: #fff;
-      background: var(--accent);
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    .retry-btn:hover { opacity: 0.85; }
-    .retry-btn:active { opacity: 0.7; }
   </style>
 </head>
 <body>
@@ -120,9 +136,7 @@
     </div>
   </div>
   <script>
-    // Auto-retry when back online
     window.addEventListener('online', () => location.reload());
-    // Also poll — some browsers don't fire 'online' for localhost
     setInterval(() => {
       fetch('/api/jobs', { method: 'HEAD' })
         .then(r => { if (r.ok) location.reload(); })
