@@ -19,12 +19,22 @@
     art = await api.getArtifact(parseInt(id));
     if (!art) { router.navigate('/artifacts'); return; }
     loading = false;
+
+    // Build breadcrumbs with optional job link
+    const crumbs = [
+      { label: 'Artifacts', action: () => router.navigate('/artifacts') },
+    ];
+    if (art.jobId) {
+      const job = await api.getJob(art.jobId);
+      if (job) {
+        crumbs.push({ label: job.company, action: () => router.navigate('/job/' + job.id) });
+      }
+    }
+    crumbs.push({ label: art.title || 'Artifact' });
+
     setPage({
       title: art.title || 'Artifact',
-      breadcrumbs: [
-        { label: 'Artifacts', action: () => router.navigate('/artifacts') },
-        { label: art.title || 'Artifact' },
-      ],
+      breadcrumbs: crumbs,
     });
   });
 
