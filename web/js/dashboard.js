@@ -186,10 +186,11 @@ const Dashboard = {
 
       <div class="dashboard-two-col">
         <div class="dashboard-col-left">
+          ${responded + withdrawn > 0 ? `
           <div class="chart-card">
             <h4>Pipeline</h4>
             <canvas id="chart-pipeline"></canvas>
-          </div>
+          </div>` : ''}
           ${staleApps.length > 0 ? `
           <div class="chart-card chart-card--alert">
             <h4>Needs Follow-up <span class="alert-badge">${staleApps.length}</span></h4>
