@@ -37,6 +37,8 @@ func Start(cfg Config) error {
 	mux.HandleFunc("GET /api/stats", handleStats(cfg.DB))
 	mux.HandleFunc("GET /api/history", handleGetAllHistory(cfg.DB))
 	mux.HandleFunc("GET /api/categories", handleCategories(cfg.DB))
+	mux.HandleFunc("GET /api/artifacts", handleListArtifacts(cfg.DB))
+	mux.HandleFunc("GET /api/artifacts/{id}", handleGetArtifact(cfg.DB))
 
 	// Profile & Settings
 	mux.HandleFunc("GET /api/profile", handleGetProfile(cfg.DB))
@@ -299,5 +301,46 @@ func handleCategories(store *db.Store) http.HandlerFunc {
 			cats = []db.Category{}
 		}
 		jsonResponse(w, cats)
+	}
+}
+
+func handleListArtifacts(store *db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		skill := r.URL.Query().Get("skill")
+		jobStr := r.URL.Query().Get("job")
+		all := r.URL.Query().Get("all") == "true"
+
+		var jobID int64
+		if jobStr != "" {
+			jobID, _ = strconv.ParseInt(jobStr, 10, 64)
+		}
+
+		arts, err := store.GetArtifacts(skill, jobID, all)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if arts == nil {
+			arts = []db.Artifact{}
+		}
+		jsonResponse(w, arts)
+	}
+}
+
+func handleGetArtifact(store *db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.PathValue("id")
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			jsonError(w, "invalid artifact id", http.StatusBadRequest)
+			return
+		}
+
+		art, err := store.GetArtifact(id)
+		if err != nil {
+			jsonError(w, "artifact not found", http.StatusNotFound)
+			return
+		}
+		jsonResponse(w, art)
 	}
 }

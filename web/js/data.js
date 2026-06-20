@@ -118,19 +118,27 @@ const DB = {
     return Promise.resolve();
   },
 
-  // === Generated Content ===
+  // === Artifacts ===
 
-  getGeneratedContent() {
-    return Promise.resolve([]);
+  async getArtifacts(skill, job) {
+    let path = '/artifacts';
+    const params = new URLSearchParams();
+    if (skill) params.set('skill', skill);
+    if (job) params.set('job', job);
+    const qs = params.toString();
+    if (qs) path += '?' + qs;
+    const data = await this._api(path);
+    return Array.isArray(data) ? data : [];
   },
 
-  addGeneratedContent(item) {
-    UI.showToast('Content generation is managed via the CLI', 'info');
-    return Promise.resolve(item);
+  async getArtifact(id) {
+    return this._api(`/artifacts/${id}`);
   },
 
-  deleteGeneratedContent(id) {
-    return Promise.resolve();
+  // === Generated Content (legacy alias for the view) ===
+
+  async getGeneratedContent() {
+    return this.getArtifacts();
   },
 
   // === Skill Feedback ===

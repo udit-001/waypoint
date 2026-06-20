@@ -445,8 +445,41 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .skill-generate-btn { width: 100%; }
 
-/* === Generated Content === */
+/* === Generated Content / Artifacts === */
 .generated-container { max-width: 800px; margin: 0 auto; }
+.generated-item {
+  background: var(--card-bg); border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 16px;
+}
+.gen-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.gen-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.gen-meta { font-size: 12px; color: var(--text-muted); }
+.gen-skill-badge {
+  display: inline-block; background: var(--accent); color: #fff;
+  padding: 1px 8px; border-radius: 99px; font-size: 10px; font-weight: 500;
+}
+.gen-actions { display: flex; gap: 6px; }
+.gen-variant-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-color); margin: 10px 0 0; overflow-x: auto; }
+.gen-variant-tab {
+  background: none; border: none; cursor: pointer;
+  padding: 6px 12px; font-size: 12px; color: var(--text-muted);
+  border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.gen-variant-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+.gen-variant-pane.hidden { display: none; }
+.gen-content {
+  font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+  background: var(--bg); border-radius: var(--radius); padding: 12px; margin-top: 10px;
+  max-height: 280px; overflow-y: auto;
+}
+.gen-modal-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+.gen-modal-variant { margin-bottom: 20px; }
+.gen-modal-variant h4 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.gen-modal-content {
+  font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+  background: var(--bg); border: 1px solid var(--border-color); border-radius: var(--radius);
+  padding: 12px; overflow-x: auto; max-height: 400px; overflow-y: auto;
+}
 
 /* === Categories Page === */
 .cat-cli-box {
