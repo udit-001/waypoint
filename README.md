@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="web/icons/icon-192.svg" width="64" height="64" alt="Waypoint logo">
+  <img src="web/public/icons/icon-192.svg" width="64" height="64" alt="Waypoint logo">
 </p>
 
 # Waypoint — Job Tracker
