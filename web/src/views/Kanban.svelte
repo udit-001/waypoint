@@ -28,12 +28,15 @@ import { setPage } from '../stores/page.svelte.js';
     allJobs = api.jobs.value || [];
   });
 
-  function getJobsByStatus(status) {
+  function getJobsByStatus(statusFilter) {
     let filtered = allJobs;
     if (filter.category) {
       filtered = filtered.filter(j => j.category === filter.category);
     }
-    return filtered.filter(j => j.status === status);
+    if (filter.status) {
+      filtered = filtered.filter(j => j.status === filter.status);
+    }
+    return filtered.filter(j => j.status === statusFilter);
   }
 
   function formatDate(d) {

@@ -44,7 +44,7 @@ import { setPage } from '../stores/page.svelte.js';
 
   // Re-apply filters when the shared filter changes
   $effect(() => {
-    if (filter.category !== undefined) applyFilters();
+    if (filter.category !== undefined && filter.status !== undefined) applyFilters();
   });
 
   function sortBy(field) {
@@ -59,6 +59,11 @@ import { setPage } from '../stores/page.svelte.js';
     // Category filter
     if (filter.category) {
       result = result.filter(j => j.category === filter.category);
+    }
+
+    // Status filter
+    if (filter.status) {
+      result = result.filter(j => j.status === filter.status);
     }
 
     // Search filter

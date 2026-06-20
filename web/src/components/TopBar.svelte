@@ -85,7 +85,7 @@
       title="Toggle Filters"
     >
       {@html iconSvg('filter', 18)}
-      {#if filter.category}
+      {#if filter.category || filter.status}
         <span class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-slate-700 rounded-full"></span>
       {/if}
     </button>

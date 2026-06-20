@@ -23,12 +23,19 @@ import { setPage } from '../stores/page.svelte.js';
   let allHistory = $state([]);
   let loaded = $state(false);
 
-  // Filtered jobs based on selected category
-  let filteredJobs = $derived(
-    filter.category
-      ? (jobs || []).filter(j => j.category === filter.category)
-      : jobs || []
-  );
+  // Filtered jobs based on selected category and status
+  let filteredJobs = $derived.by(() => {
+    let result = jobs || [];
+    if (filter.category) {
+      result = result.filter(j => j.category === filter.category);
+    }
+    if (filter.status) {
+      result = result.filter(j => j.status === filter.status);
+    }
+    return result;
+  });
+
+  let hasActiveFilter = $derived(filter.category || filter.status);
 
   // Derived state
   let statusCounts = $derived.by(() => {
@@ -335,7 +342,7 @@ import { setPage } from '../stores/page.svelte.js';
     <pre class="inline-block bg-slate-100 px-5 py-3 rounded-lg text-sm mb-6">waypoint jobs add "Company" "Position"</pre>
     <p class="text-xs">Then reload this page</p>
   </div>
-{:else if filteredJobs.length === 0 && filter.category}
+{:else if filteredJobs.length === 0 && hasActiveFilter}
   <div class="text-center py-20 text-slate-400">
     <div class="text-4xl mb-4">{@html iconSvg("search", 48)}</div>
     <h3 class="text-lg font-semibold text-slate-600 mb-1">No jobs match &ldquo;{filter.category}&rdquo;</h3>
