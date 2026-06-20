@@ -46,9 +46,21 @@ Suggest a natural next step:
 - Interview prep → "Career summary as well?"
 - First artifact → "`waypoint start` to see it in the web UI"
 
-## Exa search (if MCP available)
+# External Data Sources
 
-If `exa` MCP connected, `read` [exa-search](references/exa-search.md) for company/people research patterns. Use findings to personalize content and save contacts via `jobs update --contact` / `--notes`.
+## Exa search (if MCP connected)
+
+`read` [exa-search](references/exa-search.md) for company/people research patterns. Use findings to personalize content, save contacts via `jobs update --contact` / `--notes`.
+
+## PDFs
+
+If `pdftotext` (poppler) is available, extract text from PDFs for job details:
+
+```bash
+pdftotext <file.pdf> - | head -200
+```
+
+Useful for job postings, company dossiers, research papers saved as PDFs. Pipe output to `--notes` or `jobs add`.
 
 ## Commands
 
@@ -83,6 +95,7 @@ All: `--db <path>`, `--json`.
 | [career-summary](references/career-summary.md) | resume summary in 5 styles |
 | [statement-of-purpose](references/statement-of-purpose.md) | SOP in 4 tones |
 | [exa-search](references/exa-search.md) | company/people research (if exa MCP) |
+| [pdf-extract](references/pdf-extract.md) | extract text from PDFs (if pdftotext) |
 
 ## Save as artifacts
 
