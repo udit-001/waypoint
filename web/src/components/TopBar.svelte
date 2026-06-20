@@ -111,51 +111,54 @@
     {/if}
   </div>
 
-  <div class="flex items-center gap-2 relative">
-    <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg px-2 relative">
-      <input
-        type="text"
-        bind:value={searchQuery}
-        oninput={onSearchInput}
-        placeholder="Search jobs & artifacts... (/)"
-        class="bg-transparent border-none outline-none w-56 py-1.5 px-2 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:w-72 transition-all"
-        onkeydown={handleKeydown}
-        onblur={() => setTimeout(() => { showDropdown = false; }, 200)}
-      />
-      {#if searchQuery}
-        <button
-          class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
-          onclick={clearSearch}
-        >×</button>
+  <div class="flex items-center gap-2">
+    <div class="relative">
+      <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg px-2">
+        <input
+          type="text"
+          bind:value={searchQuery}
+          oninput={onSearchInput}
+          placeholder="Search jobs & artifacts... (/)"
+          class="bg-transparent border-none outline-none w-56 py-1.5 px-2 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:w-72 transition-all"
+          onkeydown={handleKeydown}
+          onblur={() => setTimeout(() => { showDropdown = false; }, 200)}
+        />
+        {#if searchQuery}
+          <button
+            class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+            onclick={clearSearch}
+          >×</button>
+        {/if}
+      </div>
+
+      {#if showDropdown && results.length > 0}
+        <div class="absolute top-full right-0 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-50 max-h-72 overflow-y-auto">
+          {#each results as r}
+            <button
+              class="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer bg-transparent border-none flex items-center gap-2 transition-colors"
+              onmousedown={() => goToResult(r.type, r.id)}
+            >
+              <span class="shrink-0 flex items-center">{@html iconSvg(typeLabels[r.type], 16)}</span>
+              <span class="flex-1 min-w-0 truncate">{r.title || 'Untitled'}</span>
+              <span class="text-xs text-slate-400 dark:text-slate-500 shrink-0">{r.type === 'job' ? r.sub : skillLabel(r.sub)}</span>
+            </button>
+          {/each}
+        </div>
       {/if}
     </div>
 
-    <!-- Autocomplete dropdown -->
-    {#if showDropdown && results.length > 0}
-      <div class="absolute top-full right-0 mt-1 w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-50 max-h-72 overflow-y-auto">
-        {#each results as r}
-          <button
-            class="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer bg-transparent border-none flex items-center gap-2 transition-colors"
-            onmousedown={() => goToResult(r.type, r.id)}
-          >
-            <span class="shrink-0 flex items-center">{@html iconSvg(typeLabels[r.type], 16)}</span>
-            <span class="flex-1 min-w-0 truncate">{r.title || 'Untitled'}</span>
-            <span class="text-xs text-slate-400 dark:text-slate-500 shrink-0">{r.type === 'job' ? r.sub : skillLabel(r.sub)}</span>
-          </button>
-        {/each}
-      </div>
+    {#if router.current.route === 'dashboard' || router.current.route === 'kanban' || router.current.route === 'table'}
+      <button
+        class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer relative"
+        onclick={filter.toggle}
+        title="Toggle Filters"
+      >
+        {@html iconSvg('filter', 18)}
+        {#if filter.category || filter.status}
+          <span class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-slate-700 rounded-full"></span>
+        {/if}
+      </button>
     {/if}
-
-    <button
-      class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer relative"
-      onclick={filter.toggle}
-      title="Toggle Filters"
-    >
-      {@html iconSvg('filter', 18)}
-      {#if filter.category || filter.status}
-        <span class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-slate-700 rounded-full"></span>
-      {/if}
-    </button>
     <button
       class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
       onclick={toggleTheme}
