@@ -2,7 +2,7 @@ package version
 
 import "runtime/debug"
 
-var Version = "dev"
+var Version = "0.1.0"
 
 func init() {
 	info, ok := debug.ReadBuildInfo()
