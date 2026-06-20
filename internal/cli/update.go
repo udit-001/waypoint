@@ -1,138 +1,123 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"os/exec"
 	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
-
-	"github.com/SwatiBio/job-tracker/internal/version"
 )
 
-var updateForce bool
-
-func init() {
-	updateCmd.Flags().BoolVarP(&updateForce, "force", "f", false, "Reinstall even if already up to date")
-	rootCmd.AddCommand(updateCmd)
-}
-
-const (
-	ghOwner = "SwatiBio"
-	ghRepo  = "job-tracker"
-)
-
-type ghRelease struct {
-	TagName string `json:"tag_name"`
+var updateFlags struct {
+	company      string
+	position     string
+	status       string
+	category     string
+	salary       string
+	location     string
+	contact      string
+	url          string
+	notes        string
+	date         string
+	appliedDate  string
+	reminderDate string
 }
 
 var updateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update job-tracker to the latest version via 'go install'",
-	Long: `Update job-tracker to the latest release by running:
-  go install github.com/SwatiBio/job-tracker/cmd/job-tracker@latest
+	Use:   "update <id>",
+	Short: "Update a job application's fields",
+	Long: `Update one or more fields of a job application by its ID.
 
-This compiles from source — no binary download, no Windows SmartScreen flags.`,
-	Args: cobra.NoArgs,
+Only the flags you provide are changed — all other fields remain untouched.
+
+Examples:
+  waypoint update 42 --status Offer --notes "Got the offer!"
+  waypoint update 42 --company "Google LLC" --position "Senior Engineer"
+  waypoint update 42 --salary "$180k" --location "Mountain View, CA"`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid job ID: %s", args[0])
+		}
+
+		// Build updates map from non-empty flags
+		updates := make(map[string]any)
+		flags := map[string]*string{
+			"company":       &updateFlags.company,
+			"position":      &updateFlags.position,
+			"status":        &updateFlags.status,
+			"category":      &updateFlags.category,
+			"salary":        &updateFlags.salary,
+			"location":      &updateFlags.location,
+			"contact":       &updateFlags.contact,
+			"url":           &updateFlags.url,
+			"notes":         &updateFlags.notes,
+			"date":          &updateFlags.date,
+			"applied_date":  &updateFlags.appliedDate,
+			"reminder_date": &updateFlags.reminderDate,
+		}
+
+		for key, val := range flags {
+			if *val != "" {
+				updates[key] = *val
+			}
+		}
+
+		if len(updates) == 0 {
+			return fmt.Errorf("no fields to update — use --flags to specify changes")
+		}
+
+		updated, err := store.UpdateJob(id, updates)
+		if err != nil {
+			return formatError("failed to update job", err)
+		}
+
+		if jsonOut {
+			printJSON(updated)
+			return nil
+		}
+
 		fmt.Println()
-		fmt.Printf("  Checking for updates...\n")
-
-		rel, err := fetchLatestRelease()
-		if err != nil {
-			return fmt.Errorf("failed to fetch latest release: %w", err)
+		fmt.Printf("  ✓ Updated job %d: %s — %s\n", updated.ID, updated.Company, updated.Position)
+		for key := range updates {
+			switch key {
+			case "company":
+				fmt.Printf("    Company:  %s\n", updated.Company)
+			case "position":
+				fmt.Printf("    Position: %s\n", updated.Position)
+			case "status":
+				fmt.Printf("    Status:   %s\n", updated.Status)
+			case "category":
+				fmt.Printf("    Category: %s\n", updated.Category)
+			case "salary":
+				fmt.Printf("    Salary:   %s\n", updated.Salary)
+			case "location":
+				fmt.Printf("    Location: %s\n", updated.Location)
+			case "contact":
+				fmt.Printf("    Contact:  %s\n", updated.Contact)
+			case "url":
+				fmt.Printf("    URL:      %s\n", updated.URL)
+			case "notes":
+				fmt.Printf("    Notes:    %s\n", updated.Notes)
+			}
 		}
-
-		latest := strings.TrimPrefix(rel.TagName, "v")
-		current := strings.TrimPrefix(version.Version, "v")
-		fmt.Printf("  Latest version: %s\n", rel.TagName)
-
-		if !updateForce && current != "" && current != "dev" && semverCompare(current, latest) >= 0 {
-			fmt.Printf("  Already up to date (v%s)\n", current)
-			fmt.Println()
-			return nil
-		}
-
-		goPath, err := exec.LookPath("go")
-		if err != nil {
-			fmt.Println()
-			fmt.Println("  Go is not installed on your PATH.")
-			fmt.Println("  Install manually with:")
-			fmt.Printf("    go install github.com/%s/%s/cmd/job-tracker@%s\n", ghOwner, ghRepo, rel.TagName)
-			fmt.Println()
-			return nil
-		}
-
-		module := fmt.Sprintf("github.com/%s/%s/cmd/job-tracker@%s", ghOwner, ghRepo, rel.TagName)
-		fmt.Printf("  Running: go install %s\n", module)
-
-		c := exec.Command(goPath, "install", module)
-		output, err := c.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("go install failed: %w\n%s", err, string(output))
-		}
-
-		fmt.Printf("  Updated to %s\n", rel.TagName)
-		fmt.Printf("  Restart the server to use the new version\n")
 		fmt.Println()
 		return nil
 	},
 }
 
-// semverCompare returns -1 if a < b, 0 if a == b, 1 if a > b.
-func semverCompare(a, b string) int {
-	pa := parseSemver(a)
-	pb := parseSemver(b)
-	min := len(pa)
-	if len(pb) < min {
-		min = len(pb)
-	}
-	for i := 0; i < min; i++ {
-		if pa[i] < pb[i] {
-			return -1
-		}
-		if pa[i] > pb[i] {
-			return 1
-		}
-	}
-	if len(pa) < len(pb) {
-		return -1
-	}
-	if len(pa) > len(pb) {
-		return 1
-	}
-	return 0
-}
-
-func parseSemver(v string) []int {
-	parts := strings.Split(v, ".")
-	nums := make([]int, 0, len(parts))
-	for _, p := range parts {
-		n, err := strconv.Atoi(p)
-		if err != nil {
-			return nums
-		}
-		nums = append(nums, n)
-	}
-	return nums
-}
-
-func fetchLatestRelease() (*ghRelease, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", ghOwner, ghRepo)
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned %s", resp.Status)
-	}
-	var rel ghRelease
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return nil, err
-	}
-	return &rel, nil
+func init() {
+	rootCmd.AddCommand(updateCmd)
+	updateCmd.Flags().StringVar(&updateFlags.company, "company", "", "Company or institution name")
+	updateCmd.Flags().StringVar(&updateFlags.position, "position", "", "Job title or position")
+	updateCmd.Flags().StringVar(&updateFlags.status, "status", "", "Application status")
+	updateCmd.Flags().StringVar(&updateFlags.category, "category", "", "Job category")
+	updateCmd.Flags().StringVar(&updateFlags.salary, "salary", "", "Salary range")
+	updateCmd.Flags().StringVar(&updateFlags.location, "location", "", "Job location")
+	updateCmd.Flags().StringVar(&updateFlags.contact, "contact", "", "Contact person or email")
+	updateCmd.Flags().StringVar(&updateFlags.url, "url", "", "Job posting URL")
+	updateCmd.Flags().StringVar(&updateFlags.notes, "notes", "", "Notes about the job")
+	updateCmd.Flags().StringVar(&updateFlags.date, "date", "", "Deadline date (YYYY-MM-DD)")
+	updateCmd.Flags().StringVar(&updateFlags.appliedDate, "applied-date", "", "Date applied (YYYY-MM-DD)")
+	updateCmd.Flags().StringVar(&updateFlags.reminderDate, "reminder-date", "", "Follow-up reminder (datetime-local)")
 }

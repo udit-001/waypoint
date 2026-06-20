@@ -18,8 +18,8 @@ var deleteCmd = &cobra.Command{
 unless --force is used.
 
 Examples:
-  job-tracker delete 42
-  job-tracker delete 42 --force`,
+  waypoint delete 42
+  waypoint delete 42 --force`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := strconv.ParseInt(args[0], 10, 64)

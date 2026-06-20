@@ -25,17 +25,17 @@ const DB = {
   },
 
   addJob(job) {
-    UI.showToast('Use the CLI to add jobs: job-tracker add "Company" "Position"', 'info');
+    UI.showToast('Use the CLI to add jobs: waypoint add "Company" "Position"', 'info');
     return Promise.resolve(job);
   },
 
   updateJob(id, updates) {
-    UI.showToast('Use the CLI to update jobs: job-tracker update ' + id + ' --flag value', 'info');
+    UI.showToast('Use the CLI to update jobs: waypoint update ' + id + ' --flag value', 'info');
     return Promise.resolve(null);
   },
 
   deleteJob(id) {
-    UI.showToast('Use the CLI to delete jobs: job-tracker delete ' + id, 'info');
+    UI.showToast('Use the CLI to delete jobs: waypoint delete ' + id, 'info');
     return Promise.resolve(true);
   },
 
@@ -48,12 +48,12 @@ const DB = {
   },
 
   addCategory(name) {
-    UI.showToast('Use the CLI: job-tracker add-category "', 'info');
+    UI.showToast('Use the CLI: waypoint add-category "', 'info');
     return Promise.resolve(false);
   },
 
   deleteCategory(name) {
-    UI.showToast('Use the CLI: job-tracker delete-category "', 'info');
+    UI.showToast('Use the CLI: waypoint delete-category "', 'info');
     return Promise.resolve(false);
   },
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/SwatiBio/job-tracker/internal/db"
+	"github.com/SwatiBio/waypoint/internal/db"
 	"github.com/spf13/cobra"
 )
 
@@ -16,9 +16,9 @@ If the database file already exists, this command will refuse
 to overwrite it (use --force to start fresh).
 
 Examples:
-  job-tracker init
-  job-tracker init --db ~/my-jobs.db
-  job-tracker init --force`,
+  waypoint init
+  waypoint init --db ~/my-jobs.db
+  waypoint init --force`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check if file exists
@@ -47,9 +47,9 @@ Examples:
 		fmt.Printf("  ✓ Initialized job tracker database at %s\n", storePath)
 		fmt.Println()
 		fmt.Println("  Next steps:")
-		fmt.Println("    job-tracker add \"Company Name\" \"Position Title\"")
-		fmt.Println("    job-tracker list")
-		fmt.Println("    job-tracker stats")
+		fmt.Println("    waypoint add \"Company Name\" \"Position Title\"")
+		fmt.Println("    waypoint list")
+		fmt.Println("    waypoint stats")
 		fmt.Println()
 		return nil
 	},

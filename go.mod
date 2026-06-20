@@ -1,4 +1,4 @@
-module github.com/SwatiBio/job-tracker
+module github.com/SwatiBio/waypoint
 
 go 1.25.10
 

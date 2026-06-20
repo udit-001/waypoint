@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/SwatiBio/job-tracker/internal/db"
+	"github.com/SwatiBio/waypoint/internal/db"
 	"github.com/spf13/cobra"
 )
 
@@ -22,11 +22,11 @@ var listCmd = &cobra.Command{
 	Long: `List job applications with optional filtering.
 
 Examples:
-  job-tracker list                    # All jobs
-  job-tracker list --status Applied   # Only applied jobs
-  job-tracker list --category Tech    # Tech category
-  job-tracker list --search "google"  # Search company/position/notes
-  job-tracker list --json             # Machine-readable output`,
+  waypoint list                    # All jobs
+  waypoint list --status Applied   # Only applied jobs
+  waypoint list --category Tech    # Tech category
+  waypoint list --search "google"  # Search company/position/notes
+  waypoint list --json             # Machine-readable output`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var (

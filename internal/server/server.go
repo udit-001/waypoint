@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/SwatiBio/job-tracker/internal/db"
-	"github.com/SwatiBio/job-tracker/web"
+	"github.com/SwatiBio/waypoint/internal/db"
+	"github.com/SwatiBio/waypoint/web"
 )
 
 // Config holds the server configuration.
@@ -64,9 +64,9 @@ func Start(cfg Config) error {
 	}
 
 	if cfg.Silent {
-		log.Printf("Job Tracker server listening on http://127.0.0.1:%d", cfg.Port)
+		log.Printf("Waypoint server listening on http://127.0.0.1:%d", cfg.Port)
 	} else {
-		fmt.Printf("  Job Tracker UI: http://127.0.0.1:%d\n", cfg.Port)
+		fmt.Printf("  Waypoint UI: http://127.0.0.1:%d\n", cfg.Port)
 		fmt.Println("  Press Ctrl+C to stop")
 		fmt.Println()
 	}

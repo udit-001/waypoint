@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/SwatiBio/job-tracker/internal/skills"
+	"github.com/SwatiBio/waypoint/internal/skills"
 	"github.com/spf13/cobra"
 )
 
@@ -17,10 +17,10 @@ type agentTarget struct {
 }
 
 var agents = []agentTarget{
-	{name: "opencode", path: ".opencode/skills/job-tracker/SKILL.md"},
-	{name: "claude-code", path: ".claude/skills/job-tracker/SKILL.md"},
-	{name: "codex", path: ".codex/skills/job-tracker/SKILL.md"},
-	{name: "pi.dev", path: ".pi/skills/job-tracker/SKILL.md"},
+	{name: "opencode", path: ".opencode/skills/waypoint/SKILL.md"},
+	{name: "claude-code", path: ".claude/skills/waypoint/SKILL.md"},
+	{name: "codex", path: ".codex/skills/waypoint/SKILL.md"},
+	{name: "pi.dev", path: ".pi/skills/waypoint/SKILL.md"},
 }
 
 func runSkillsInstall(cmd *cobra.Command) error {
@@ -67,7 +67,7 @@ func runSkillsInstall(cmd *cobra.Command) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("  ✓ Installed job-tracker skill to %s\n", targetPath)
+	fmt.Printf("  ✓ Installed waypoint skill to %s\n", targetPath)
 	fmt.Println()
 	printNextSteps(selected)
 	fmt.Println()
@@ -102,5 +102,5 @@ func pickAgent() agentTarget {
 func printNextSteps(a agentTarget) {
 	fmt.Println("  Next steps:")
 	fmt.Printf("  - Skills are auto-discovered at session start\n")
-	fmt.Printf("  - Ask your agent to manage job applications with job-tracker\n")
+	fmt.Printf("  - Ask your agent to manage job applications with waypoint\n")
 }

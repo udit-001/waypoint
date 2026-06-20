@@ -38,6 +38,11 @@
   --transition: 150ms ease;
 }
 
+[data-font="sans"] {
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Inter", ui-monospace, "SF Mono", monospace;
+}
+
 [data-theme="dark"] {
   --bg-primary: #2E3440;
   --bg-secondary: #3B4252;
@@ -128,8 +133,9 @@ textarea { resize: vertical; min-height: 80px; }
   padding: 16px 20px; display: flex; align-items: center; gap: 10px;
   border-bottom: 1px solid var(--border-color);
 }
-.app-name { font-weight: 600; font-size: 15px; color: var(--text-color); text-decoration: none; cursor: pointer; }
+.app-name { font-weight: 600; font-size: 15px; color: var(--text-color); text-decoration: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
 .app-name:hover { color: var(--accent); }
+.sidebar-logo { flex-shrink: 0; }
 .sidebar-nav { padding: 8px; flex: 1; overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; }
 .sidebar-nav::-webkit-scrollbar { width: 4px; }
 .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }

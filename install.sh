@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-REPO="SwatiBio/Job-tracker"
-BIN="job-tracker"
+REPO="SwatiBio/waypoint"
+BIN="waypoint"
 VERSION="${1:-latest}"
 
 # Detect OS
@@ -32,8 +32,8 @@ fi
 
 # Strip leading 'v' for filename
 VER="${TAG#v}"
-ARCHIVE="job-tracker_${VER}_${OS}_${ARCH}.tar.gz"
-[ "$OS" = "windows" ] && ARCHIVE="job-tracker_${VER}_${OS}_${ARCH}.zip"
+ARCHIVE="waypoint_${VER}_${OS}_${ARCH}.tar.gz"
+[ "$OS" = "windows" ] && ARCHIVE="waypoint_${VER}_${OS}_${ARCH}.zip"
 
 echo "Downloading $BIN $TAG for $OS/$ARCH..."
 

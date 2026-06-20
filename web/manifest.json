@@ -1,6 +1,6 @@
 {
-  "name": "Job Tracker",
-  "short_name": "Jobs",
+  "name": "Waypoint",
+  "short_name": "Waypoint",
   "description": "Track your job applications from the comfort of your browser",
   "start_url": "/",
   "display": "standalone",

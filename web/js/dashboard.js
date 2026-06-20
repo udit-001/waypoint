@@ -34,10 +34,24 @@ const Dashboard = {
     if (jobs.length === 0) {
       container.innerHTML = `
         <div class="empty-state" style="padding:80px 24px">
-          <div class="empty-icon">${icon('briefcase', 64)}</div>
-          <h3 style="font-size:22px;margin-bottom:8px">Welcome to Job Tracker</h3>
+          <div class="empty-icon">
+            <svg viewBox="0 0 100 100" width="80" height="80" aria-hidden="true" style="opacity:0.5">
+              <g fill="none" stroke="currentColor" stroke-linecap="round">
+                <circle cx="50" cy="50" r="32" stroke-width="4"/>
+                <circle cx="50" cy="50" r="16" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.4"/>
+                <circle cx="50" cy="18" r="4" fill="currentColor" stroke="none"/>
+                <circle cx="82" cy="50" r="4" fill="currentColor" stroke="none"/>
+                <circle cx="50" cy="82" r="4" fill="currentColor" stroke="none"/>
+                <circle cx="18" cy="50" r="4" fill="currentColor" stroke="none"/>
+                <polygon points="50,40 60,50 50,60 40,50" fill="currentColor" stroke="none"/>
+                <path d="M 50 18 A 32 32 0 0 1 82 50" stroke-width="2.5" opacity="0.5"/>
+                <circle cx="50" cy="50" r="2" fill="currentColor" stroke="none"/>
+              </g>
+            </svg>
+          </div>
+          <h3 style="font-size:22px;margin-bottom:8px">Welcome to Waypoint</h3>
           <p style="font-size:15px;max-width:400px;margin:0 auto 24px;line-height:1.6">Your job applications appear here. Use the CLI to add them:</p>
-          <pre style="background:var(--bg-secondary);padding:12px 20px;border-radius:8px;font-size:14px;display:inline-block;margin-bottom:24px">job-tracker add "Company" "Position"</pre>
+          <pre style="background:var(--bg-secondary);padding:12px 20px;border-radius:8px;font-size:14px;display:inline-block;margin-bottom:24px">waypoint add "Company" "Position"</pre>
           <p class="text-muted" style="font-size:13px">Then reload this page</p>
         </div>
       `;

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/SwatiBio/job-tracker/internal/db"
-	"github.com/SwatiBio/job-tracker/internal/version"
+	"github.com/SwatiBio/waypoint/internal/db"
+	"github.com/SwatiBio/waypoint/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -27,12 +27,12 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "job-tracker",
+	Use:     "waypoint",
 	Short:   "Track job applications from the command line",
 	Version: version.Version,
 	Long: `A CLI tool to manage and track your job applications.
 
-Data is stored in a local SQLite database. Use 'job-tracker init'
+Data is stored in a local SQLite database. Use 'waypoint init'
 to create one, then add, list, update, and delete your job entries.
 
 Most commands support --json for machine-readable output.`,
@@ -44,7 +44,7 @@ Most commands support --json for machine-readable output.`,
 		var err error
 		store, err = db.Open(storePath)
 		if err != nil {
-			return fmt.Errorf("open database: %w\n\n  Run 'job-tracker init' to create one", err)
+			return fmt.Errorf("open database: %w\n\n  Run 'waypoint init' to create one", err)
 		}
 		return nil
 	},
