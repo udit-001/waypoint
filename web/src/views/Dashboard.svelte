@@ -263,7 +263,7 @@ import { setPage } from '../stores/page.svelte.js';
             callbacks: {
               label: (ctx) => {
                 const raw = ctx.raw;
-                const sym = salaryData.some(j => /rs\.?/i.test(j.salary)) ? '₹' : '$';
+                const sym = '₹';
                 return `${sym}${raw[0]}k – ${sym}${raw[1]}k`;
               }
             }
@@ -276,7 +276,7 @@ import { setPage } from '../stores/page.svelte.js';
             ticks: {
               color: textColor,
               callback: v => {
-                const sym = salaryData.some(j => /rs\.?/i.test(j.salary)) ? '₹' : '$';
+                const sym = '₹';
                 return `${sym}${v}k`;
               },
               padding: 4,
