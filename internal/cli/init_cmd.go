@@ -15,10 +15,14 @@ var initCmd = &cobra.Command{
 If the database file already exists, this command will refuse
 to overwrite it (use --force to start fresh).
 
+After creating the database, you'll be offered the option to
+install the waypoint skill for your AI coding agent.
+
 Examples:
   waypoint init
   waypoint init --db ~/my-jobs.db
-  waypoint init --force`,
+  waypoint init --force
+  waypoint init --no-skills`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check if file exists
@@ -45,6 +49,13 @@ Examples:
 
 		fmt.Println()
 		fmt.Printf("  ✓ Initialized job tracker database at %s\n", storePath)
+
+		// Offer skill installation
+		noSkills, _ := cmd.Flags().GetBool("no-skills")
+		if !noSkills {
+			offerSkillInstall()
+		}
+
 		fmt.Println()
 		fmt.Println("  Next steps:")
 		fmt.Println("    waypoint jobs add \"Company Name\" \"Position Title\"")
@@ -58,4 +69,5 @@ Examples:
 func init() {
 	rootCmd.AddCommand(initCmd)
 	initCmd.Flags().Bool("force", false, "Overwrite existing database")
+	initCmd.Flags().Bool("no-skills", false, "Skip the skill installation prompt")
 }

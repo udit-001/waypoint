@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ var upgradeForce bool
 
 func init() {
 	upgradeCmd.Flags().BoolVarP(&upgradeForce, "force", "f", false, "Reinstall even if already up to date")
+	upgradeCmd.Flags().Bool("no-skills", false, "Skip the skill upgrade prompt")
 	rootCmd.AddCommand(upgradeCmd)
 }
 
@@ -35,7 +37,10 @@ var upgradeCmd = &cobra.Command{
 	Long: `Upgrade waypoint to the latest release by running:
   go install github.com/SwatiBio/waypoint/cmd/waypoint@latest
 
-This compiles from source — no binary download, no Windows SmartScreen flags.`,
+This compiles from source — no binary download, no Windows SmartScreen flags.
+
+If the server is running, it will be stopped before the upgrade and
+restarted afterwards.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println()
@@ -54,6 +59,27 @@ This compiles from source — no binary download, no Windows SmartScreen flags.`
 			fmt.Printf("  Already up to date (v%s)\n", current)
 			fmt.Println()
 			return nil
+		}
+
+		// Stop server if running — the binary can't be replaced while
+		// the process is alive, and the DB lock will conflict on restart.
+		var pid int
+		if data, err := os.ReadFile(pidFilePath()); err == nil {
+			if p, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+				pid = p
+			}
+		}
+
+		if pid > 0 {
+			fmt.Printf("  Stopping server (PID %d)...\n", pid)
+			if err := killProcess(pid); err != nil {
+				fmt.Printf("  Warning: could not stop server: %v\n", err)
+				fmt.Printf("  Please stop it manually and re-run upgrade.\n")
+				fmt.Println()
+				return nil
+			}
+			_ = os.Remove(pidFilePath())
+			fmt.Printf("  Server stopped.\n")
 		}
 
 		goPath, err := exec.LookPath("go")
@@ -76,7 +102,40 @@ This compiles from source — no binary download, no Windows SmartScreen flags.`
 		}
 
 		fmt.Printf("  Upgraded to %s\n", rel.TagName)
-		fmt.Printf("  Restart the server to use the new version\n")
+
+		// Restart the server if it was running before the upgrade.
+		if pid > 0 {
+			fmt.Printf("  Restarting server...\n")
+			restartPort := startFlags.port
+			daemonArgs := []string{
+				os.Args[0], "start",
+				"--port", strconv.Itoa(restartPort),
+				"--no-open",
+				"--daemon",
+			}
+			rc := exec.Command(daemonArgs[0], daemonArgs[1:]...)
+			rc.Stdin = nil
+			rc.Stdout = nil
+			rc.Stderr = nil
+			detachProcess(rc)
+			if err := rc.Start(); err != nil {
+				fmt.Printf("  Warning: could not restart server: %v\n", err)
+				fmt.Printf("  Run 'waypoint start' manually.\n")
+			} else {
+				_ = os.WriteFile(pidFilePath(), []byte(fmt.Sprintf("%d", rc.Process.Pid)), 0644)
+				fmt.Printf("  Server restarted in background (PID: %d)\n", rc.Process.Pid)
+				fmt.Printf("  http://127.0.0.1:%d\n", restartPort)
+			}
+		} else {
+			fmt.Printf("  Run 'waypoint start' to launch the server.\n")
+		}
+
+		// Offer skill upgrades for installed skills that differ from embedded version.
+		noSkills, _ := cmd.Flags().GetBool("no-skills")
+		if !noSkills {
+			offerSkillUpgrade()
+		}
+
 		fmt.Println()
 		return nil
 	},
@@ -136,3 +195,5 @@ func fetchLatestRelease() (*ghRelease, error) {
 	}
 	return &rel, nil
 }
+
+
