@@ -31,7 +31,7 @@ curl -sL "<url>" | sed 's/<[^>]*>//g' | sed '/^$/d' | head -300 > /tmp/job-page.
 | Position | arg 2 | job title, role |
 | Status | `--status` | default "Not Applied" |
 | Category | `--category` | match to existing: `categories list` |
-| Salary | `--salary` | "$100k", "₹15 LPA", "€60k" |
+| Salary | `--salary` | see [salary extraction](#salary-extraction) below |
 | Location | `--location` | city, "Remote", "Hybrid" |
 | Contact | `--contact` | hiring manager, recruiter email |
 | URL | `--url` | source URL |
@@ -40,6 +40,48 @@ curl -sL "<url>" | sed 's/<[^>]*>//g' | sed '/^$/d' | head -300 > /tmp/job-page.
 | Notes | `--notes` | requirements, tech stack, extras |
 
 Ambiguous → ask user. Don't guess.
+
+## Salary extraction
+
+Parse the salary string from the job posting into a compact value for
+`--salary`. The output must survive `waypoint upgrade` and render on the
+salary chart — keep it raw but clean, not normalised.
+
+### Extraction order
+
+1. **Strip non-numeric decorations** — remove `Rs.`, `$`, `€`, `₹`, commas
+   used as thousand separators, `/year`, `/yr`, `PA`, `LPA`, `/month`, `/mo`.
+2. **Chop suffixes** — drop everything after `+` (removes `+ HRA`,
+   `+ 27% HRA`, etc.) and everything in `()`, `[]`, `{}` that looks like a
+   qualification note (`GATE/NET`, `NET/GATE`).
+3. **Coalesce `OR` options** — if the string contains ` OR ` (case-insensitive),
+   split and keep only the option with the highest numeric value. That's
+   the one the applicant would target.
+4. **Normalise the unit** — convert full-length numbers to `k` shorthand:
+   `37000` → `37k`, `1500000` → `15L` (lakhs), `70000` → `70k`.
+
+### Examples
+
+| Raw | Extracted | Notes |
+|-----|-----------|-------|
+| `$100k` | `$100k` | Already clean |
+| `€60k` | `€60k` | Already clean |
+| `₹15 LPA` | `₹15L` | Annual → lakhs |
+| `Rs. 37,000 + HRA` | `37k` | Stripped Rs., commas, +HRA |
+| `Rs. 28,000 + HRA` | `28k` | Same pattern |
+| `Rs. 37,000 + 27% HRA` | `37k` | +27% HRA chopped |
+| `Rs. 37,000 + HRA (GATE/NET) OR Rs. 31,000 + HRA` | `37k` | Coalesced to highest OR option, cleaned |
+| `Rs. 31,000 + 20% HRA (NET/GATE) OR Rs. 25,000 + HRA` | `31k` | Same |
+| `70k-100k` | `70k-100k` | Range kept as-is |
+| `50000 - 80000` | `50k-80k` | Full numbers → k |
+
+### Completion criterion
+
+Salary extraction is done when every salary-like number in the posting
+has been parsed, and the extracted string fits one of the patterns in
+the example table above. If a format doesn't match any example, keep
+the most salary-like number (highest if multiple) in `k` shorthand.
+Don't ask the user — extract what's there and move on.
 
 ## How to apply
 
