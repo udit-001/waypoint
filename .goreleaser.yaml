@@ -1,16 +1,16 @@
 version: 2
 
-project_name: job-tracker
+project_name: waypoint
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - main: ./cmd/job-tracker/main.go
-    binary: job-tracker
+  - main: ./cmd/waypoint/main.go
+    binary: waypoint
     ldflags:
-      - -s -w -X github.com/SwatiBio/job-tracker/internal/version.Version={{ .Version }}
+      - -s -w -X github.com/SwatiBio/waypoint/internal/version.Version={{ .Version }}
     env:
       - CGO_ENABLED=0
     goos:
@@ -43,4 +43,4 @@ changelog:
 release:
   github:
     owner: SwatiBio
-    name: job-tracker
+    name: waypoint

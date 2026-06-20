@@ -29,20 +29,20 @@ jobs:
           ext=""
           if [ "${{ matrix.os }}" = "windows" ]; then ext=".exe"; fi
           GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} CGO_ENABLED=0 \
-            go build -ldflags="-s -w -X github.com/SwatiBio/job-tracker/internal/version.Version=${GITHUB_REF_NAME#v}" \
-            -o "job-tracker${ext}" ./cmd/job-tracker/
+            go build -ldflags="-s -w -X github.com/SwatiBio/waypoint/internal/version.Version=${GITHUB_REF_NAME#v}" \
+            -o "waypoint${ext}" ./cmd/waypoint/
 
       - name: Archive
         run: |
           tag="${{ github.ref_name }}"
           ext=""
           if [ "${{ matrix.os }}" = "windows" ]; then ext=".exe"; fi
-          name="job-tracker_${tag}_${{ matrix.os }}_${{ matrix.arch }}"
+          name="waypoint_${tag}_${{ matrix.os }}_${{ matrix.arch }}"
           if [ "${{ matrix.os }}" = "windows" ]; then
-            zip -9 "${name}.zip" "job-tracker${ext}"
+            zip -9 "${name}.zip" "waypoint${ext}"
             echo "artifact=${name}.zip" >> $GITHUB_ENV
           else
-            tar czf "${name}.tar.gz" "job-tracker${ext}"
+            tar czf "${name}.tar.gz" "waypoint${ext}"
             echo "artifact=${name}.tar.gz" >> $GITHUB_ENV
           fi
 
