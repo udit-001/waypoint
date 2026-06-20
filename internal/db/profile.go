@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -11,12 +12,39 @@ type Profile struct {
 	Email         string `db:"email" json:"email"`
 	Phone         string `db:"phone" json:"phone"`
 	Title         string `db:"title" json:"title"`
-	Skills        string `db:"skills" json:"skills"`
-	Experience    string `db:"experience" json:"experience"`
-	Education     string `db:"education" json:"education"`
+	Skills        string `db:"skills" json:"-"`        // raw JSON string from DB; emitted as array via MarshalJSON
+	Experience    string `db:"experience" json:"-"`    // raw JSON string from DB; emitted as array via MarshalJSON
+	Education     string `db:"education" json:"-"`     // raw JSON string from DB; emitted as array via MarshalJSON
 	Industry      string `db:"industry" json:"industry"`
 	GreetingStyle string `db:"greeting_style" json:"greetingStyle"`
 	SignOff       string `db:"sign_off" json:"signOff"`
+}
+
+// MarshalJSON ensures Skills, Experience, and Education are returned as
+// proper JSON arrays instead of escaped strings.
+func (p Profile) MarshalJSON() ([]byte, error) {
+	type Alias Profile
+	parseArray := func(s string) []string {
+		if s == "" {
+			return []string{}
+		}
+		var arr []string
+		if err := json.Unmarshal([]byte(s), &arr); err != nil {
+			return []string{}
+		}
+		return arr
+	}
+	return json.Marshal(&struct {
+		*Alias
+		Skills     []string `json:"skills"`
+		Experience []string `json:"experience"`
+		Education  []string `json:"education"`
+	}{
+		Alias:      (*Alias)(&p),
+		Skills:     parseArray(p.Skills),
+		Experience: parseArray(p.Experience),
+		Education:  parseArray(p.Education),
+	})
 }
 
 // Settings represents app settings (singleton row).
