@@ -1,10 +1,17 @@
 <script>
 import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
+  import { Chart, registerables } from 'chart.js';
+
+  Chart.register(...registerables);
+
+  let chartInstances = [];
+  let pipelineCanvas = null;
+  let salaryCanvas = null;
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -26,6 +33,25 @@ import { setPage } from '../stores/page.svelte.js';
   let activePipeline = $derived(notApplied + applied);
   let responseRate = $derived(applied > 0 ? Math.round((offers + rejected) / applied * 100) : 0);
   let offerRate = $derived(applied > 0 ? Math.round(offers / applied * 100) : 0);
+
+  // Pipeline chart data
+  let pipelineData = $derived.by(() => {
+    const stages = ['Not Applied', 'Applied', 'Offer', 'Rejected', 'Withdrawn'];
+    return stages.filter(s => statusCounts[s] > 0).map(s => ({ stage: s, count: statusCounts[s] }));
+  });
+
+  // Salary chart data
+  let salaryData = $derived.by(() => {
+    return (jobs || [])
+      .filter(j => j.salary && j.salary.trim())
+      .map(j => {
+        const parsed = parseSalary(j.salary);
+        return { ...j, ...parsed };
+      })
+      .filter(j => j.mid > 0)
+      .sort((a, b) => b.mid - a.mid)
+      .slice(0, 12);
+  });
 
   // Week-over-week
   let thisWeek = $derived.by(() => {
@@ -86,6 +112,181 @@ import { setPage } from '../stores/page.svelte.js';
     allHistory = api.history.value || [];
     loaded = true;
   });
+
+  onDestroy(() => {
+    chartInstances.forEach(c => c.destroy());
+    chartInstances = [];
+  });
+
+  // Render charts after DOM updates
+  $effect(() => {
+    if (loaded && jobs.length > 0) {
+      // Wait for DOM to render
+      requestAnimationFrame(() => {
+        destroyCharts();
+        renderPipelineChart();
+        renderSalaryChart();
+      });
+    }
+  });
+
+  function destroyCharts() {
+    chartInstances.forEach(c => c.destroy());
+    chartInstances = [];
+  }
+
+  function renderPipelineChart() {
+    const canvas = document.getElementById('chart-pipeline');
+    if (!canvas || pipelineData.length === 0) return;
+
+    const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--color-slate-600').trim() || '#88c0d0';
+    const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--color-slate-400').trim() || '#81a1c1';
+    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--color-slate-700').trim() || '#aebbcf';
+    const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--color-slate-200').trim() || '#434c5e';
+
+    const ctx = canvas.getContext('2d');
+    const labels = pipelineData.map(d => d.stage);
+    const values = pipelineData.map(d => d.count);
+    const appliedCount = pipelineData.find(d => d.stage === 'Applied')?.count || 0;
+
+    const tickLabels = labels.map((s, i) => {
+      const count = values[i];
+      if ((s === 'Offer' || s === 'Rejected') && appliedCount > 0) {
+        return `${s}  (${Math.round(count / appliedCount * 100)}%)`;
+      }
+      return s;
+    });
+
+    const colors = labels.map(s => s === 'Offer' ? '#bf616a' : '#4c566a');
+
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: tickLabels,
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          barThickness: 20,
+          borderRadius: 2,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#2e3440',
+            titleColor: '#eceff4',
+            bodyColor: '#d8dee9',
+            padding: 8,
+            cornerRadius: 4,
+            displayColors: false,
+          },
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            grid: { color: gridColor, drawTicks: false },
+            border: { color: gridColor },
+            ticks: { color: textColor, stepSize: 1, padding: 4 },
+          },
+          y: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: { color: textColor, padding: 4 },
+          },
+        },
+      }
+    });
+    chartInstances.push(chart);
+  }
+
+  function renderSalaryChart() {
+    const canvas = document.getElementById('chart-salary');
+    if (!canvas || salaryData.length === 0) return;
+
+    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--color-slate-700').trim() || '#aebbcf';
+    const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--color-slate-200').trim() || '#434c5e';
+
+    const ctx = canvas.getContext('2d');
+    const labels = salaryData.map(j => j.company);
+    const lows = salaryData.map(j => j.low);
+    const highs = salaryData.map(j => j.high);
+    const colors = salaryData.map(j => j.status === 'Offer' ? '#bf616a' : '#4c566a');
+
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data: highs.map((h, i) => [lows[i], h]),
+          backgroundColor: colors,
+          barThickness: 12,
+          borderRadius: 2,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#2e3440',
+            titleColor: '#eceff4',
+            bodyColor: '#d8dee9',
+            padding: 8,
+            cornerRadius: 4,
+            displayColors: false,
+            callbacks: {
+              label: (ctx) => {
+                const raw = ctx.raw;
+                return `$${raw[0]}k – $${raw[1]}k`;
+              }
+            }
+          },
+        },
+        scales: {
+          x: {
+            grid: { color: gridColor, drawTicks: false },
+            border: { color: gridColor },
+            ticks: {
+              color: textColor,
+              callback: v => `$${v}k`,
+              padding: 4,
+            },
+            suggestedMin: Math.max(0, Math.min(...lows) - 10),
+            suggestedMax: Math.max(...highs) + 10,
+          },
+          y: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: { color: textColor, padding: 4 },
+          },
+        },
+      }
+    });
+    chartInstances.push(chart);
+  }
+
+  function parseSalary(str) {
+    if (!str) return { low: 0, high: 0, mid: 0 };
+    const nums = str.replace(/[,$]/g, '').match(/(\d+)k/gi);
+    if (!nums || nums.length < 2) {
+      const single = str.replace(/[,$]/g, '').match(/(\d+)k/i);
+      if (single) {
+        const v = parseInt(single[1]);
+        return { low: v, high: v, mid: v };
+      }
+      return { low: 0, high: 0, mid: 0 };
+    }
+    const low = parseInt(nums[0]);
+    const high = parseInt(nums[1]);
+    return { low, high, mid: Math.round((low + high) / 2) };
+  }
 
   function formatDate(d) {
     if (!d) return '';
@@ -165,6 +366,22 @@ import { setPage } from '../stores/page.svelte.js';
           <span class="text-xs text-slate-400">{actionsThisWeek === 1 ? 'action' : 'actions'}</span>
         </div>
       </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="grid grid-cols-2 gap-3">
+      {#if pipelineData.length > 0}
+        <div class="bg-white rounded-lg border border-slate-200 p-3">
+          <h4 class="text-xs uppercase tracking-wide text-slate-400 font-medium mb-2">Pipeline</h4>
+          <div class="h-48"><canvas id="chart-pipeline"></canvas></div>
+        </div>
+      {/if}
+      {#if salaryData.length > 0}
+        <div class="bg-white rounded-lg border border-slate-200 p-3">
+          <h4 class="text-xs uppercase tracking-wide text-slate-400 font-medium mb-2">Salary Range</h4>
+          <div class="h-64"><canvas id="chart-salary"></canvas></div>
+        </div>
+      {/if}
     </div>
 
     <!-- Two-column layout -->
