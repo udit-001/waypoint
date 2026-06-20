@@ -1,303 +1,33 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Blocking theme init — runs before Svelte mounts, prevents flash -->
+  <script>
+    (function() {
+      var theme = localStorage.getItem('jobtracker_theme');
+      if (!theme) {
+        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.dataset.theme = theme;
+
+      var font = localStorage.getItem('waypoint_font');
+      if (font) {
+        document.documentElement.dataset.font = font;
+      }
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Waypoint</title>
-  <meta name="theme-color" content="#5E81AC">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg">
-  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-  <link rel="stylesheet" href="css/fonts.css">
-  <link rel="stylesheet" href="css/style.css">
-  <script src="vendor/chart.umd.min.js" defer></script>
-  <script src="vendor/marked.min.js" defer></script>
-  <script src="js/icons.js"></script>
+  <meta name="theme-color" content="#5E81AC" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
 </head>
 <body>
-  <div id="app">
-    <!-- Sidebar -->
-    <aside id="sidebar">
-      <div class="sidebar-header">
-        <a class="app-name" data-view="dashboard" href="/">
-          <svg class="sidebar-logo" viewBox="0 0 100 100" width="28" height="28" aria-hidden="true">
-            <g fill="none" stroke="currentColor" stroke-linecap="round">
-              <circle cx="50" cy="50" r="32" stroke-width="4"/>
-              <circle cx="50" cy="50" r="16" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.4"/>
-              <circle cx="50" cy="18" r="4" fill="currentColor" stroke="none"/>
-              <circle cx="82" cy="50" r="4" fill="currentColor" stroke="none"/>
-              <circle cx="50" cy="82" r="4" fill="currentColor" stroke="none"/>
-              <circle cx="18" cy="50" r="4" fill="currentColor" stroke="none"/>
-              <polygon points="50,40 60,50 50,60 40,50" fill="currentColor" stroke="none"/>
-              <path d="M 50 18 A 32 32 0 0 1 82 50" stroke-width="2.5" opacity="0.5"/>
-              <circle cx="50" cy="50" r="2" fill="currentColor" stroke="none"/>
-            </g>
-          </svg>
-          Waypoint</a>
-      </div>
-      <nav class="sidebar-nav">
-        <div class="nav-section">
-          <span class="nav-section-title">Views</span>
-          <a class="nav-item active" data-view="dashboard" href="/">
-            <span class="nav-icon" data-icon="dashboard" data-size="18"></span> Dashboard
-          </a>
-          <a class="nav-item" data-view="kanban" href="/kanban">
-            <span class="nav-icon" data-icon="kanban" data-size="18"></span> Kanban
-          </a>
-          <a class="nav-item" data-view="table" href="/table">
-            <span class="nav-icon" data-icon="table" data-size="18"></span> Table
-          </a>
-        </div>
-        <div class="nav-section">
-          <span class="nav-section-title">Organize</span>
-          <a class="nav-item" data-view="categories" href="/categories">
-            <span class="nav-icon" data-icon="box" data-size="18"></span> Categories
-          </a>
-          <a class="nav-item" data-view="profile" href="/profile">
-            <span class="nav-icon" data-icon="user" data-size="18"></span> Profile
-          </a>
-        </div>
-        <div class="nav-section">
-          <span class="nav-section-title">AI</span>
-          <a class="nav-item" data-view="skills" href="/skills">
-            <span class="nav-icon" data-icon="bot" data-size="18"></span> AI Integration
-          </a>
-          <a class="nav-item" data-view="artifacts" href="/artifacts">
-            <span class="nav-icon" data-icon="folder" data-size="18"></span> Artifacts
-          </a>
-        </div>
-        <div class="nav-section">
-          <a class="nav-item" data-view="settings" href="/settings">
-            <span class="nav-icon" data-icon="sliders" data-size="18"></span> Settings
-          </a>
-        </div>
-      </nav>
-    </aside>
-
-    <!-- Main Content Area -->
-    <main id="main-content">
-      <!-- Top Bar -->
-      <header id="top-bar">
-        <div class="top-bar-left">
-          <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle Sidebar"><span data-icon="menu" data-size="20"></span></button>
-          <div id="breadcrumb-bar">
-            <h2 id="view-title">Dashboard</h2>
-          </div>
-          <div class="view-toggles" id="view-toggles">
-            <button class="view-btn active" data-view="dashboard" title="Dashboard"><span data-icon="dashboard" data-size="18"></span></button>
-            <button class="view-btn" data-view="kanban" title="Kanban Board"><span data-icon="kanban" data-size="18"></span></button>
-            <button class="view-btn" data-view="table" title="Table View"><span data-icon="table" data-size="18"></span></button>
-          </div>
-        </div>
-        <div class="top-bar-right">
-          <div class="search-box">
-            <input type="text" id="search-input" placeholder="Search jobs & artifacts... (/)" />
-            <button class="search-clear" id="search-clear" title="Clear search" style="display:none">&times;</button>
-            <button class="search-btn" id="search-btn" title="Advanced Search"><span data-icon="search" data-size="16"></span></button>
-          </div>
-          <button class="theme-toggle" id="theme-toggle" title="Toggle Theme"><span data-icon="moon" data-size="18"></span></button>
-        </div>
-      </header>
-
-      <!-- View Container -->
-      <div id="view-container">
-        <!-- Dashboard -->
-        <div class="view-pane active" id="view-dashboard"></div>
-        <!-- Kanban -->
-        <div class="view-pane" id="view-kanban">
-          <div class="kanban-board" id="kanban-board"></div>
-        </div>
-        <!-- Table -->
-        <div class="view-pane" id="view-table">
-          <div class="table-controls">
-            <div class="table-filters" id="table-filters"></div>
-          </div>
-          <div class="table-wrapper">
-            <table class="job-table" id="job-table">
-              <thead id="table-head"></thead>
-              <tbody id="table-body"></tbody>
-            </table>
-          </div>
-        </div>
-        <!-- Skills -->
-        <div class="view-pane" id="view-skills">
-          <div class="skills-container" id="skills-container"></div>
-        </div>
-        <!-- Categories -->
-        <div class="view-pane" id="view-categories">
-          <div class="categories-container" id="categories-container"></div>
-        </div>
-        <!-- Profile -->
-        <div class="view-pane" id="view-profile">
-          <div class="profile-container" id="profile-container"></div>
-        </div>
-        <!-- Generated Content -->
-        <div class="view-pane" id="view-artifacts">
-          <div class="artifacts-container" id="artifacts-container"></div>
-        </div>
-        <!-- Settings -->
-        <div class="view-pane" id="view-settings">
-          <div class="settings-container" id="settings-container"></div>
-        </div>
-      </div>
-    </main>
-
-    <!-- Modals -->
-    <!-- Job Form Modal -->
-    <div class="modal-overlay" id="job-modal">
-      <div class="modal">
-        <div class="modal-header">
-          <h3 id="job-modal-title">New Job</h3>
-          <button class="modal-close" data-modal="job-modal">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form id="job-form">
-            <input type="hidden" id="job-id" />
-            <div class="form-row">
-              <div class="form-group">
-                <label for="job-company">Company/Institute Name *</label>
-                <input type="text" id="job-company" required />
-              </div>
-              <div class="form-group">
-                <label for="job-position">Position *</label>
-                <input type="text" id="job-position" required />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="job-date">Deadline Date</label>
-                <input type="date" id="job-date" />
-              </div>
-              <div class="form-group">
-                <label for="job-applied-date">Date Applied</label>
-                <input type="date" id="job-applied-date" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="job-status">Status</label>
-                <select id="job-status">
-                  <option value="Not Applied">Not Applied</option>
-                  <option value="Applied">Applied</option>
-                  <option value="Offer">Offer</option>
-                  <option value="Rejected">Rejected</option>
-                  <option value="Withdrawn">Withdrawn</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="job-category">Category</label>
-                <select id="job-category"></select>
-              </div>
-              <div class="form-group">
-                <label for="job-salary">Salary</label>
-                <input type="text" id="job-salary" placeholder="e.g. $100k-$130k" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="job-location">Location</label>
-                <input type="text" id="job-location" placeholder="e.g. Remote, NYC" />
-              </div>
-              <div class="form-group">
-                <label for="job-contact">Contact Person</label>
-                <input type="text" id="job-contact" placeholder="e.g. Jane Doe, jane@co.com" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="job-url">Job URL</label>
-              <input type="url" id="job-url" placeholder="https://..." />
-            </div>
-            <div class="form-group">
-              <label for="job-notes">Notes (Markdown supported)</label>
-              <textarea id="job-notes" rows="4" placeholder="Add notes, research, interview prep..."></textarea>
-              <div class="notes-preview" id="notes-preview"></div>
-            </div>
-            <div class="form-group">
-              <label>
-                <input type="checkbox" id="job-reminder" />
-                Set reminder for follow-up
-              </label>
-              <input type="datetime-local" id="job-reminder-date" style="margin-top:4px;display:none" />
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary modal-close" data-modal="job-modal">Cancel</button>
-          <button class="btn btn-primary" id="job-save-btn" type="button">Save</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Job Detail Modal -->
-    <div class="modal-overlay" id="detail-modal">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <h3 id="detail-title">Job Details</h3>
-          <div class="modal-header-actions">
-            <button class="btn btn-sm btn-danger" id="detail-delete-btn"><span data-icon="trash" data-size="14"></span> Delete</button>
-            <button class="modal-close" data-modal="detail-modal">&times;</button>
-          </div>
-        </div>
-        <div class="modal-body" id="detail-body"></div>
-      </div>
-    </div>
-
-    <!-- Skills Modal -->
-    <div class="modal-overlay" id="skills-modal">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <h3 id="skills-modal-title">AI Generator</h3>
-          <button class="modal-close" data-modal="skills-modal">&times;</button>
-        </div>
-        <div class="modal-body" id="skills-modal-body"></div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" data-modal="skills-modal">Close</button>
-          <button class="btn btn-primary" id="skills-copy-btn" style="display:none"><span data-icon="copy" data-size="16"></span> Copy</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Generated Content Quick Access -->
-    <div class="modal-overlay" id="generated-modal">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <h3>Generated Content</h3>
-          <button class="modal-close" data-modal="generated-modal">&times;</button>
-        </div>
-        <div class="modal-body" id="generated-modal-body"></div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" data-modal="generated-modal">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script src="js/data.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/kanban.js"></script>
-  <script src="js/table.js"></script>
-  <script src="js/dashboard.js"></script>
-  <script src="js/search.js"></script>
-  <script src="js/notes.js"></script>
-  <script src="js/generated.js"></script>
-  <script src="js/settings.js"></script>
-  <script src="js/notifications.js"></script>
-  <script src="js/skills.js"></script>
-  <script src="js/categories.js"></script>
-  <script src="js/profile.js"></script>
-  <script src="js/app.js"></script>
-
-  <!-- Service Worker for offline PWA -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(function(err) {
-        console.log('SW registration failed:', err);
-      });
-    }
-  </script>
+  <div id="app"></div>
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waypoint — Offline</title>
+  <style>
+    :root {
+      --bg: #eceff4;
+      --card-bg: #ffffff;
+      --text: #2e3440;
+      --text-secondary: #4c566a;
+      --muted: #81a1c1;
+      --accent: #5e81ac;
+      --accent-hover: #81a1c1;
+      --border: #e5e9f0;
+      --logo-opacity: 0.15;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #2e3440;
+        --card-bg: #3b4252;
+        --text: #eceff4;
+        --text-secondary: #d8dee9;
+        --muted: #81a1c1;
+        --accent: #88c0d0;
+        --accent-hover: #8fbcbb;
+        --border: #434c5e;
+        --logo-opacity: 0.08;
+      }
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container {
+      text-align: center;
+      padding: 40px 32px;
+      max-width: 420px;
+    }
+    .logo {
+      width: 80px; height: 80px;
+      margin: 0 auto 32px;
+      position: relative;
+    }
+    .logo svg {
+      width: 100%; height: 100%;
+      color: var(--accent);
+      opacity: var(--logo-opacity);
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+    p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+    .retry-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      color: #fff;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .retry-btn:hover { background: var(--accent-hover); }
+    .retry-btn:active { opacity: 0.8; }
+    .retry-btn svg { flex-shrink: 0; }
+    .hint {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .pulse {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-right: 6px;
+      vertical-align: middle;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-linecap="round">
+          <circle cx="50" cy="50" r="32" stroke-width="4"/>
+          <circle cx="50" cy="50" r="16" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.4"/>
+          <circle cx="50" cy="18" r="4" fill="currentColor" stroke="none"/>
+          <circle cx="82" cy="50" r="4" fill="currentColor" stroke="none"/>
+          <circle cx="50" cy="82" r="4" fill="currentColor" stroke="none"/>
+          <circle cx="18" cy="50" r="4" fill="currentColor" stroke="none"/>
+          <polygon points="50,40 60,50 50,60 40,50" fill="currentColor" stroke="none"/>
+          <path d="M 50 18 A 32 32 0 0 1 82 50" stroke-width="2.5" opacity="0.5"/>
+          <circle cx="50" cy="50" r="2" fill="currentColor" stroke="none"/>
+        </g>
+      </svg>
+    </div>
+    <h1>You're offline</h1>
+    <p>Waypoint needs a connection to the local server. Make sure the server is running and your device is online.</p>
+    <button class="retry-btn" onclick="location.reload()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Try again
+    </button>
+    <div class="hint">
+      <span class="pulse"></span>
+      Checking connection automatically...
+    </div>
+  </div>
+  <script>
+    window.addEventListener('online', () => location.reload());
+    setInterval(() => {
+      fetch('/api/jobs', { method: 'HEAD' })
+        .then(r => { if (r.ok) location.reload(); })
+        .catch(() => {});
+    }, 5000);
+  </script>
+</body>
+</html>

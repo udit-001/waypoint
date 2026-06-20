@@ -14,10 +14,31 @@ type Artifact struct {
 	JobID     *int64 `db:"job_id" json:"jobId,omitempty"`
 	Title     string `db:"title" json:"title"`
 	Options   string `db:"options" json:"options"`
-	Variants  string `db:"variants" json:"variants"`
+	Variants  string `db:"variants" json:"-"` // raw JSON string from DB; emitted as array via MarshalJSON
 	Archived  bool   `db:"archived" json:"archived"`
 	CreatedAt string `db:"created_at" json:"createdAt"`
 	UpdatedAt string `db:"updated_at" json:"updatedAt"`
+}
+
+// MarshalJSON ensures Variants is returned as a proper JSON array instead of a string.
+func (a Artifact) MarshalJSON() ([]byte, error) {
+	type Alias Artifact
+	var variants []ArtifactVariant
+	if a.Variants != "" {
+		if err := json.Unmarshal([]byte(a.Variants), &variants); err != nil {
+			variants = []ArtifactVariant{}
+		}
+	}
+	if variants == nil {
+		variants = []ArtifactVariant{}
+	}
+	return json.Marshal(&struct {
+		*Alias
+		Variants []ArtifactVariant `json:"variants"`
+	}{
+		Alias:    (*Alias)(&a),
+		Variants: variants,
+	})
 }
 
 // ArtifactVariant is a single output within an artifact generation.
