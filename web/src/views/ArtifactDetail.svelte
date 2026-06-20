@@ -10,6 +10,7 @@
   let { id } = $props();
 
   let art = $state(null);
+  let jobName = $state(null);
   let activeVariant = $state(0);
   let loading = $state(true);
   let copied = $state(false);
@@ -27,6 +28,7 @@
     if (art.jobId) {
       const job = await api.getJob(art.jobId);
       if (job) {
+        jobName = job.company;
         crumbs.push({ label: job.company, action: () => router.navigate('/job/' + job.id) });
       }
     }
@@ -58,8 +60,15 @@
   <div class="max-w-3xl mx-auto">
     <div class="mb-6">
       <h2 class="text-xl font-bold text-slate-800">{art.title || 'Untitled'}</h2>
-      <div class="flex items-center gap-2 mt-1 text-xs text-slate-400">
+      <div class="flex items-center gap-2 mt-1 text-xs text-slate-400 flex-wrap">
         <span class="bg-slate-700 text-white rounded-full px-2 py-0.5 text-[10px] font-medium">{skillLabel(art.skillId)}</span>
+        {#if jobName}
+          <button
+            class="text-slate-500 hover:text-slate-700 cursor-pointer bg-transparent border-none p-0 text-xs"
+            onclick={() => router.navigate('/job/' + art.jobId)}
+          >{jobName}</button>
+          <span>·</span>
+        {/if}
         <span>{formatDate(art.createdAt)}</span>
       </div>
     </div>

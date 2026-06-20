@@ -4,6 +4,7 @@
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
   import { setPage } from '../stores/page.svelte.js';
+  import { skillLabel } from '../stores/skillMeta.js';
   import { marked } from 'marked';
 
   function renderMarkdown(text) {
@@ -19,6 +20,7 @@
 
   let job = $state(null);
   let history = $state([]);
+  let linkedArtifacts = $state([]);
   let loading = $state(true);
 
   onMount(async () => {
@@ -27,6 +29,10 @@
     if (!job) { router.navigate('/'); return; }
     history = await api.getJobHistory(job.id);
     loading = false;
+
+    // Filter artifacts linked to this job
+    await api.artifacts.ensure();
+    linkedArtifacts = (api.artifacts.value || []).filter(a => a.jobId === job.id).slice(0, 10);
     setPage({
       title: `${job.company} — ${job.position}`,
       breadcrumbs: [
@@ -83,6 +89,25 @@
       <div class="mb-6">
         <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2 mb-3">Notes</h4>
         <div class="bg-slate-50 rounded-lg p-4 text-sm text-slate-700 leading-relaxed notes-content">{@html renderMarkdown(job.notes)}</div>
+      </div>
+    {/if}
+
+    {#if linkedArtifacts.length > 0}
+      <div class="mb-6">
+        <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2 mb-3">Linked Artifacts</h4>
+        <div class="space-y-2">
+          {#each linkedArtifacts as a}
+            <button
+              class="w-full text-left bg-white rounded-lg border border-slate-200 p-3 cursor-pointer hover:border-slate-400 transition-all"
+              onclick={() => router.navigate('/artifact/' + a.id)}
+            >
+              <div class="flex items-center gap-2 text-sm">
+                <span class="font-medium text-slate-800">{a.title || 'Untitled'}</span>
+                <span class="bg-slate-600 text-white rounded-full px-2 py-0.5 text-[10px]">{skillLabel(a.skillId)}</span>
+              </div>
+            </button>
+          {/each}
+        </div>
       </div>
     {/if}
 
