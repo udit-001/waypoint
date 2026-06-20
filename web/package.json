@@ -16,7 +16,6 @@
     "vite": "^8.0.12"
   },
   "dependencies": {
-    "marked": "^18.0.5",
-    "svelte-routing": "^2.13.0"
+    "marked": "^18.0.5"
   }
 }
