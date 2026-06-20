@@ -2,6 +2,7 @@ const CACHE_NAME = 'waypoint-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/offline.html',
   '/css/style.css',
   '/css/fonts.css',
   '/fonts/pt-serif-regular-400.ttf',
@@ -80,6 +81,6 @@ async function networkFirst(request) {
         { headers: { 'Content-Type': 'application/json' } }
       );
     }
-    return new Response('Offline', { status: 503 });
+    return caches.match('/offline.html');
   }
 }
