@@ -30,8 +30,7 @@ import { setPage } from '../stores/page.svelte.js';
   }
 </script>
 
-<div class="max-w-3xl mx-auto space-y-4">
-  <h2 class="text-xl font-semibold text-slate-800 mb-2">Artifacts</h2>
+<div class="space-y-4">
 
   {#if artifactsList.length === 0}
     <p class="text-sm text-slate-400">No artifacts generated yet.</p>
