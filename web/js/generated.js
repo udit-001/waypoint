@@ -21,6 +21,7 @@ const GeneratedContentView = {
       { id: 'resume-optimizer', name: 'Resume Optimizer' },
       { id: 'interview-prep', name: 'Interview Prep' },
       { id: 'career-summary', name: 'Career Summary' },
+      { id: 'statement-of-purpose', name: 'SOP' },
     ];
 
     const filterBar = skills.map(s => `
@@ -96,6 +97,7 @@ const GeneratedContentView = {
       'resume-optimizer': 'Resume Optimizer',
       'interview-prep': 'Interview Prep',
       'career-summary': 'Career Summary',
+      'statement-of-purpose': 'SOP',
     };
     return labels[id] || id || 'Unknown';
   },

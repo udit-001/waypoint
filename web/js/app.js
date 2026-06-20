@@ -286,6 +286,7 @@ const App = {
       'resume-optimizer': 'Resume Optimizer',
       'interview-prep': 'Interview Prep',
       'career-summary': 'Career Summary',
+      'statement-of-purpose': 'SOP',
     };
 
     if (artifacts.length === 0) {
@@ -386,6 +387,7 @@ const App = {
       'resume-optimizer': 'Resume Optimizer',
       'interview-prep': 'Interview Prep',
       'career-summary': 'Career Summary',
+      'statement-of-purpose': 'SOP',
     };
 
     pane.innerHTML = `

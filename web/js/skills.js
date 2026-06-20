@@ -39,6 +39,13 @@ const Skills = {
         icon: 'star',
         tags: ['5 styles', '3 lengths', 'Target role'],
       },
+      {
+        id: 'statement-of-purpose',
+        name: 'Statement of Purpose Generator',
+        desc: 'Tailored SOPs for grad school, fellowships, and research programs.',
+        icon: 'grad',
+        tags: ['4 tones', '3 lengths', 'SOP checklist'],
+      },
     ];
   },
 
@@ -62,7 +69,7 @@ const Skills = {
       </p>
 
       <div class="ai-install-section">
-        <h3>${icon('brain', 18)} Install the Waypoint skill</h3>
+        <h3>${icon('bot', 18)} Install the Waypoint skill</h3>
         <p class="text-muted text-sm">Run this in your project directory. The skill teaches your agent how to use <code>waypoint</code> and provides generation references.</p>
         <div class="ai-install-cmd">
           <code id="install-cmd">waypoint skills install --agent pi.dev</code>

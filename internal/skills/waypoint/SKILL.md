@@ -36,6 +36,7 @@ Job-search content generation. Load on demand — each pulls job + profile via C
 | [resume-optimizer](references/resume-optimizer.md) | keyword match score + gap analysis vs a posting |
 | [interview-prep](references/interview-prep.md) | interview questions, answers, research checklist |
 | [career-summary](references/career-summary.md) | resume summary / professional bio |
+| [statement-of-purpose](references/statement-of-purpose.md) | grad school / fellowship SOP |
 
 When asked for that content, `read` the matching reference, then `waypoint jobs get <id>` for fresh data.
 
