@@ -50,10 +50,10 @@ import { setPage } from '../stores/page.svelte.js';
         </div>
         <div class="text-xs text-slate-400 space-x-1">
           {#if art.jobId && jobMap[art.jobId]}
-            <button
+            <span
               class="text-slate-500 hover:text-slate-700 cursor-pointer bg-transparent border-none p-0 text-xs"
               onclick={(e) => { e.stopPropagation(); router.navigate('/job/' + art.jobId); }}
-            >{jobMap[art.jobId]}</button>
+            >{jobMap[art.jobId]}</span>
             <span>·</span>
           {/if}
           {art.variants?.length || 0} variant{(art.variants?.length || 0) === 1 ? '' : 's'}
