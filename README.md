@@ -75,12 +75,6 @@ Seven read-only views:
 
 The web UI fetches data from the Go REST API (`GET /api/*`). All mutations (add/update/delete) require the CLI.
 
-## AI Integration (Optional)
-
-1. Get a free API key from [Google AI Studio](https://aistudio.google.com/apikey)
-2. Set your API key in the app Settings page (requires the server to be running)
-3. Generators will use Gemini AI with automatic fallback to built-in templates
-
 ## Tech Stack
 
 - **Backend:** Go 1.25 — standard library `net/http`, REST API, embedded static files
