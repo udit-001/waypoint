@@ -4,30 +4,30 @@
 
 # Waypoint — Job Tracker
 
-A job application tracker with a Go backend (SQLite + REST API) and a pure vanilla JS frontend.  
+A job application tracker with a Go backend and vanilla JS frontend.
 Data mutations happen through the CLI; the web UI is a read-only dashboard.
 
 ## Install
 
-### From a release (curl pipe)
+From a release:
 
 ```bash
 curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh
 ```
 
-To install a specific version:
+Install a specific version:
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh -s -- v0.3.0
+curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh -s -- v0.4.0
 ```
 
-### With Go (recommended)
+With Go:
 
 ```bash
 go install github.com/SwatiBio/waypoint/cmd/waypoint@latest
 ```
 
-### From source
+From source:
 
 ```bash
 git clone https://github.com/SwatiBio/waypoint.git
@@ -38,142 +38,113 @@ go build -o waypoint ./cmd/waypoint
 ## Quick Start
 
 ```bash
-# Initialize the database
 waypoint init
-
-# Start the web UI (opens on http://localhost:8080)
 waypoint start
 ```
 
-## CLI Commands
+Opens at `http://localhost:8080`. Use `--port` to change the port.
 
-### Jobs
+## Usage
 
-| Command | Description |
-|---------|-------------|
-| `waypoint jobs add <company> <position>` | Add a job. Flags: `--status`, `--category`, `--salary`, `--location`, `--contact`, `--url`, `--notes`, `--date`, `--applied-date`, `--reminder` |
-| `waypoint jobs list` | List jobs. Flags: `--status`, `--category`, `--search`, `--limit`, `--all` |
-| `waypoint jobs get <id>` | Show job details. Flag: `--history` |
-| `waypoint jobs update <id>` | Update job fields. Same flags as `add` |
-| `waypoint jobs delete <id>` | Delete a job. Flag: `--force` |
-| `waypoint jobs stats` | Show aggregate statistics |
-
-### Categories
-
-| Command | Description |
-|---------|-------------|
-| `waypoint categories list` | List all categories with job counts |
-| `waypoint categories add <name>` | Add a new category |
-| `waypoint categories rename <id> <name>` | Rename a category by ID |
-| `waypoint categories delete <id>` | Delete a category by ID (jobs move to General) |
-
-Alias: `waypoint cat`
-
-### Profile
-
-| Command | Description |
-|---------|-------------|
-| `waypoint profile show` | Display your profile (`--json` for machine output) |
-| `waypoint profile set` | Update profile fields. Flags: `--name`, `--email`, `--phone`, `--title`, `--skills` (JSON array), `--experience`, `--education`, `--industry`, `--greeting-style`, `--sign-off` |
-
-### Artifacts
-
-| Command | Description |
-|---------|-------------|
-| `waypoint artifacts add` | Add an artifact. Flags: `--skill`, `--title`, `--title-file`, `-f`/`--variant-file`, `--variant-content`, `--variant-label`, `--variants`, `--variants-file`, `--options`, `--options-file`, `--job` |
-| `waypoint artifacts list` | List generated content. Flags: `--skill`, `--job`, `--all` |
-| `waypoint artifacts get <id>` | Show artifact with all variants |
-| `waypoint artifacts delete <id>` | Delete an artifact. Flag: `--force` |
-| `waypoint artifacts archive <id>` | Soft-delete (hide from default list) |
-
-Alias: `waypoint artifact`
-
-The `-f`/`--variant-file` flag reads content from a file — ideal for multiline text and AI agent workflows:
+Waypoint is CLI-first. Add, update, and delete jobs from the terminal.
+The web UI is a read-only dashboard for what you've tracked.
 
 ```bash
-waypoint artifacts add --skill cover-letter --title "Cover for Google" -f /tmp/cover.txt --job 3
-waypoint artifacts add --skill email-generator --title "Follow-up" --variants-file /tmp/variants.json --job 3
+waypoint jobs add "Google" "Senior SWE" --status Applied
+waypoint jobs add "Meta" "Staff Engineer" --status "Not Applied"
+waypoint jobs stats
+waypoint jobs list
 ```
 
-### Other
+Full CLI reference at [docs/cli.md](docs/cli.md).
 
-| Command | Description |
-|---------|-------------|
-| `waypoint init` | Initialize a new SQLite database. Flag: `--force` |
-| `waypoint start` | Launch the web UI server. Flag: `--port` (default 8080) |
-| `waypoint stop` | Stop the background web UI server |
-| `waypoint skills install` | Install agent skill for AI coding assistants. Flag: `--agent` |
-| `waypoint upgrade` | Self-update to the latest release |
+### Key commands at a glance
 
-All commands support `--db <path>` and `--json`.
+- **`jobs add/list/get/update/delete/stats`** — Track applications
+- **`profile show/set`** — Personal info for AI content generation
+- **`artifacts add/list/get/delete/archive`** — Save generated content
+- **`categories list/add/rename/delete`** — Organize jobs into groups
+- **`init/start/stop`** — System management
 
-## Web UI
+All commands accept `--db <path>` and `--json`.
 
-Nine views, all read-only (mutations via CLI):
+## AI Integration
 
-- **Dashboard** — Stats cards + charts (status doughnut, category bar, monthly trend)
-- **Kanban** — Columnar board grouped by status
-- **Table** — Sortable table with category filter (pills or dropdown)
-- **Search** — Full-text search across jobs and artifacts with instant dropdown results
-- **Categories** — Manage categories table with CLI actions
-- **Profile** — View personal info, skills, education, experience
-- **AI Integration** — Browse 6 built-in skills + install command for AI agents
-- **Artifacts** — Browse AI-generated content with variant tabs and job linking
-- **Settings** — Typography, CLI reference, app settings
-
-Breadcrumb navigation in the top bar for detail pages (job → artifacts).
-
-## AI Skills
-
-Waypoint ships a skill file that teaches AI coding assistants how to use the CLI and generate job-search content. Install it with:
+Waypoint ships a skill file that teaches AI coding assistants
+how to use the CLI and generate job-search content.
 
 ```bash
 waypoint skills install --agent pi.dev
 ```
 
-Supported agents: `pi.dev`, `claude-code`, `codex`, `opencode`
+Supported agents: `pi.dev`, `claude-code`, `codex`, `opencode`.
 
 ### Built-in generation skills
 
-| Skill | Generates |
-|-------|-----------|
-| Email Generator | Application, follow-up, thank-you, networking emails (4 tones) |
-| Cover Letter Generator | Cover letters in formal, casual, creative, executive styles |
-| Resume Keyword Optimizer | Match score, gap analysis, action-verb suggestions |
-| Interview Prep Assistant | Role-specific questions, sample answers, research checklist |
-| Career Summary Generator | Resume summaries in 5 styles (standard, impact, technical, executive, entry-level) |
-| Statement of Purpose Generator | SOPs for grad school, fellowships, research programs (4 tones) |
+| Skill | What it produces |
+|-------|-----------------|
+| Email Generator | Application, follow-up, thank-you, networking (4 tones) |
+| Cover Letter Generator | Formal, casual, creative, executive styles |
+| Resume Keyword Optimizer | Match score, gap analysis, verb suggestions |
+| Interview Prep Assistant | Role-specific Q&A, research checklist |
+| Career Summary Generator | 5 resume summary styles |
+| Statement of Purpose Generator | SOP for grad school, fellowships, research |
 
-## Tech Stack
+When an AI agent generates content, it saves it as an artifact.
+Artifacts store every variant (tones, lengths, styles) and link to the job.
 
-- **Backend:** Go 1.25 — standard library `net/http`, REST API, embedded static files
-- **CLI:** Cobra CLI framework
-- **Database:** SQLite (via `modernc.org/sqlite` — pure Go, no CGo)
-- **Frontend:** Vanilla HTML/CSS/JS (ES6+), no frameworks
-- **Charts:** Chart.js 4.4.1
-- **Markdown:** marked 11.1.1
-- **Typography:** Inter & PT Serif
-- **PWA:** Service worker for offline caching
+```bash
+waypoint artifacts add --skill cover-letter --title "Cover" -f /tmp/cover.txt --job 3
+waypoint artifacts list --job 3
+waypoint artifacts get 12
+```
 
-## Data Storage
+## Web UI
 
-All data lives in a SQLite database (`~/.waypoint/waypoint.db`). Tables:
+Read-only dashboard with 9 views. Manage data via CLI.
 
-- `jobs` — Applications with company, position, status, category (FK), notes, etc.
-- `categories` — Custom category labels (FK on jobs)
-- `artifacts` — AI-generated content with multi-variant support, linked to jobs
-- `history` — Activity log (action audit trail)
-- `profile` — User profile (name, skills, experience, etc.)
-- `settings` — App preferences (theme, reminders, default view)
-- `jobs_fts` / `artifacts_fts` — FTS5 full-text search indices
+- **Dashboard** — Stats cards + charts (status, category, monthly trend)
+- **Kanban** — Columnar board grouped by status
+- **Table** — Sortable table with category filter
+- **Search** — Full-text search across jobs and artifacts
+- **Categories** — Manage categories
+- **Profile** — View personal info, skills, education
+- **AI Integration** — Browse skills, install command
+- **Artifacts** — Browse generated content with variant tabs
+- **Settings** — Typography, CLI reference, app settings
 
-## Keyboard Shortcuts
+### Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+N` | New job (opens CLI hint) |
 | `Ctrl+F` | Focus search |
 | `Ctrl+S` | Export data |
+
+## Data
+
+All data lives in a SQLite database at `~/.waypoint/waypoint.db`.
+
+| Table | Contents |
+|-------|----------|
+| `jobs` | Applications with company, position, status, notes |
+| `categories` | Custom labels for grouping jobs |
+| `artifacts` | AI-generated content with multi-variant support |
+| `history` | Activity audit trail |
+| `profile` | Name, skills, experience, education |
+| `settings` | Theme, default view, reminders |
+| `jobs_fts` / `artifacts_fts` | FTS5 full-text search indices |
+
+### Tech Stack
+
+- **Backend:** Go 1.25 — standard library `net/http`, REST API
+- **CLI:** Cobra CLI framework
+- **Database:** SQLite (pure Go via `modernc.org/sqlite`)
+- **Frontend:** Vanilla HTML/CSS/JS (ES6+), no frameworks
+- **Charts:** Chart.js 4.4.1
+- **Markdown:** marked 11.1.1
+- **Typography:** Inter & PT Serif
+- **PWA:** Service worker for offline caching
 
 ## License
 
