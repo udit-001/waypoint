@@ -22,7 +22,7 @@ func init() {
 
 const (
 	ghOwner = "SwatiBio"
-	ghRepo  = "job-tracker"
+	ghRepo  = "waypoint"
 )
 
 type ghRelease struct {
