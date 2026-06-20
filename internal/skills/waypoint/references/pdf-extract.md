@@ -1,6 +1,18 @@
 # PDF Text Extraction
 
-If `pdftotext` (poppler) available, extract text from PDFs — job postings, company dossiers, research papers.
+## 0. Prerequisites
+
+Needs poppler (`pdftotext`, `pdftoppm`). If missing, install:
+
+| OS | Command |
+|-----|--------|
+| macOS | `brew install poppler` |
+| Ubuntu/Debian | `sudo apt install poppler-utils` |
+| Fedora | `sudo dnf install poppler-utils` |
+| Arch | `sudo pacman -S poppler` |
+| Windows | `choco install poppler` or `scoop install poppler` |
+
+Check: `pdftotext -v 2>&1 | head -1`
 
 ## 1. Try pdftotext first
 
