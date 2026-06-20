@@ -13,8 +13,18 @@
   import ArtifactDetail from './views/ArtifactDetail.svelte';
   import Search from './views/Search.svelte';
   import { getRouter } from './stores/router.svelte.js';
+  import { setPage } from './stores/page.svelte.js';
 
   const router = getRouter();
+
+  // Set correct page title immediately — before any view mounts
+  const routeTitles = {
+    dashboard: 'Dashboard', kanban: 'Kanban Board', table: 'Table View',
+    categories: 'Categories', profile: 'Profile', skills: 'AI Integration',
+    artifacts: 'Artifacts', settings: 'Settings', search: 'Search',
+    job: 'Job Detail', artifact: 'Artifact',
+  };
+  setPage({ title: routeTitles[router.current.route] || 'Dashboard' });
 
   // Sidebar state persisted in localStorage
   let sidebarClosed = $state(
