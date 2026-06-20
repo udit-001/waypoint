@@ -12,6 +12,7 @@
 /* ── Light mode defaults (Tailwind's defaults, just ensuring purity) ── */
 :root {
   --color-white:  #ffffff;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
 
   --color-slate-50:  #f8fafc;
   --color-slate-100: #eceff4;   /* nord5 — page bg */
@@ -71,4 +72,19 @@
 
   --color-blue-100: #4c566a;
   --color-blue-700: #81a1c1;   /* nord10 */
+}
+
+/* ── Font toggle (Settings page) ──
+ * data-font="serif" applies PT Serif to the main content area.
+ * Sidebar and TopBar stay Inter (sans-serif) for UI clarity.
+ */
+[data-font="serif"] main,
+[data-font="serif"] main * {
+  font-family: 'PT Serif', Georgia, 'Times New Roman', serif;
+}
+[data-font="serif"] main .font-mono,
+[data-font="serif"] main code,
+[data-font="serif"] main pre,
+[data-font="serif"] main .tabular-nums {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
 }
