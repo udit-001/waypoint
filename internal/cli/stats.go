@@ -28,8 +28,8 @@ Examples:
 		categoryCounts := make(map[string]int)
 		for _, j := range jobs {
 			statusCounts[j.Status]++
-			if j.Category != "" {
-				categoryCounts[j.Category]++
+			if j.CategoryName != "" {
+				categoryCounts[j.CategoryName]++
 			}
 		}
 

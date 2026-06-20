@@ -85,7 +85,7 @@ Examples:
 				truncate(j.Company, 28),
 				truncate(j.Position, 30),
 				j.Status,
-				j.Category,
+				j.CategoryName,
 				formatDateShort(j.UpdatedAt),
 			})
 		}

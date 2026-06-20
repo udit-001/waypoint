@@ -42,25 +42,36 @@ Examples:
 
 		// Build updates map from non-empty flags
 		updates := make(map[string]any)
-		flags := map[string]*string{
-			"company":       &updateFlags.company,
-			"position":      &updateFlags.position,
-			"status":        &updateFlags.status,
-			"category":      &updateFlags.category,
-			"salary":        &updateFlags.salary,
-			"location":      &updateFlags.location,
-			"contact":       &updateFlags.contact,
-			"url":           &updateFlags.url,
-			"notes":         &updateFlags.notes,
-			"date":          &updateFlags.date,
-			"applied_date":  &updateFlags.appliedDate,
+		stringFlags := map[string]*string{
+			"company":      &updateFlags.company,
+			"position":     &updateFlags.position,
+			"status":       &updateFlags.status,
+			"salary":       &updateFlags.salary,
+			"location":     &updateFlags.location,
+			"contact":      &updateFlags.contact,
+			"url":          &updateFlags.url,
+			"notes":        &updateFlags.notes,
+			"date":         &updateFlags.date,
+			"applied_date": &updateFlags.appliedDate,
 			"reminder_date": &updateFlags.reminderDate,
 		}
 
-		for key, val := range flags {
+		for key, val := range stringFlags {
 			if *val != "" {
 				updates[key] = *val
 			}
+		}
+
+		// Resolve category name → ID
+		if updateFlags.category != "" {
+			catID, err := store.CategoryIDByName(updateFlags.category)
+			if err != nil {
+				return formatError("failed to resolve category", err)
+			}
+			if catID == 0 {
+				return fmt.Errorf("category %q not found — use 'waypoint categories list' to see available categories", updateFlags.category)
+			}
+			updates["category_id"] = catID
 		}
 
 		if len(updates) == 0 {
@@ -87,8 +98,8 @@ Examples:
 				fmt.Printf("    Position: %s\n", updated.Position)
 			case "status":
 				fmt.Printf("    Status:   %s\n", updated.Status)
-			case "category":
-				fmt.Printf("    Category: %s\n", updated.Category)
+			case "category_id":
+				fmt.Printf("    Category: %s\n", updated.CategoryName)
 			case "salary":
 				fmt.Printf("    Salary:   %s\n", updated.Salary)
 			case "location":
