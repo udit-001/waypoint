@@ -6,6 +6,11 @@ const GeneratedContentView = {
     const container = document.getElementById('generated-container');
     const items = await DB.getArtifacts(this.activeSkillFilter);
 
+    // Fetch jobs to resolve job links
+    const jobs = await DB.getJobs();
+    const jobMap = {};
+    jobs.forEach(j => { jobMap[j.id] = j; });
+
     document.getElementById('view-title').textContent = 'Artifacts';
 
     // Skill filter chips
@@ -23,10 +28,7 @@ const GeneratedContentView = {
     `).join('');
 
     if (items.length === 0) {
-      container.innerHTML = `
-        <div style="margin-bottom:16px">${filterBar}</div>
-        ${UI.showEmptyStateHtml ? '' : ''}
-      `;
+      container.innerHTML = `<div style="margin-bottom:16px">${filterBar}</div>`;
       UI.showEmptyState(container, icon('folder', 48), 'No artifacts yet', 'Generate content via the CLI skills. Artifacts store every variant (tones, lengths, styles).');
       this._bindFilters(container);
       return;
@@ -34,18 +36,26 @@ const GeneratedContentView = {
 
     container.innerHTML = `
       <div style="margin-bottom:16px">${filterBar}</div>
-      ${items.map(item => this._renderItem(item)).join('')}
+      ${items.map(item => this._renderItem(item, jobMap)).join('')}
     `;
 
     this._bindFilters(container);
     this._bindItemActions(container);
   },
 
-  _renderItem(item) {
+  _renderItem(item, jobMap) {
     let variants = [];
     try { variants = JSON.parse(item.variants || '[]'); } catch { variants = []; }
 
     const skillLabel = this._skillLabel(item.skillId);
+
+    // Job link
+    let jobLink = '';
+    if (item.jobId && jobMap[item.jobId]) {
+      const j = jobMap[item.jobId];
+      jobLink = `<a href="#" class="gen-job-link" data-job-id="${j.id}">${UI.escapeHtml(j.company)} — ${UI.escapeHtml(j.position)}</a>`;
+    }
+
     const variantTabs = variants.length > 1
       ? `<div class="gen-variant-tabs">${variants.map((v, i) => `<button class="gen-variant-tab${i === 0 ? ' active' : ''}" data-variant="${i}">${UI.escapeHtml(v.label || 'Variant ' + (i+1))}</button>`).join('')}</div>`
       : '';
@@ -57,6 +67,7 @@ const GeneratedContentView = {
             <div class="gen-title">${UI.escapeHtml(item.title || 'Untitled')}</div>
             <div class="gen-meta">
               <span class="gen-skill-badge">${skillLabel}</span>
+              ${jobLink ? ' · ' + jobLink : ''}
               · ${variants.length} variant${variants.length === 1 ? '' : 's'}
               · ${UI.formatDateTime(item.createdAt)}
             </div>
@@ -99,6 +110,14 @@ const GeneratedContentView = {
   },
 
   _bindItemActions(container) {
+    // Job links → navigate to job detail
+    container.querySelectorAll('.gen-job-link').forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        App.showJobDetail(parseInt(a.dataset.jobId));
+      });
+    });
+
     // Variant tab switching
     container.querySelectorAll('.gen-variant-tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -155,7 +174,6 @@ const GeneratedContentView = {
     `;
     const footer = modal.querySelector('.modal-footer');
     footer.innerHTML = '<button class="btn btn-secondary" data-modal="skills-modal">Close</button>';
-    // Re-bind modal close handlers
     modal.querySelector('[data-modal]').addEventListener('click', () => modal.classList.remove('active'));
     modal.classList.add('active');
   },

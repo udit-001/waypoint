@@ -475,11 +475,21 @@ textarea { resize: vertical; min-height: 80px; }
 .gen-modal-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
 .gen-modal-variant { margin-bottom: 20px; }
 .gen-modal-variant h4 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
-.gen-modal-content {
-  font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
-  background: var(--bg); border: 1px solid var(--border-color); border-radius: var(--radius);
-  padding: 12px; overflow-x: auto; max-height: 400px; overflow-y: auto;
+.gen-job-link {
+  color: var(--accent); text-decoration: none; font-weight: 500;
 }
+.gen-job-link:hover { text-decoration: underline; }
+
+.job-artifact-list { display: flex; flex-direction: column; gap: 8px; }
+.job-artifact-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border: 1px solid var(--border-color); border-radius: var(--radius);
+  transition: border-color var(--transition);
+}
+.job-artifact-item:hover { border-color: var(--accent); background: var(--bg-secondary); }
+.job-artifact-title { flex: 1; font-size: 13px; font-weight: 500; }
+.job-artifact-variants { font-size: 11px; color: var(--text-muted); }
+.job-artifact-date { font-size: 11px; color: var(--text-muted); }
 
 /* === Categories Page === */
 .cat-cli-box {
