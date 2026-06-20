@@ -81,7 +81,7 @@
 </script>
 
 <header class="flex items-center justify-between gap-4 min-h-10 px-6 py-1.5 bg-stone-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
-  <div class="flex items-center gap-4">
+  <div class="flex items-center gap-4 min-w-0">
     <button
       class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center"
       onclick={onToggleSidebar}
@@ -91,18 +91,18 @@
     </button>
 
     {#if page.breadcrumbs.length > 0}
-      <nav class="flex items-center gap-1.5 text-sm">
+      <nav class="flex items-center gap-1.5 text-sm min-w-0">
         {#each page.breadcrumbs as crumb, i}
           {#if i > 0}
-            <span class="text-slate-300 dark:text-slate-500 mx-0.5">/</span>
+            <span class="text-slate-300 dark:text-slate-500 mx-0.5 shrink-0">/</span>
           {/if}
           {#if i < page.breadcrumbs.length - 1}
             <button
-              class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer bg-transparent border-none p-0 text-sm"
+              class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer bg-transparent border-none p-0 text-sm truncate max-w-[200px]"
               onclick={crumb.action}
             >{crumb.label}</button>
           {:else}
-            <span class="text-slate-800 dark:text-slate-200 font-semibold">{crumb.label}</span>
+            <span class="text-slate-800 dark:text-slate-200 font-semibold truncate min-w-0">{crumb.label}</span>
           {/if}
         {/each}
       </nav>
