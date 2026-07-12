@@ -2,6 +2,13 @@
 
 @custom-variant dark (&[data-theme="dark"]);
 
+@utility bg-tint-red {
+  background-color: var(--color-tint-red);
+}
+@utility bg-tint-amber {
+  background-color: var(--color-tint-amber);
+}
+
 /* ── Nord-themed color tokens ──
  * Light: Aurora / Snow Storm on Polar Night accents
  * Dark:  Polar Night surfaces with Frost + Aurora accents
@@ -30,6 +37,10 @@
   --color-amber-100: #fff4e0;
   --color-amber-500: #ebcb8b;   /* nord13 */
   --color-amber-600: #d08770;   /* nord12 */
+
+  /* Row tint backgrounds — actual red/amber in both themes */
+  --color-tint-red:   #fce4e4;
+  --color-tint-amber: #fff4e0;
 }
 
 /* ── Dark mode: Polar Night (nord0–3) + Frost (nord7–10) ── */
@@ -72,6 +83,10 @@
 
   --color-blue-100: #4c566a;
   --color-blue-700: #81a1c1;   /* nord10 */
+
+  /* Row tint backgrounds — warm dark tones with red/amber undertone */
+  --color-tint-red:   #433540;
+  --color-tint-amber: #433c35;
 }
 
 /* ── Custom scrollbar ──
