@@ -7,9 +7,7 @@ description: Manage job applications with the waypoint CLI. Use when the user me
 
 ## Discovery
 
-When the user wants to find new jobs, search job portals, or see what's new —
-`read` [scraping](references/scraping.md). Promoted results enter the pipeline
-as tracked jobs.
+When the user wants to find new jobs or see what's new — `read` [scraping](references/scraping.md). Promoted results enter the pipeline at Step 2 (Enrich).
 
 ## Pipeline
 
