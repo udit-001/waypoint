@@ -31,10 +31,12 @@ Examples:
 			if !force {
 				return fmt.Errorf("database %q already exists\n  Use --force to overwrite, or --db to specify a different path", storePath)
 			}
-			// Remove existing file
+			// Remove existing file and WAL sidecars
 			if err := os.Remove(storePath); err != nil {
 				return fmt.Errorf("remove existing database: %w", err)
 			}
+			os.Remove(storePath + "-wal")
+			os.Remove(storePath + "-shm")
 		}
 
 		// Open (creates) the database
@@ -44,8 +46,10 @@ Examples:
 		}
 		defer s.Close()
 
-		// Set store so other commands can use it
-		store = s
+		// Run migrations to create schema
+		if err := db.RunMigrations(s.DB, storePath); err != nil {
+			return fmt.Errorf("database migration failed: %w", err)
+		}
 
 		fmt.Println()
 		fmt.Printf("  ✓ Initialized job tracker database at %s\n", storePath)

@@ -9,10 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/SwatiBio/waypoint/internal/db"
 	"github.com/SwatiBio/waypoint/web"
@@ -54,8 +54,12 @@ func Start(cfg Config) error {
 
 	addr := fmt.Sprintf("127.0.0.1:%d", cfg.Port)
 	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Auto-open browser
@@ -79,7 +83,6 @@ func Start(cfg Config) error {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-quit
-		_ = os.Remove(pidFilePath())
 		server.Close()
 	}()
 
@@ -117,14 +120,6 @@ func spaHandler(fsys fs.FS) http.Handler {
 		}
 		fileServer.ServeHTTP(w, r)
 	})
-}
-
-func pidFilePath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "server.pid"
-	}
-	return filepath.Join(home, ".job-tracker", "server.pid")
 }
 
 // openBrowser opens the default browser to the given URL.
@@ -232,26 +227,12 @@ func handleGetJobHistory(store *db.Store) http.HandlerFunc {
 
 func handleStats(store *db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		jobs, err := store.GetJobs()
+		stats, err := store.GetStats()
 		if err != nil {
 			jsonError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		byStatus := make(map[string]int)
-		byCategory := make(map[string]int)
-		for _, j := range jobs {
-			byStatus[j.Status]++
-			if j.CategoryName != "" {
-				byCategory[j.CategoryName]++
-			}
-		}
-
-		jsonResponse(w, map[string]any{
-			"total":      len(jobs),
-			"byStatus":   byStatus,
-			"byCategory": byCategory,
-		})
+		jsonResponse(w, stats)
 	}
 }
 
