@@ -18,7 +18,7 @@
     const catCounts = {};
     const stCounts = {};
     (api.jobs.value || []).forEach(j => {
-      const c = j.category || 'General';
+      const c = j.category || 'Uncategorized';
       catCounts[c] = (catCounts[c] || 0) + 1;
       stCounts[j.status] = (stCounts[j.status] || 0) + 1;
     });
