@@ -120,7 +120,7 @@ import { setPage } from '../stores/page.svelte.js';
   // Category breakdown
   let catCounts = $derived.by(() => {
     const counts = {};
-    (jobs || []).forEach(j => { const c = j.category || 'General'; counts[c] = (counts[c] || 0) + 1; });
+    (jobs || []).forEach(j => { const c = j.category || 'Uncategorized'; counts[c] = (counts[c] || 0) + 1; });
     return Object.entries(counts).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
   });
 
@@ -555,7 +555,7 @@ import { setPage } from '../stores/page.svelte.js';
               </thead>
               <tbody>
                 {#each catCounts as cat, i}
-                  {@const catJobs = jobs.filter(j => (j.category || 'General') === cat.label)}
+                  {@const catJobs = jobs.filter(j => (j.category || 'Uncategorized') === cat.label)}
                   <tr class="border-b border-slate-50 hover:bg-slate-50">
                     <td class="py-1.5 pr-2 font-medium text-slate-700">{cat.label}</td>
                     <td class="py-1.5 px-2 text-right tabular-nums {i === 0 ? 'text-slate-800 font-bold' : 'text-slate-600'}">{cat.value}</td>

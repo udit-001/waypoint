@@ -71,7 +71,7 @@
 
     <!-- Grid -->
     <div class="grid grid-cols-2 gap-x-8 gap-y-3 mb-6">
-      <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Category</span><button class="text-sm text-slate-600 hover:text-slate-700 cursor-pointer bg-transparent border-none p-0" onclick={() => router.navigate('/table?category=' + encodeURIComponent(job.category || 'General'))}>{job.category || 'General'}</button></div>
+      <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Category</span><button class="text-sm text-slate-600 hover:text-slate-700 cursor-pointer bg-transparent border-none p-0" onclick={() => router.navigate('/table?category=' + encodeURIComponent(job.category || 'Uncategorized'))}>{job.category || 'Uncategorized'}</button></div>
       <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Salary</span><span class="text-sm text-slate-700">{job.salary || '-'}</span></div>
       <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Location</span><span class="text-sm text-slate-700">{job.location || '-'}</span></div>
       <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Contact</span><span class="text-sm text-slate-700">{job.contact || '-'}</span></div>

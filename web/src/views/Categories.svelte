@@ -19,7 +19,7 @@ import { setPage } from '../stores/page.svelte.js';
     // Count jobs per category
     const counts = {};
     (api.jobs.value || []).forEach(j => {
-      const cat = j.category || 'General';
+      const cat = j.category || 'Uncategorized';
       counts[cat] = (counts[cat] || 0) + 1;
     });
     jobCounts = counts;

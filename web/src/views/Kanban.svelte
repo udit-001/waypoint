@@ -78,7 +78,7 @@ import { setPage } from '../stores/page.svelte.js';
               {#if job.appliedDate}<span>Applied: {formatDate(job.appliedDate)}</span>{/if}
             </div>
             <div class="mt-2">
-              <span class="bg-slate-100 text-slate-500 rounded px-1.5 py-0.5 text-[10px] uppercase font-semibold">{job.category || 'General'}</span>
+              <span class="bg-slate-100 text-slate-500 rounded px-1.5 py-0.5 text-[10px] uppercase font-semibold">{job.category || 'Uncategorized'}</span>
             </div>
           </button>
         {/each}
