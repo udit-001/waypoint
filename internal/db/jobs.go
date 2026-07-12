@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const jobColumns = `j.id, j.company, j.position, j.date, j.applied_date, j.status, j.category_id, c.name, j.salary, j.location, j.contact, j.url, j.notes, j.reminder_date, j.created_at, j.updated_at`
+const jobColumns = `j.id, j.company, j.position, j.date, j.applied_date, j.status, COALESCE(j.category_id, 0), COALESCE(c.name, ''), j.salary, j.location, j.contact, j.url, j.notes, j.reminder_date, j.created_at, j.updated_at`
 
 // scanJob scans a single job row from a Row (includes JOIN on categories).
 func scanJob(row interface{ Scan(...any) error }) (Job, error) {
@@ -32,7 +32,7 @@ func scanJobs(rows interface{ Next() bool; Scan(...any) error; Close() error; Er
 	return jobs, rows.Err()
 }
 
-const jobFrom = `FROM jobs j JOIN categories c ON j.category_id = c.id`
+const jobFrom = `FROM jobs j LEFT JOIN categories c ON j.category_id = c.id`
 
 // GetJobs returns all jobs, sorted by newest first.
 func (s *Store) GetJobs() ([]Job, error) {
@@ -56,14 +56,16 @@ func (s *Store) AddJob(j Job) (Job, error) {
 	if j.Status == "" {
 		j.Status = "Not Applied"
 	}
-	if j.CategoryID == 0 {
-		j.CategoryID = 1 // General
+
+	var categoryID any
+	if j.CategoryID != 0 {
+		categoryID = j.CategoryID
 	}
 
 	result, err := s.Exec(
 		`INSERT INTO jobs (company, position, date, applied_date, status, category_id, salary, location, contact, url, notes, reminder_date, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		j.Company, j.Position, j.Date, j.AppliedDate, j.Status, j.CategoryID,
+		j.Company, j.Position, j.Date, j.AppliedDate, j.Status, categoryID,
 		j.Salary, j.Location, j.Contact, j.URL, j.Notes, j.ReminderDate,
 		now, now,
 	)
@@ -160,17 +162,9 @@ func (s *Store) UpdateJob(id int64, updates map[string]any) (Job, error) {
 	return s.GetJob(id)
 }
 
-// DeleteJob deletes a job by ID.
+// DeleteJob deletes a job by ID. History is automatically cascade-deleted
+// by the ON DELETE CASCADE foreign key on history.job_id.
 func (s *Store) DeleteJob(id int64) error {
-	job, err := s.GetJob(id)
-	if err != nil {
-		return err
-	}
-
-	if err := s.AddHistory(id, "Deleted", "", ""); err != nil {
-		return err
-	}
-
 	result, err := s.Exec("DELETE FROM jobs WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("delete job: %w", err)
@@ -180,9 +174,6 @@ func (s *Store) DeleteJob(id int64) error {
 	if n == 0 {
 		return fmt.Errorf("job %d not found", id)
 	}
-
-	_, _ = s.Exec("DELETE FROM history WHERE job_id = ?", id)
-	_ = job
 	return nil
 }
 
@@ -249,4 +240,11 @@ func (s *Store) JobCount() (int, error) {
 	var count int
 	err := s.Get(&count, "SELECT COUNT(*) FROM jobs")
 	return count, err
+}
+
+// JobExists returns true if a job with the given URL is already tracked.
+func (s *Store) JobExists(url string) (bool, error) {
+	var count int
+	err := s.Get(&count, "SELECT COUNT(*) FROM jobs WHERE url = ?", url)
+	return count > 0, err
 }

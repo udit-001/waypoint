@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -26,6 +27,14 @@ var stopCmd = &cobra.Command{
 
 		if err := killProcess(pid); err != nil {
 			return err
+		}
+
+		// Wait for the process to actually exit (up to 5 seconds)
+		for i := 0; i < 50; i++ {
+			if !processAlive(pid) {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
 		}
 
 		_ = os.Remove(pidFilePath())

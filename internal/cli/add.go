@@ -51,15 +51,17 @@ Examples:
 			ReminderDate: nil,
 		}
 
-		// Resolve category name → ID
-		catID, err := store.CategoryIDByName(addFlags.category)
-		if err != nil {
-			return formatError("failed to resolve category", err)
+		// Resolve category name → ID (optional — uncategorized if not specified)
+		if addFlags.category != "" {
+			catID, err := store.CategoryIDByName(addFlags.category)
+			if err != nil {
+				return formatError("failed to resolve category", err)
+			}
+			if catID == 0 {
+				return fmt.Errorf("category %q not found — use 'waypoint categories list' to see available categories", addFlags.category)
+			}
+			job.CategoryID = catID
 		}
-		if catID == 0 {
-			return fmt.Errorf("category %q not found — use 'waypoint categories list' to see available categories", addFlags.category)
-		}
-		job.CategoryID = catID
 
 		if addFlags.reminderDate != "" {
 			job.ReminderDate = &addFlags.reminderDate
@@ -92,7 +94,7 @@ func init() {
 	jobsCmd.AddCommand(addCmd)
 
 	addCmd.Flags().StringVar(&addFlags.status, "status", "Not Applied", "Application status")
-	addCmd.Flags().StringVar(&addFlags.category, "category", "General", "Job category")
+	addCmd.Flags().StringVar(&addFlags.category, "category", "", "Job category (optional, defaults to uncategorized)")
 	addCmd.Flags().StringVar(&addFlags.salary, "salary", "", "Salary range")
 	addCmd.Flags().StringVar(&addFlags.location, "location", "", "Job location")
 	addCmd.Flags().StringVar(&addFlags.contact, "contact", "", "Contact person or email")

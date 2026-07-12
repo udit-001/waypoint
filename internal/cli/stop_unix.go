@@ -18,3 +18,13 @@ func killProcess(pid int) error {
 	}
 	return nil
 }
+
+// processAlive returns true if the process is still running.
+func processAlive(pid int) bool {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	// Send signal 0 (existence check — doesn't actually signal the process)
+	return proc.Signal(syscall.Signal(0)) == nil
+}

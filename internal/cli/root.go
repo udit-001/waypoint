@@ -44,7 +44,7 @@ Most commands support --json for machine-readable output.`,
 		var err error
 		store, err = db.Open(storePath)
 		if err != nil {
-			return fmt.Errorf("open database: %w\n\n  Run 'waypoint init' to create one", err)
+			return fmt.Errorf("could not open database at %s: %w", storePath, err)
 		}
 		return nil
 	},
