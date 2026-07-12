@@ -1,6 +1,7 @@
 <script>
 import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
+  import { deadlineClass, deadlineLabel } from '../lib/deadline.js';
   import Spinner from '../components/Spinner.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
@@ -393,18 +394,6 @@ import { setPage } from '../stores/page.svelte.js';
     if (!d) return '';
     try { return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
     catch { return d; }
-  }
-
-  function deadlineClass(days) {
-    if (days < 0) return 'text-red-600';
-    if (days <= 7) return 'text-amber-600';
-    return 'text-emerald-600';
-  }
-
-  function deadlineLabel(days) {
-    if (days < 0) return `${Math.abs(days)}d overdue`;
-    if (days === 0) return 'Today';
-    return `${days}d`;
   }
 </script>
 

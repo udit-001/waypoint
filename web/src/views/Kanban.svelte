@@ -6,6 +6,7 @@ import { setPage } from '../stores/page.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
   import { getFilter } from '../stores/filter.svelte.js';
+  import { deadlineDaysLeft, deadlineLabel, deadlineClassMuted } from '../lib/deadline.js';
 
   const filter = getFilter();
 
@@ -65,6 +66,7 @@ import { setPage } from '../stores/page.svelte.js';
       </div>
       <div class="flex flex-col gap-2 flex-1 min-h-[60px] overflow-y-auto">
         {#each getJobsByStatus(status) as job}
+          {@const days = deadlineDaysLeft(job.date)}
           <button
             class="bg-white rounded-lg border border-slate-200 p-3 text-left cursor-pointer hover:border-slate-400 hover:shadow-sm hover:-translate-y-0.5 transition-all"
             onclick={() => showJob(job.id)}
@@ -72,7 +74,9 @@ import { setPage } from '../stores/page.svelte.js';
             <div class="text-sm font-semibold text-slate-800 mb-0.5">{job.company}</div>
             <div class="text-xs text-slate-500">{job.position}</div>
             <div class="flex flex-wrap gap-1.5 mt-2 text-xs text-slate-400">
-              {#if job.date}<span>{formatDate(job.date)}</span>{/if}
+              {#if days !== null}
+                <span class="font-medium {deadlineClassMuted(days)}">{deadlineLabel(days)}</span>
+              {/if}
               {#if job.salary}<span>{job.salary}</span>{/if}
               {#if job.location}<span>{job.location}</span>{/if}
               {#if job.appliedDate}<span>Applied: {formatDate(job.appliedDate)}</span>{/if}
