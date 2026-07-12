@@ -214,7 +214,7 @@ func (s *Store) SearchAll(query string) ([]SearchResultItem, error) {
 	jobRows, err := s.Query(
 		`SELECT j.id, j.company, j.position, j.status, c.name
 		 FROM jobs j
-		 JOIN categories c ON j.category_id = c.id
+		 LEFT JOIN categories c ON j.category_id = c.id
 		 JOIN jobs_fts f ON j.id = f.rowid
 		 WHERE jobs_fts MATCH ?
 		 ORDER BY rank

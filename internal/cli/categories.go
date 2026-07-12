@@ -27,7 +27,7 @@ Examples:
   waypoint categories list --json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cats, err := store.GetCategories()
+		cats, err := store.GetCategoriesWithCounts()
 		if err != nil {
 			return formatError("failed to list categories", err)
 		}
@@ -46,11 +46,10 @@ Examples:
 
 		rows := make([][]string, 0, len(cats))
 		for _, c := range cats {
-			count, _ := store.CategoryJobCount(c.ID)
 			rows = append(rows, []string{
 				strconv.FormatInt(c.ID, 10),
 				c.Name,
-				strconv.Itoa(count),
+				strconv.Itoa(c.JobCount),
 			})
 		}
 
@@ -165,8 +164,7 @@ var categoriesDeleteCmd = &cobra.Command{
 	Long: `Delete a category by its ID. Prompts for confirmation
 unless --force is used.
 
-Jobs in the deleted category are moved to "General" (ID 1).
-The General category cannot be deleted.
+Jobs in the deleted category are moved to "Uncategorized".
 
 Examples:
   waypoint categories delete 3
@@ -178,10 +176,6 @@ Examples:
 			return fmt.Errorf("invalid category ID: %s", args[0])
 		}
 
-		if id == 1 {
-			return fmt.Errorf("cannot delete the General category")
-		}
-
 		cat, err := store.GetCategoryByID(id)
 		if err != nil {
 			return err
@@ -190,7 +184,7 @@ Examples:
 		count, _ := store.CategoryJobCount(id)
 
 		if !categoriesDeleteFlags.force {
-			fmt.Printf("  Delete category %q (%d jobs will move to General)? [y/N]: ", cat.Name, count)
+			fmt.Printf("  Delete category %q (%d jobs will move to Uncategorized)? [y/N]: ", cat.Name, count)
 			var confirm string
 			fmt.Scanln(&confirm)
 			if confirm != "y" && confirm != "Y" && confirm != "yes" {
@@ -211,7 +205,7 @@ Examples:
 		fmt.Println()
 		fmt.Printf("  ✓ Deleted category: %s\n", cat.Name)
 		if count > 0 {
-			fmt.Printf("    %d job(s) moved to General\n", count)
+			fmt.Printf("    %d job(s) moved to Uncategorized\n", count)
 		}
 		fmt.Println()
 		return nil

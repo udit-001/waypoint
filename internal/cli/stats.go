@@ -16,31 +16,18 @@ Examples:
   waypoint jobs stats --json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		jobs, err := store.GetJobs()
+		stats, err := store.GetStats()
 		if err != nil {
 			return formatError("failed to get stats", err)
 		}
 
-		total := len(jobs)
-
-		// Count by status
-		statusCounts := make(map[string]int)
-		categoryCounts := make(map[string]int)
-		for _, j := range jobs {
-			statusCounts[j.Status]++
-			if j.CategoryName != "" {
-				categoryCounts[j.CategoryName]++
-			}
-		}
+		total := stats.Total
+		statusCounts := stats.ByStatus
+		categoryCounts := stats.ByCategory
 
 		statusOrder := []string{"Not Applied", "Applied", "Offer", "Rejected", "Withdrawn"}
 
 		if jsonOut {
-			stats := map[string]any{
-				"total":          total,
-				"byStatus":       statusCounts,
-				"byCategory":     categoryCounts,
-			}
 			printJSON(stats)
 			return nil
 		}

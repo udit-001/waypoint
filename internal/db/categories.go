@@ -13,6 +13,24 @@ func (s *Store) GetCategories() ([]Category, error) {
 	return cats, err
 }
 
+// CategoryWithCount is a category plus its job count.
+type CategoryWithCount struct {
+	ID      int64  `db:"id" json:"id"`
+	Name    string `db:"name" json:"name"`
+	JobCount int   `db:"job_count" json:"jobCount"`
+}
+
+// GetCategoriesWithCounts returns all categories with job counts in one query.
+func (s *Store) GetCategoriesWithCounts() ([]CategoryWithCount, error) {
+	var cats []CategoryWithCount
+	err := s.Select(&cats, `SELECT c.id, c.name, COUNT(j.id) as job_count
+		FROM categories c
+		LEFT JOIN jobs j ON j.category_id = c.id
+		GROUP BY c.id, c.name
+		ORDER BY c.name`)
+	return cats, err
+}
+
 // GetCategoryByID returns a category by its ID.
 func (s *Store) GetCategoryByID(id int64) (Category, error) {
 	var c Category
@@ -34,13 +52,10 @@ func (s *Store) AddCategory(name string) (Category, error) {
 }
 
 // DeleteCategory removes a category by ID.
-// Jobs in the deleted category are moved to General (id=1).
+// Jobs in the deleted category are moved to uncategorized (NULL category_id).
 func (s *Store) DeleteCategory(id int64) error {
-	if id == 1 {
-		return fmt.Errorf("cannot delete the General category")
-	}
 	return s.tx(func(tx *sqlx.Tx) error {
-		if _, err := tx.Exec("UPDATE jobs SET category_id = 1 WHERE category_id = ?", id); err != nil {
+		if _, err := tx.Exec("UPDATE jobs SET category_id = NULL WHERE category_id = ?", id); err != nil {
 			return fmt.Errorf("reassign jobs: %w", err)
 		}
 		result, err := tx.Exec("DELETE FROM categories WHERE id = ?", id)

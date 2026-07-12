@@ -148,7 +148,7 @@ Examples:
 			return fmt.Errorf("no fields to update — use --flags to specify changes")
 		}
 
-		if err := store.UpdateProfile(updates); err != nil {
+		if err := store.UpsertProfile(updates); err != nil {
 			return formatError("failed to update profile", err)
 		}
 

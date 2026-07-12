@@ -1,7 +1,9 @@
 package db
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -55,15 +57,33 @@ type Settings struct {
 	ItemsPerPage      int    `db:"items_per_page" json:"itemsPerPage"`
 }
 
-// GetProfile returns the user profile.
+// defaultSettings holds the Go-level defaults returned when no settings row
+// exists in the database yet.
+var defaultSettings = Settings{
+	Theme:            "light",
+	RemindersEnabled: 1,
+	DefaultView:      "dashboard",
+	ItemsPerPage:     25,
+}
+
+// GetProfile returns the user profile. If no profile row exists yet, it
+// returns a zero-value Profile with a nil error; callers detect "not set up"
+// by checking p.Name == "".
 func (s *Store) GetProfile() (Profile, error) {
 	var p Profile
 	err := s.Get(&p, `SELECT name, email, phone, title, skills, experience, education, industry, greeting_style, sign_off FROM profile WHERE id = 1`)
-	return p, err
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Profile{}, nil
+		}
+		return Profile{}, err
+	}
+	return p, nil
 }
 
-// UpdateProfile updates profile fields. Only non-empty fields in the map are changed.
-func (s *Store) UpdateProfile(updates map[string]any) error {
+// UpsertProfile inserts the profile row if it doesn't exist, then updates the
+// provided fields. Only keys present in the updates map are changed.
+func (s *Store) UpsertProfile(updates map[string]any) error {
 	if len(updates) == 0 {
 		return nil
 	}
@@ -90,15 +110,57 @@ func (s *Store) UpdateProfile(updates map[string]any) error {
 	if len(setClauses) == 0 {
 		return nil
 	}
+	if _, err := s.Exec(`INSERT INTO profile (id) VALUES (1) ON CONFLICT(id) DO NOTHING`); err != nil {
+		return err
+	}
 	args = append(args, 1) // id = 1
 	query := fmt.Sprintf("UPDATE profile SET %s WHERE id = ?", strings.Join(setClauses, ", "))
 	_, err := s.Exec(query, args...)
 	return err
 }
 
-// GetSettings returns the app settings.
+// GetSettings returns the app settings. If no settings row exists yet, it
+// returns Go-level defaults with a nil error.
 func (s *Store) GetSettings() (Settings, error) {
 	var st Settings
 	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page FROM settings WHERE id = 1`)
-	return st, err
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return defaultSettings, nil
+		}
+		return Settings{}, err
+	}
+	return st, nil
+}
+
+// UpsertSettings inserts the settings row if it doesn't exist, then updates the
+// provided fields. Only keys present in the updates map are changed.
+func (s *Store) UpsertSettings(updates map[string]any) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	columnMap := map[string]string{
+		"theme":            "theme",
+		"reminders_enabled": "reminders_enabled",
+		"default_view":     "default_view",
+		"items_per_page":   "items_per_page",
+	}
+	var setClauses []string
+	var args []any
+	for key, col := range columnMap {
+		if val, ok := updates[key]; ok {
+			setClauses = append(setClauses, col+" = ?")
+			args = append(args, val)
+		}
+	}
+	if len(setClauses) == 0 {
+		return nil
+	}
+	if _, err := s.Exec(`INSERT INTO settings (id) VALUES (1) ON CONFLICT(id) DO NOTHING`); err != nil {
+		return err
+	}
+	args = append(args, 1) // id = 1
+	query := fmt.Sprintf("UPDATE settings SET %s WHERE id = ?", strings.Join(setClauses, ", "))
+	_, err := s.Exec(query, args...)
+	return err
 }

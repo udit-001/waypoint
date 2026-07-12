@@ -142,41 +142,73 @@ restarted afterwards.`,
 }
 
 // semverCompare returns -1 if a < b, 0 if a == b, 1 if a > b.
+// Supports semver 2.0 pre-release suffixes: 1.0.0-alpha < 1.0.0-beta < 1.0.0-rc1 < 1.0.0.
+// Versions without a pre-release suffix have higher precedence than those with one.
 func semverCompare(a, b string) int {
-	pa := parseSemver(a)
-	pb := parseSemver(b)
-	min := len(pa)
-	if len(pb) < min {
-		min = len(pb)
+	aVer, aPre := parseSemver(a)
+	bVer, bPre := parseSemver(b)
+
+	// Compare numeric version parts (major.minor.patch)
+	min := len(aVer)
+	if len(bVer) < min {
+		min = len(bVer)
 	}
 	for i := 0; i < min; i++ {
-		if pa[i] < pb[i] {
+		if aVer[i] < bVer[i] {
 			return -1
 		}
-		if pa[i] > pb[i] {
+		if aVer[i] > bVer[i] {
 			return 1
 		}
 	}
-	if len(pa) < len(pb) {
+	// Longer version wins (1.0.0 > 1.0)
+	switch {
+	case len(aVer) < len(bVer):
+		return -1
+	case len(aVer) > len(bVer):
+		return 1
+	}
+
+	// Numeric versions are equal — compare pre-release.
+	// No pre-release > has pre-release (1.0.0 > 1.0.0-rc1)
+	if aPre == "" && bPre != "" {
+		return 1
+	}
+	if aPre != "" && bPre == "" {
 		return -1
 	}
-	if len(pa) > len(pb) {
+	// Both have pre-release — compare lexically (alpha < beta < rc1)
+	switch {
+	case aPre < bPre:
+		return -1
+	case aPre > bPre:
 		return 1
 	}
 	return 0
 }
 
-func parseSemver(v string) []int {
+// parseSemver splits a version string into numeric parts and a pre-release suffix.
+// e.g. "1.0.0-rc1" → ([1, 0, 0], "rc1")
+func parseSemver(v string) (nums []int, preRelease string) {
+	// Strip leading 'v' if present
+	v = strings.TrimPrefix(v, "v")
+
+	// Split version and pre-release
+	if idx := strings.Index(v, "-"); idx != -1 {
+		preRelease = v[idx+1:]
+		v = v[:idx]
+	}
+
 	parts := strings.Split(v, ".")
-	nums := make([]int, 0, len(parts))
+	nums = make([]int, 0, len(parts))
 	for _, p := range parts {
 		n, err := strconv.Atoi(p)
 		if err != nil {
-			return nums
+			n = 0
 		}
 		nums = append(nums, n)
 	}
-	return nums
+	return nums, preRelease
 }
 
 func fetchLatestRelease() (*ghRelease, error) {
