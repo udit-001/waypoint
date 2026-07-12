@@ -1,9 +1,15 @@
 ---
 name: waypoint
-description: Manage job applications with the waypoint CLI. Use when the user mentions job applications, applying to companies, cover letters, interview prep, career summaries, or wants to track their job search.
+description: Manage job applications with the waypoint CLI. Use when the user mentions job applications, applying to companies, cover letters, interview prep, career summaries, wants to track their job search, or find new job postings from job portals.
 ---
 
 `waypoint` CLI. Local SQLite. Every interaction follows the **pipeline**: enroll → enrich → generate → save.
+
+## Discovery
+
+When the user wants to find new jobs, search job portals, or see what's new —
+`read` [scraping](references/scraping.md). Promoted results enter the pipeline
+as tracked jobs.
 
 ## Pipeline
 
