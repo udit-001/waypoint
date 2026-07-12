@@ -1,9 +1,6 @@
 # Scraping job postings
 
-Scrape job portals for new postings, stage them for review, and promote
-relevant ones into the tracked jobs table. Staging is the intermediate state
-between discovery and commitment — results land in staging, get reviewed,
-then get promoted or dismissed.
+Scrape job portals, review new results in **staging**, then promote picks to tracked jobs or dismiss rejects.
 
 ## Flow
 
@@ -29,28 +26,52 @@ waypoint scrape run <name> -q "<query>" --json
 Results are staged automatically — the CLI deduplicates against the staging
 file and the jobs table by URL, so only new postings appear.
 
-If `meta.truncated` is `true`, results are partial (rate-limited). Present
-what was fetched and advise retrying later.
+If `meta.count` is `0`, no new postings since the last run. Skip to the next
+scraper — don't present an empty list.
 
-**Done when**: every selected scraper has returned results or reported an error.
+If a scraper errors, skip it and continue with the remaining scrapers.
+Mention the failure to the user after presenting results from the ones that
+succeeded.
+
+**Done when**: every selected scraper has been run.
 
 ### Step 3 — Present new results
 
-Show the user a numbered list: title, company, location, date. Ask which to
-track.
+Show the user a numbered list: title, company, location, deadline. Ask which
+to track.
+
+If results have `metadata` fields (qualification, salary, vacancy), include
+them inline — they help the user decide.
 
 **Done when**: results presented, user has indicated their picks.
 
-### Step 4 — Promote picks via jobs add
+### Step 4 — Promote picks
 
 ```bash
-waypoint jobs add "<company>" "<position>" --url "<url>" --location "<location>"
+waypoint jobs add "<company>" "<position>" \
+  --url "<url>" \
+  --location "<location>" \
+  --date "<deadline>" \
+  --salary "<salary>" \
+  --notes "<description or key details>"
 ```
 
-Map result fields to job fields: `Title` → `position`, `Company` → `company`,
-`URL` → `url`, `Location` → `location`. Confirm each with its job ID.
+Field mapping from result to `jobs add`:
 
-**Done when**: every user pick added as a job.
+| Result field | Flag | Notes |
+|-------------|------|-------|
+| `title` | `<position>` (2nd arg) | |
+| `company` | `<company>` (1st arg) | |
+| `url` | `--url` | |
+| `location` | `--location` | |
+| `date` | `--date` | Deadline |
+| `metadata.salary` | `--salary` | If present |
+| `description` | `--notes` | Summarize if long |
+
+After promoting, the job is in the pipeline — offer to enrich it (`jobs get`)
+or generate materials (cover letter, email).
+
+**Done when**: every user pick added as a job, ID confirmed.
 
 ### Step 5 — Dismiss rejects
 
@@ -58,9 +79,11 @@ Map result fields to job fields: `Title` → `position`, `Company` → `company`
 waypoint scrape dismiss "<url>"
 ```
 
-Dismissed results don't reappear on the next scrape.
+Dismissed results don't reappear on the next scrape. If the user is unsure
+about a result, skip dismissal — it stays in staging as "new" and won't
+reappear until pruned.
 
-**Done when**: every reject dismissed.
+**Done when**: every explicit reject dismissed.
 
 ## Commands
 
