@@ -92,6 +92,7 @@ Suggest a natural next step:
 - Cover letter → "Follow-up email too?"
 - Interview prep → "Career summary as well?"
 - First artifact → "`waypoint start` to see in web UI"
+- User shared new personal details (experience, education, skills, contact) → "I used this in your [artifact]. Save it to your profile for next time?" → `profile set`
 
 ## Data sources
 
