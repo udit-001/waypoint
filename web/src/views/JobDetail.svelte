@@ -11,7 +11,9 @@
   function renderMarkdown(text) {
     if (!text) return '';
     try {
-      return marked.parse(text, { gfm: true, breaks: true });
+      const unescaped = text.replace(/\\n/g, '\n');
+      const html = marked.parse(unescaped, { gfm: true, breaks: true });
+      return html.replace(/<a\s/g, '<a target="_blank" rel="noopener noreferrer" ');
     } catch {
       return text;
     }
@@ -82,7 +84,7 @@
     {#if job.url}
       <div class="mb-6">
         <span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">URL</span>
-        <a href={job.url} target="_blank" class="text-sm text-slate-600 hover:text-slate-500 break-all">{job.url}</a>
+        <a href={job.url} target="_blank" rel="noopener noreferrer" class="text-sm text-slate-600 hover:text-slate-500 break-all">{job.url}</a>
       </div>
     {/if}
 
