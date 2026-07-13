@@ -38,28 +38,46 @@ func CleanHTML(s string) string {
 
 // HTTPFetcher is the default Fetcher adapter.
 type HTTPFetcher struct {
-	Client *http.Client
+	Client    *http.Client
+	UserAgent string // defaults to defaultUA when empty
 }
 
 // Fetch retrieves HTML with browser headers and exponential backoff.
 func (f *HTTPFetcher) Fetch(ctx context.Context, url string) (string, error) {
-	if f.Client == nil {
-		f.Client = &http.Client{}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
 	}
+	ua := f.UserAgent
+	if ua == "" {
+		ua = defaultUA
+	}
+	req.Header.Set("User-Agent", ua)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
+	return DoWithRetry(ctx, req)
+}
+
+// DoWithRetry executes an HTTP request with exponential backoff on 429/5xx.
+// Returns ("", nil) on 404. Resets the request body between retries via
+// req.GetBody when available. Shared by HTTPFetcher.Fetch and POST-based
+// scrapers (bitspilani, vit) that build their own requests.
+func DoWithRetry(ctx context.Context, req *http.Request) (string, error) {
 	const maxRetries = 6
 	delay := time.Second
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return "", err
+		// Reset body for retry if GetBody is available
+		if attempt > 0 && req.GetBody != nil {
+			body, err := req.GetBody()
+			if err != nil {
+				return "", err
+			}
+			req.Body = body
 		}
-		req.Header.Set("User-Agent", defaultUA)
-		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
-		resp, err := f.Client.Do(req)
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return "", err
 		}

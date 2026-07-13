@@ -21,7 +21,9 @@ const (
 	sourceName = "Indeed"
 )
 
-type Indeed struct{}
+type Indeed struct {
+	Fetcher scraper.Fetcher
+}
 
 func init() {
 	scraper.Register(Indeed{})
@@ -36,7 +38,7 @@ func (n Indeed) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.
 	cursor := ""
 
 	for page := 0; page < 5; page++ {
-		results, nextCursor, err := fetchPage(ctx, opts, cursor)
+		results, nextCursor, err := n.fetchPage(ctx, opts, cursor)
 		if err != nil {
 			if page == 0 {
 				return nil, err
@@ -54,7 +56,7 @@ func (n Indeed) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.
 	return allResults, nil
 }
 
-func fetchPage(ctx context.Context, opts scraper.SearchOpts, cursor string) ([]scraper.Result, string, error) {
+func (n Indeed) fetchPage(ctx context.Context, opts scraper.SearchOpts, cursor string) ([]scraper.Result, string, error) {
 	searchTerm := opts.Query
 	if searchTerm == "" {
 		searchTerm = "research"
@@ -73,6 +75,14 @@ func fetchPage(ctx context.Context, opts scraper.SearchOpts, cursor string) ([]s
 		searchTerm, location, cursorStr)
 
 	payload, _ := json.Marshal(map[string]string{"query": query})
+
+	if n.Fetcher != nil {
+		raw, err := n.Fetcher.Fetch(ctx, apiURL)
+		if err != nil {
+			return nil, "", err
+		}
+		return parseResponse([]byte(raw))
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewBuffer(payload))
 	if err != nil {

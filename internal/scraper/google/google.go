@@ -51,7 +51,7 @@ func (n Google) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.
 	}
 
 	// Phase 1: initial search page — get cursor + first batch of jobs
-	htmlBody, cursor, err := fetchInitialPage(ctx, query)
+	htmlBody, cursor, err := n.fetchInitialPage(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (n Google) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.
 
 	// Phase 2: paginate via async cursor
 	for page := 0; page < 5 && cursor != ""; page++ {
-		nextResults, nextCursor, err := fetchNextPage(ctx, cursor)
+		nextResults, nextCursor, err := n.fetchNextPage(ctx, cursor)
 		if err != nil {
 			break
 		}
@@ -103,12 +103,30 @@ var jobsHeaders = map[string]string{
 	"User-Agent":       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
 }
 
-func fetchInitialPage(ctx context.Context, query string) (string, string, error) {
+func extractCursor(body string) string {
+	cursorRE := regexp.MustCompile(`data-async-fc="([^"]+)"`)
+	if m := cursorRE.FindStringSubmatch(body); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+func (n Google) fetchInitialPage(ctx context.Context, query string) (string, string, error) {
 	params := url.Values{}
 	params.Set("q", query)
 	params.Set("udm", "8")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL+"?"+params.Encode(), nil)
+	searchFullURL := searchURL + "?" + params.Encode()
+
+	if n.Fetcher != nil {
+		body, err := n.Fetcher.Fetch(ctx, searchFullURL)
+		if err != nil {
+			return "", "", err
+		}
+		return body, extractCursor(body), nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchFullURL, nil)
 	if err != nil {
 		return "", "", err
 	}
@@ -132,24 +150,26 @@ func fetchInitialPage(ctx context.Context, query string) (string, string, error)
 	}
 
 	htmlBody := string(body)
-
-	// Extract cursor
-	cursor := ""
-	cursorRE := regexp.MustCompile(`data-async-fc="([^"]+)"`)
-	if m := cursorRE.FindStringSubmatch(htmlBody); m != nil {
-		cursor = m[1]
-	}
-
-	return htmlBody, cursor, nil
+	return htmlBody, extractCursor(htmlBody), nil
 }
 
-func fetchNextPage(ctx context.Context, cursor string) ([]scraper.Result, string, error) {
+func (n Google) fetchNextPage(ctx context.Context, cursor string) ([]scraper.Result, string, error) {
 	params := url.Values{}
 	params.Add("fc", cursor)
 	params.Add("fcv", "3")
 	params.Add("async", "_fmt:prog")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jobsURL+"?"+params.Encode(), nil)
+	jobsFullURL := jobsURL + "?" + params.Encode()
+
+	if n.Fetcher != nil {
+		body, err := n.Fetcher.Fetch(ctx, jobsFullURL)
+		if err != nil {
+			return nil, "", err
+		}
+		return parseAsyncJobs(body)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jobsFullURL, nil)
 	if err != nil {
 		return nil, "", err
 	}
