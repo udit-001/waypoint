@@ -29,19 +29,11 @@ Examples:
   waypoint jobs list --json             # Machine-readable output`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var (
-			jobs []db.Job
-			err  error
-		)
-
-		switch {
-		case listFlags.search != "":
-			jobs, err = store.SearchJobs(listFlags.search, listFlags.status, listFlags.category)
-		case listFlags.status != "" || listFlags.category != "":
-			jobs, err = store.FilterJobs(listFlags.status, listFlags.category)
-		default:
-			jobs, err = store.GetJobs()
-		}
+		jobs, err := db.ListJobs(store, db.ListOpts{
+			Search:   listFlags.search,
+			Status:   listFlags.status,
+			Category: listFlags.category,
+		})
 		if err != nil {
 			return formatError("failed to list jobs", err)
 		}

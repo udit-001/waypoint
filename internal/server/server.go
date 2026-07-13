@@ -163,17 +163,11 @@ func handleListJobs(store db.Store) http.HandlerFunc {
 		category := r.URL.Query().Get("category")
 		search := r.URL.Query().Get("search")
 
-		var jobs []db.Job
-		var err error
-
-		switch {
-		case search != "":
-			jobs, err = store.SearchJobs(search, status, category)
-		case status != "" || category != "":
-			jobs, err = store.FilterJobs(status, category)
-		default:
-			jobs, err = store.GetJobs()
-		}
+		jobs, err := db.ListJobs(store, db.ListOpts{
+			Search:   search,
+			Status:   status,
+			Category: category,
+		})
 
 		if err != nil {
 			jsonError(w, err.Error(), http.StatusInternalServerError)
