@@ -7,6 +7,7 @@
   import { skillLabel } from '../stores/skillMeta.js';
   import { marked } from 'marked';
   import Spinner from '../components/Spinner.svelte';
+  import { formatDate, formatDateTime } from '../lib/format.js';
 
   function renderMarkdown(text) {
     if (!text) return '';
@@ -45,17 +46,6 @@
     });
   });
 
-  function formatDate(d) {
-    if (!d) return '-';
-    try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-    catch { return d; }
-  }
-
-  function formatDateTime(d) {
-    if (!d) return '-';
-    try { return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-    catch { return d; }
-  }
 </script>
 
 {#if loading}
@@ -77,8 +67,8 @@
       <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Salary</span><span class="text-sm text-slate-700">{job.salary || '-'}</span></div>
       <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Location</span><span class="text-sm text-slate-700">{job.location || '-'}</span></div>
       <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Contact</span><span class="text-sm text-slate-700">{job.contact || '-'}</span></div>
-      <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Deadline</span><span class="text-sm text-slate-700">{formatDate(job.date)}</span></div>
-      <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Applied</span><span class="text-sm text-slate-700">{formatDate(job.appliedDate)}</span></div>
+      <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Deadline</span><span class="text-sm text-slate-700">{formatDate(job.date) || '-'}</span></div>
+      <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Applied</span><span class="text-sm text-slate-700">{formatDate(job.appliedDate) || '-'}</span></div>
     </div>
 
     {#if job.url}
@@ -123,7 +113,7 @@
         <div class="space-y-1.5">
           {#each history as h}
             <div class="flex gap-3 text-xs">
-              <span class="text-slate-400 shrink-0 tabular-nums">{formatDateTime(h.timestamp)}</span>
+              <span class="text-slate-400 shrink-0 tabular-nums">{formatDateTime(h.timestamp) || '-'}</span>
               <span class="text-slate-600">
                 {#if h.action === 'Created'}Job created
                 {:else if h.action === 'Status'}{h.from} → <span class="font-medium">{h.to}</span>

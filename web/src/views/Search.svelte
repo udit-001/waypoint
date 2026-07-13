@@ -5,17 +5,9 @@
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
+  import { skillLabel } from '../stores/skillMeta.js';
 
   onMount(() => { setPage({ title: 'Search' }); });
-  const skillLabels = {
-    'email-generator': 'Email',
-    'cover-letter': 'Cover Letter',
-    'resume-optimizer': 'Resume Optimizer',
-    'interview-prep': 'Interview Prep',
-    'career-summary': 'Career Summary',
-    'statement-of-purpose': 'SOP',
-  };
-
   let query = $state('');
   let results = $state([]);
   let loading = $state(false);
@@ -89,7 +81,7 @@
                   {@html highlight(result.title || 'Untitled', query)}
                 </div>
                 <div class="text-xs text-slate-400 mt-0.5">
-                  {result.type === 'job' ? 'Job' : (skillLabels[result.sub] || result.sub || 'Artifact')}
+                  {result.type === 'job' ? 'Job' : (skillLabel(result.sub) || 'Artifact')}
                 </div>
               </div>
             </div>

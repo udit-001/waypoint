@@ -7,6 +7,9 @@ import { setPage } from '../stores/page.svelte.js';
   import * as api from '../stores/api.svelte.js';
   import { getFilter } from '../stores/filter.svelte.js';
   import { deadlineDaysLeft, deadlineLabel, deadlineClass, deadlineRowTint } from '../lib/deadline.js';
+  import { formatDateShort } from '../lib/format.js';
+  import { STATUS_STYLES } from '../lib/status.js';
+  import { applyFilter } from '../lib/filter.js';
 
   const filter = getFilter();
 
@@ -26,14 +29,6 @@ import { setPage } from '../stores/page.svelte.js';
   let sortField = $state('date');
   let sortDir = $state(1);
   let searchQuery = $state('');
-
-  const statusColors = {
-    'Not Applied': 'bg-slate-100 text-slate-600',
-    'Applied': 'bg-blue-100 text-blue-700',
-    'Offer': 'bg-emerald-100 text-emerald-700',
-    'Rejected': 'bg-red-100 text-red-700',
-    'Withdrawn': 'bg-slate-200 text-slate-500',
-  };
 
   onMount(async () => {
     setPage({ title: 'Table View' });
@@ -56,17 +51,7 @@ import { setPage } from '../stores/page.svelte.js';
   }
 
   function applyFilters() {
-    let result = [...jobs];
-
-    // Category filter
-    if (filter.category) {
-      result = result.filter(j => j.category === filter.category);
-    }
-
-    // Status filter
-    if (filter.status) {
-      result = result.filter(j => j.status === filter.status);
-    }
+    let result = applyFilter(jobs, filter);
 
     // Search filter
     if (searchQuery.length >= 2) {
@@ -87,12 +72,6 @@ import { setPage } from '../stores/page.svelte.js';
     });
 
     filteredJobs = result;
-  }
-
-  function formatDate(d) {
-    if (!d) return '';
-    try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-    catch { return d; }
   }
 
   function showJob(id) {
@@ -150,16 +129,16 @@ import { setPage } from '../stores/page.svelte.js';
               <td class="px-4 py-2.5 font-medium text-slate-800">{job.company}</td>
               <td class="px-4 py-2.5 text-slate-600">{job.position}</td>
               <td class="px-4 py-2.5">
-                <span class="tabular-nums text-slate-500">{formatDate(job.date)}</span>
+                <span class="tabular-nums text-slate-500">{formatDateShort(job.date)}</span>
                 {#if days !== null}
                   <span class="ml-1.5 text-xs font-semibold {deadlineClass(days)}">{deadlineLabel(days)}</span>
                 {/if}
               </td>
               <td class="px-4 py-2.5">
-                <span class="inline-block px-2 py-0.5 rounded text-xs font-medium {statusColors[job.status] || 'bg-slate-100 text-slate-600'}">{job.status}</span>
+                <span class="inline-block px-2 py-0.5 rounded text-xs font-medium {STATUS_STYLES[job.status]?.bg || 'bg-slate-100 text-slate-600'}">{job.status}</span>
               </td>
               <td class="px-4 py-2.5 text-slate-600">{job.category || 'Uncategorized'}</td>
-              <td class="px-4 py-2.5 text-slate-500 tabular-nums">{formatDate(job.appliedDate) || '-'}</td>
+              <td class="px-4 py-2.5 text-slate-500 tabular-nums">{formatDateShort(job.appliedDate) || '-'}</td>
               <td class="px-4 py-2.5 text-slate-600">{job.salary || ''}</td>
               <td class="px-4 py-2.5 text-slate-500">{job.location || '-'}</td>
             </tr>

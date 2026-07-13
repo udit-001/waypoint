@@ -3,10 +3,9 @@
   import { getFilter } from '../stores/filter.svelte.js';
   import * as api from '../stores/api.svelte.js';
   import { iconSvg } from '../lib/icons.js';
+  import { STATUSES } from '../lib/status.js';
 
   const filter = getFilter();
-
-  const statuses = ['Not Applied', 'Applied', 'Offer', 'Rejected', 'Withdrawn'];
 
   let cats = $state([]);
   let jobCounts = {};
@@ -114,7 +113,7 @@
       <div>
         <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Status</h4>
         <div class="space-y-0.5">
-          {#each statuses as st}
+          {#each STATUSES as st}
             <button
               class="w-full text-left px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors {filter.status === st ? 'bg-slate-800 text-white dark:bg-slate-600' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}"
               onclick={() => selectStatus(st)}

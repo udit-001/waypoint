@@ -6,6 +6,7 @@
   import { setPage } from '../stores/page.svelte.js';
   import { skillLabel } from '../stores/skillMeta.js';
   import Spinner from '../components/Spinner.svelte';
+  import { formatDateFull } from '../lib/format.js';
 
   let { id } = $props();
 
@@ -40,12 +41,6 @@
     });
   });
 
-  function formatDate(d) {
-    if (!d) return '';
-    try { return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-    catch { return d; }
-  }
-
   async function copyContent() {
     if (!art?.variants?.[activeVariant]) return;
     await navigator.clipboard.writeText(art.variants[activeVariant].content || '');
@@ -69,7 +64,7 @@
           >{jobName}</button>
           <span>·</span>
         {/if}
-        <span>{formatDate(art.createdAt)}</span>
+        <span>{formatDateFull(art.createdAt)}</span>
       </div>
     </div>
 
