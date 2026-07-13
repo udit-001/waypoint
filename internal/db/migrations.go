@@ -78,7 +78,7 @@ func baselinedb(db *sqlx.DB) error {
 //
 // For fresh databases, goose creates goose_db_version and runs all
 // migrations from V1 onward.
-func RunMigrations(db *sqlx.DB, dbPath string) error {
+func (s *SQLiteStore) RunMigrations(dbPath string) error {
 	goose.SetBaseFS(embedMigrations)
 	goose.SetLogger(goose.NopLogger())
 	if err := goose.SetDialect("sqlite3"); err != nil {
@@ -87,7 +87,7 @@ func RunMigrations(db *sqlx.DB, dbPath string) error {
 
 	// Baselining: check whether goose_db_version already exists.
 	var gooseTableExists bool
-	if err := db.Get(&gooseTableExists,
+	if err := s.Get(&gooseTableExists,
 		`SELECT count(*) > 0 FROM sqlite_master WHERE type='table' AND name='goose_db_version'`); err != nil {
 		return fmt.Errorf("check goose_db_version existence: %w", err)
 	}
@@ -95,7 +95,7 @@ func RunMigrations(db *sqlx.DB, dbPath string) error {
 	if !gooseTableExists {
 		// Does the database already have application tables?
 		var jobsTableCount int
-		if err := db.Get(&jobsTableCount,
+		if err := s.Get(&jobsTableCount,
 			`SELECT count(*) FROM sqlite_master WHERE type='table' AND name='jobs'`); err != nil {
 			return fmt.Errorf("check jobs table existence: %w", err)
 		}
@@ -104,7 +104,7 @@ func RunMigrations(db *sqlx.DB, dbPath string) error {
 			// Existing DB — baseline V1 as applied so goose skips it.
 			// Wrapped in a transaction so a crash mid-baseling rolls back
 			// cleanly — no half-created goose_db_version table.
-			if err := baselinedb(db); err != nil {
+			if err := baselinedb(s.DB); err != nil {
 				return err
 			}
 		}
@@ -116,16 +116,16 @@ func RunMigrations(db *sqlx.DB, dbPath string) error {
 	needsBackup := true
 	if gooseTableExists {
 		var version int
-		if err := db.Get(&version, "SELECT max(version_id) FROM goose_db_version WHERE is_applied = 1"); err == nil && version >= 2 {
+		if err := s.Get(&version, "SELECT max(version_id) FROM goose_db_version WHERE is_applied = 1"); err == nil && version >= 2 {
 			needsBackup = false
 		}
 	}
 	if needsBackup {
-		backupDB(db, dbPath)
+		backupDB(s.DB, dbPath)
 	}
 
 	// Run pending migrations (skips already-applied ones).
-	if err := goose.Up(db.DB, "migrations"); err != nil {
+	if err := goose.Up(s.DB.DB, "migrations"); err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 	return nil

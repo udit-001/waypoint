@@ -50,7 +50,7 @@ type ArtifactVariant struct {
 
 // GetArtifacts returns artifacts, optionally filtered by skill and/or job.
 // By default excludes archived artifacts.
-func (s *Store) GetArtifacts(skillID string, jobID int64, includeArchived bool) ([]Artifact, error) {
+func (s *SQLiteStore) GetArtifacts(skillID string, jobID int64, includeArchived bool) ([]Artifact, error) {
 	var (
 		conditions []string
 		args       []any
@@ -81,7 +81,7 @@ func (s *Store) GetArtifacts(skillID string, jobID int64, includeArchived bool) 
 }
 
 // GetArtifact returns a single artifact by ID.
-func (s *Store) GetArtifact(id int64) (Artifact, error) {
+func (s *SQLiteStore) GetArtifact(id int64) (Artifact, error) {
 	var a Artifact
 	err := s.Get(&a, "SELECT id, skill_id, job_id, title, options, variants, archived, created_at, updated_at FROM artifacts WHERE id = ?", id)
 	if err != nil {
@@ -91,7 +91,7 @@ func (s *Store) GetArtifact(id int64) (Artifact, error) {
 }
 
 // AddArtifact creates a new artifact.
-func (s *Store) AddArtifact(a Artifact) (Artifact, error) {
+func (s *SQLiteStore) AddArtifact(a Artifact) (Artifact, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if a.Options == "" {
 		a.Options = "{}"
@@ -117,7 +117,7 @@ func (s *Store) AddArtifact(a Artifact) (Artifact, error) {
 }
 
 // UpdateArtifact updates an artifact's title, options, or variants.
-func (s *Store) UpdateArtifact(id int64, updates map[string]any) (Artifact, error) {
+func (s *SQLiteStore) UpdateArtifact(id int64, updates map[string]any) (Artifact, error) {
 	if len(updates) == 0 {
 		return s.GetArtifact(id)
 	}
@@ -143,7 +143,7 @@ func (s *Store) UpdateArtifact(id int64, updates map[string]any) (Artifact, erro
 }
 
 // ArchiveArtifact soft-deletes an artifact.
-func (s *Store) ArchiveArtifact(id int64) error {
+func (s *SQLiteStore) ArchiveArtifact(id int64) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.Exec("UPDATE artifacts SET archived = 1, updated_at = ? WHERE id = ?", now, id)
 	if err != nil {
@@ -157,7 +157,7 @@ func (s *Store) ArchiveArtifact(id int64) error {
 }
 
 // DeleteArtifact permanently removes an artifact.
-func (s *Store) DeleteArtifact(id int64) error {
+func (s *SQLiteStore) DeleteArtifact(id int64) error {
 	result, err := s.Exec("DELETE FROM artifacts WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("delete artifact: %w", err)
@@ -182,7 +182,7 @@ func joinStrings(parts []string, sep string) string {
 }
 
 // SearchArtifacts performs full-text search across artifact title and skill_id.
-func (s *Store) SearchArtifacts(query string) ([]Artifact, error) {
+func (s *SQLiteStore) SearchArtifacts(query string) ([]Artifact, error) {
 	var arts []Artifact
 	err := s.Select(&arts,
 		`SELECT a.id, a.skill_id, a.job_id, a.title, a.options, a.variants, a.archived, a.created_at, a.updated_at
@@ -207,7 +207,7 @@ type SearchResultItem struct {
 }
 
 // SearchAll performs full-text search across jobs and artifacts, returning unified results.
-func (s *Store) SearchAll(query string) ([]SearchResultItem, error) {
+func (s *SQLiteStore) SearchAll(query string) ([]SearchResultItem, error) {
 	var results []SearchResultItem
 
 	// Search jobs

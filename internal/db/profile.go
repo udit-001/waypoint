@@ -69,7 +69,7 @@ var defaultSettings = Settings{
 // GetProfile returns the user profile. If no profile row exists yet, it
 // returns a zero-value Profile with a nil error; callers detect "not set up"
 // by checking p.Name == "".
-func (s *Store) GetProfile() (Profile, error) {
+func (s *SQLiteStore) GetProfile() (Profile, error) {
 	var p Profile
 	err := s.Get(&p, `SELECT name, email, phone, title, skills, experience, education, industry, greeting_style, sign_off FROM profile WHERE id = 1`)
 	if err != nil {
@@ -83,7 +83,7 @@ func (s *Store) GetProfile() (Profile, error) {
 
 // UpsertProfile inserts the profile row if it doesn't exist, then updates the
 // provided fields. Only keys present in the updates map are changed.
-func (s *Store) UpsertProfile(updates map[string]any) error {
+func (s *SQLiteStore) UpsertProfile(updates map[string]any) error {
 	if len(updates) == 0 {
 		return nil
 	}
@@ -121,7 +121,7 @@ func (s *Store) UpsertProfile(updates map[string]any) error {
 
 // GetSettings returns the app settings. If no settings row exists yet, it
 // returns Go-level defaults with a nil error.
-func (s *Store) GetSettings() (Settings, error) {
+func (s *SQLiteStore) GetSettings() (Settings, error) {
 	var st Settings
 	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page FROM settings WHERE id = 1`)
 	if err != nil {
@@ -135,7 +135,7 @@ func (s *Store) GetSettings() (Settings, error) {
 
 // UpsertSettings inserts the settings row if it doesn't exist, then updates the
 // provided fields. Only keys present in the updates map are changed.
-func (s *Store) UpsertSettings(updates map[string]any) error {
+func (s *SQLiteStore) UpsertSettings(updates map[string]any) error {
 	if len(updates) == 0 {
 		return nil
 	}

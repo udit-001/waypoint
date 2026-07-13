@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/SwatiBio/waypoint/internal/db"
 	"github.com/SwatiBio/waypoint/internal/server"
 	"github.com/spf13/cobra"
 )
@@ -78,7 +77,7 @@ Examples:
 		// Run database migrations before starting the server.
 		// Goose runs here (not in Open) so only `waypoint start` triggers
 		// migrations — CLI commands like `jobs add` use Open() directly.
-		if err := db.RunMigrations(store.DB, storePath); err != nil {
+		if err := store.RunMigrations(storePath); err != nil {
 			return fmt.Errorf("database migration failed: %w", err)
 		}
 

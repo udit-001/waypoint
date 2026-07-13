@@ -12,7 +12,7 @@ func scanHistory(row interface{ Scan(...any) error }) (HistoryEntry, error) {
 }
 
 // AddHistory records a history entry for a job.
-func (s *Store) AddHistory(jobID int64, action, from, to string) error {
+func (s *SQLiteStore) AddHistory(jobID int64, action, from, to string) error {
 	_, err := s.Exec(
 		`INSERT INTO history (job_id, action, from_value, to_value) VALUES (?, ?, ?, ?)`,
 		jobID, action, from, to,
@@ -21,7 +21,7 @@ func (s *Store) AddHistory(jobID int64, action, from, to string) error {
 }
 
 // GetJobHistory returns all history entries for a job, newest first.
-func (s *Store) GetJobHistory(jobID int64) ([]HistoryEntry, error) {
+func (s *SQLiteStore) GetJobHistory(jobID int64) ([]HistoryEntry, error) {
 	rows, err := s.Query(
 		fmt.Sprintf("SELECT %s FROM history WHERE job_id = ? ORDER BY id DESC", historyColumns),
 		jobID,
@@ -43,7 +43,7 @@ func (s *Store) GetJobHistory(jobID int64) ([]HistoryEntry, error) {
 }
 
 // GetAllHistory returns all history entries, newest first.
-func (s *Store) GetAllHistory() ([]HistoryEntry, error) {
+func (s *SQLiteStore) GetAllHistory() ([]HistoryEntry, error) {
 	rows, err := s.Query(fmt.Sprintf("SELECT %s FROM history ORDER BY id DESC LIMIT 500", historyColumns))
 	if err != nil {
 		return nil, err

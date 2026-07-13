@@ -21,7 +21,7 @@ import (
 // Config holds the server configuration.
 type Config struct {
 	Port   int
-	DB     *db.Store
+	DB     db.Store
 	NoOpen bool // don't auto-open browser
 	Silent bool // suppress terminal output (daemon mode)
 }
@@ -157,7 +157,7 @@ func jsonError(w http.ResponseWriter, msg string, code int) {
 
 // --- API Handlers ---
 
-func handleListJobs(store *db.Store) http.HandlerFunc {
+func handleListJobs(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		status := r.URL.Query().Get("status")
 		category := r.URL.Query().Get("category")
@@ -186,7 +186,7 @@ func handleListJobs(store *db.Store) http.HandlerFunc {
 	}
 }
 
-func handleGetJob(store *db.Store) http.HandlerFunc {
+func handleGetJob(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.PathValue("id")
 		id, err := strconv.ParseInt(idStr, 10, 64)
@@ -204,7 +204,7 @@ func handleGetJob(store *db.Store) http.HandlerFunc {
 	}
 }
 
-func handleGetJobHistory(store *db.Store) http.HandlerFunc {
+func handleGetJobHistory(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.PathValue("id")
 		id, err := strconv.ParseInt(idStr, 10, 64)
@@ -225,7 +225,7 @@ func handleGetJobHistory(store *db.Store) http.HandlerFunc {
 	}
 }
 
-func handleStats(store *db.Store) http.HandlerFunc {
+func handleStats(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		stats, err := store.GetStats()
 		if err != nil {
@@ -236,7 +236,7 @@ func handleStats(store *db.Store) http.HandlerFunc {
 	}
 }
 
-func handleGetAllHistory(store *db.Store) http.HandlerFunc {
+func handleGetAllHistory(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		history, err := store.GetAllHistory()
 		if err != nil {
@@ -250,7 +250,7 @@ func handleGetAllHistory(store *db.Store) http.HandlerFunc {
 	}
 }
 
-func handleGetProfile(store *db.Store) http.HandlerFunc {
+func handleGetProfile(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		profile, err := store.GetProfile()
 		if err != nil {
@@ -261,7 +261,7 @@ func handleGetProfile(store *db.Store) http.HandlerFunc {
 	}
 }
 
-func handleGetSettings(store *db.Store) http.HandlerFunc {
+func handleGetSettings(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s, err := store.GetSettings()
 		if err != nil {
@@ -272,7 +272,7 @@ func handleGetSettings(store *db.Store) http.HandlerFunc {
 	}
 }
 
-func handleCategories(store *db.Store) http.HandlerFunc {
+func handleCategories(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cats, err := store.GetCategories()
 		if err != nil {
@@ -286,7 +286,7 @@ func handleCategories(store *db.Store) http.HandlerFunc {
 	}
 }
 
-func handleListArtifacts(store *db.Store) http.HandlerFunc {
+func handleListArtifacts(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		search := r.URL.Query().Get("search")
 		skill := r.URL.Query().Get("skill")
@@ -323,7 +323,7 @@ func handleListArtifacts(store *db.Store) http.HandlerFunc {
 	}
 }
 
-func handleGetArtifact(store *db.Store) http.HandlerFunc {
+func handleGetArtifact(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.PathValue("id")
 		id, err := strconv.ParseInt(idStr, 10, 64)
@@ -341,7 +341,7 @@ func handleGetArtifact(store *db.Store) http.HandlerFunc {
 	}
 }
 
-func handleSearch(store *db.Store) http.HandlerFunc {
+func handleSearch(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query().Get("q")
 		if q == "" {
