@@ -9,16 +9,18 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Store wraps the SQLite database.
-type Store struct {
+// SQLiteStore wraps the SQLite database via sqlx.
+// Use db.Open to construct one; depend on the Store interface, not this type.
+type SQLiteStore struct {
 	*sqlx.DB
 }
 
 // Open opens (or creates) the SQLite database and sets WAL mode.
+// Returns the Store interface; the concrete type is *SQLiteStore.
 // Schema management is handled by goose migrations, which run inside
 // `waypoint start` (see RunMigrations). This function does NOT create
 // tables — callers that need schema must ensure migrations have run.
-func Open(path string) (*Store, error) {
+func Open(path string) (Store, error) {
 	dir := filepath.Dir(path)
 	if dir != "." {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -63,11 +65,11 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("set temp store: %w", err)
 	}
 
-	return &Store{db}, nil
+	return &SQLiteStore{db}, nil
 }
 
 // tx runs a function inside a transaction.
-func (s *Store) tx(fn func(*sqlx.Tx) error) error {
+func (s *SQLiteStore) tx(fn func(*sqlx.Tx) error) error {
 	tx, err := s.Beginx()
 	if err != nil {
 		return err
@@ -81,6 +83,6 @@ func (s *Store) tx(fn func(*sqlx.Tx) error) error {
 }
 
 // Close closes the database connection.
-func (s *Store) Close() error {
+func (s *SQLiteStore) Close() error {
 	return s.DB.Close()
 }

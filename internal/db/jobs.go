@@ -35,7 +35,7 @@ func scanJobs(rows interface{ Next() bool; Scan(...any) error; Close() error; Er
 const jobFrom = `FROM jobs j LEFT JOIN categories c ON j.category_id = c.id`
 
 // GetJobs returns all jobs, sorted by newest first.
-func (s *Store) GetJobs() ([]Job, error) {
+func (s *SQLiteStore) GetJobs() ([]Job, error) {
 	rows, err := s.Query(fmt.Sprintf("SELECT %s %s ORDER BY j.id DESC", jobColumns, jobFrom))
 	if err != nil {
 		return nil, err
@@ -45,13 +45,13 @@ func (s *Store) GetJobs() ([]Job, error) {
 }
 
 // GetJob returns a single job by ID.
-func (s *Store) GetJob(id int64) (Job, error) {
+func (s *SQLiteStore) GetJob(id int64) (Job, error) {
 	row := s.QueryRow(fmt.Sprintf("SELECT %s %s WHERE j.id = ?", jobColumns, jobFrom), id)
 	return scanJob(row)
 }
 
 // AddJob creates a new job.
-func (s *Store) AddJob(j Job) (Job, error) {
+func (s *SQLiteStore) AddJob(j Job) (Job, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if j.Status == "" {
 		j.Status = "Not Applied"
@@ -87,7 +87,7 @@ func (s *Store) AddJob(j Job) (Job, error) {
 }
 
 // UpdateJob updates fields of an existing job. Only non-zero fields are applied.
-func (s *Store) UpdateJob(id int64, updates map[string]any) (Job, error) {
+func (s *SQLiteStore) UpdateJob(id int64, updates map[string]any) (Job, error) {
 	if len(updates) == 0 {
 		return s.GetJob(id)
 	}
@@ -164,7 +164,7 @@ func (s *Store) UpdateJob(id int64, updates map[string]any) (Job, error) {
 
 // DeleteJob deletes a job by ID. History is automatically cascade-deleted
 // by the ON DELETE CASCADE foreign key on history.job_id.
-func (s *Store) DeleteJob(id int64) error {
+func (s *SQLiteStore) DeleteJob(id int64) error {
 	result, err := s.Exec("DELETE FROM jobs WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("delete job: %w", err)
@@ -179,7 +179,7 @@ func (s *Store) DeleteJob(id int64) error {
 
 // SearchJobs performs full-text search across company, position, notes, location, contact, and category.
 // Optionally filters by status and/or category on top of the FTS results.
-func (s *Store) SearchJobs(query string, status, category string) ([]Job, error) {
+func (s *SQLiteStore) SearchJobs(query string, status, category string) ([]Job, error) {
 	var conditions []string
 	var args []any
 
@@ -208,7 +208,7 @@ func (s *Store) SearchJobs(query string, status, category string) ([]Job, error)
 }
 
 // FilterJobs returns jobs filtered by status and/or category.
-func (s *Store) FilterJobs(status, category string) ([]Job, error) {
+func (s *SQLiteStore) FilterJobs(status, category string) ([]Job, error) {
 	var conditions []string
 	var args []any
 
@@ -236,14 +236,14 @@ func (s *Store) FilterJobs(status, category string) ([]Job, error) {
 }
 
 // JobCount returns the total number of jobs.
-func (s *Store) JobCount() (int, error) {
+func (s *SQLiteStore) JobCount() (int, error) {
 	var count int
 	err := s.Get(&count, "SELECT COUNT(*) FROM jobs")
 	return count, err
 }
 
 // JobExists returns true if a job with the given URL is already tracked.
-func (s *Store) JobExists(url string) (bool, error) {
+func (s *SQLiteStore) JobExists(url string) (bool, error) {
 	var count int
 	err := s.Get(&count, "SELECT COUNT(*) FROM jobs WHERE url = ?", url)
 	return count > 0, err

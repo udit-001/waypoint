@@ -7,7 +7,7 @@ import (
 )
 
 // GetCategories returns all categories.
-func (s *Store) GetCategories() ([]Category, error) {
+func (s *SQLiteStore) GetCategories() ([]Category, error) {
 	var cats []Category
 	err := s.Select(&cats, "SELECT id, name FROM categories ORDER BY name")
 	return cats, err
@@ -21,7 +21,7 @@ type CategoryWithCount struct {
 }
 
 // GetCategoriesWithCounts returns all categories with job counts in one query.
-func (s *Store) GetCategoriesWithCounts() ([]CategoryWithCount, error) {
+func (s *SQLiteStore) GetCategoriesWithCounts() ([]CategoryWithCount, error) {
 	var cats []CategoryWithCount
 	err := s.Select(&cats, `SELECT c.id, c.name, COUNT(j.id) as job_count
 		FROM categories c
@@ -32,7 +32,7 @@ func (s *Store) GetCategoriesWithCounts() ([]CategoryWithCount, error) {
 }
 
 // GetCategoryByID returns a category by its ID.
-func (s *Store) GetCategoryByID(id int64) (Category, error) {
+func (s *SQLiteStore) GetCategoryByID(id int64) (Category, error) {
 	var c Category
 	err := s.Get(&c, "SELECT id, name FROM categories WHERE id = ?", id)
 	if err != nil {
@@ -42,7 +42,7 @@ func (s *Store) GetCategoryByID(id int64) (Category, error) {
 }
 
 // AddCategory creates a new category.
-func (s *Store) AddCategory(name string) (Category, error) {
+func (s *SQLiteStore) AddCategory(name string) (Category, error) {
 	result, err := s.Exec("INSERT INTO categories (name) VALUES (?)", name)
 	if err != nil {
 		return Category{}, fmt.Errorf("add category: %w", err)
@@ -53,7 +53,7 @@ func (s *Store) AddCategory(name string) (Category, error) {
 
 // DeleteCategory removes a category by ID.
 // Jobs in the deleted category are moved to uncategorized (NULL category_id).
-func (s *Store) DeleteCategory(id int64) error {
+func (s *SQLiteStore) DeleteCategory(id int64) error {
 	return s.tx(func(tx *sqlx.Tx) error {
 		if _, err := tx.Exec("UPDATE jobs SET category_id = NULL WHERE category_id = ?", id); err != nil {
 			return fmt.Errorf("reassign jobs: %w", err)
@@ -71,7 +71,7 @@ func (s *Store) DeleteCategory(id int64) error {
 }
 
 // RenameCategory renames a category by ID.
-func (s *Store) RenameCategory(id int64, newName string) error {
+func (s *SQLiteStore) RenameCategory(id int64, newName string) error {
 	result, err := s.Exec("UPDATE categories SET name = ? WHERE id = ?", newName, id)
 	if err != nil {
 		return fmt.Errorf("rename category: %w", err)
@@ -84,14 +84,14 @@ func (s *Store) RenameCategory(id int64, newName string) error {
 }
 
 // HasCategory checks if a category exists by name.
-func (s *Store) HasCategory(name string) (bool, error) {
+func (s *SQLiteStore) HasCategory(name string) (bool, error) {
 	var count int
 	err := s.Get(&count, "SELECT COUNT(*) FROM categories WHERE name = ?", name)
 	return count > 0, err
 }
 
 // CategoryIDByName resolves a category name to its ID. Returns 0 if not found.
-func (s *Store) CategoryIDByName(name string) (int64, error) {
+func (s *SQLiteStore) CategoryIDByName(name string) (int64, error) {
 	var id int64
 	err := s.Get(&id, "SELECT id FROM categories WHERE name = ?", name)
 	if err != nil {
@@ -101,7 +101,7 @@ func (s *Store) CategoryIDByName(name string) (int64, error) {
 }
 
 // CategoryJobCount returns the number of jobs in a category by ID.
-func (s *Store) CategoryJobCount(id int64) (int, error) {
+func (s *SQLiteStore) CategoryJobCount(id int64) (int, error) {
 	var count int
 	err := s.Get(&count, "SELECT COUNT(*) FROM jobs WHERE category_id = ?", id)
 	return count, err

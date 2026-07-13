@@ -10,7 +10,7 @@ type Stats struct {
 
 // GetStats returns job counts grouped by status and category.
 // Uses aggregate queries instead of loading all jobs into memory.
-func (s *Store) GetStats() (Stats, error) {
+func (s *SQLiteStore) GetStats() (Stats, error) {
 	var total int
 	if err := s.Get(&total, "SELECT COUNT(*) FROM jobs"); err != nil {
 		return Stats{}, err

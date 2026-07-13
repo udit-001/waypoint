@@ -47,7 +47,7 @@ Examples:
 		defer s.Close()
 
 		// Run migrations to create schema
-		if err := db.RunMigrations(s.DB, storePath); err != nil {
+		if err := s.RunMigrations(storePath); err != nil {
 			return fmt.Errorf("database migration failed: %w", err)
 		}
 

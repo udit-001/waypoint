@@ -21,7 +21,7 @@ func defaultDBPath() string {
 }
 
 var (
-	store     *db.Store
+	store     db.Store
 	storePath string
 	jsonOut   bool
 )
