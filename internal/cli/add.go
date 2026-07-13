@@ -67,7 +67,7 @@ Examples:
 			job.ReminderDate = &addFlags.reminderDate
 		}
 
-		created, err := store.AddJob(job)
+		created, err := db.IntakeAddJob(store, job)
 		if err != nil {
 			return formatError("failed to add job", err)
 		}

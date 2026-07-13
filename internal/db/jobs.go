@@ -3,7 +3,6 @@ package db
 import (
 	"fmt"
 	"strings"
-	"time"
 )
 
 const jobColumns = `j.id, j.company, j.position, j.date, j.applied_date, j.status, COALESCE(j.category_id, 0), COALESCE(c.name, ''), j.salary, j.location, j.contact, j.url, j.notes, j.reminder_date, j.created_at, j.updated_at`
@@ -50,13 +49,9 @@ func (s *SQLiteStore) GetJob(id int64) (Job, error) {
 	return scanJob(row)
 }
 
-// AddJob creates a new job.
-func (s *SQLiteStore) AddJob(j Job) (Job, error) {
-	now := time.Now().UTC().Format(time.RFC3339)
-	if j.Status == "" {
-		j.Status = "Not Applied"
-	}
-
+// InsertJob inserts a job row as-is. No defaults, no history —
+// use IntakeAddJob for the full write workflow.
+func (s *SQLiteStore) InsertJob(j Job) (Job, error) {
 	var categoryID any
 	if j.CategoryID != 0 {
 		categoryID = j.CategoryID
@@ -67,99 +62,56 @@ func (s *SQLiteStore) AddJob(j Job) (Job, error) {
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		j.Company, j.Position, j.Date, j.AppliedDate, j.Status, categoryID,
 		j.Salary, j.Location, j.Contact, j.URL, j.Notes, j.ReminderDate,
-		now, now,
+		j.CreatedAt, j.UpdatedAt,
 	)
 	if err != nil {
-		return Job{}, fmt.Errorf("add job: %w", err)
+		return Job{}, fmt.Errorf("insert job: %w", err)
 	}
 
 	id, _ := result.LastInsertId()
 	j.ID = id
-	j.CreatedAt = now
-	j.UpdatedAt = now
-
-	// Record history
-	if err := s.AddHistory(id, "Created", "", j.Status); err != nil {
-		return Job{}, fmt.Errorf("add history: %w", err)
-	}
-
-	return s.GetJob(id)
+	return j, nil
 }
 
-// UpdateJob updates fields of an existing job. Only non-zero fields are applied.
-func (s *SQLiteStore) UpdateJob(id int64, updates map[string]any) (Job, error) {
-	if len(updates) == 0 {
-		return s.GetJob(id)
+// UpdateJobFields executes a raw UPDATE on the jobs table. No history
+// recording, no status tracking — use IntakeUpdateJob for the full
+// write workflow. Expects "updated_at" in the updates map.
+func (s *SQLiteStore) UpdateJobFields(id int64, updates map[string]any) error {
+	columnMap := map[string]string{
+		"company":       "company",
+		"position":      "position",
+		"date":          "date",
+		"applied_date":  "applied_date",
+		"status":        "status",
+		"category_id":   "category_id",
+		"salary":        "salary",
+		"location":      "location",
+		"contact":       "contact",
+		"url":           "url",
+		"notes":         "notes",
+		"reminder_date": "reminder_date",
+		"updated_at":    "updated_at",
 	}
 
-	// Fetch the old job for history tracking
-	oldJob, err := s.GetJob(id)
-	if err != nil {
-		return Job{}, fmt.Errorf("get job for update: %w", err)
-	}
-
-	// Build SET clause
 	var setClauses []string
 	var args []any
-
-	columnMap := map[string]string{
-		"company":      "company",
-		"position":     "position",
-		"date":         "date",
-		"applied_date": "applied_date",
-		"status":       "status",
-		"category_id":  "category_id",
-		"salary":       "salary",
-		"location":     "location",
-		"contact":      "contact",
-		"url":          "url",
-		"notes":        "notes",
-		"reminder_date": "reminder_date",
-	}
-
-	// Track status change for history
-	var oldStatus, newStatus string
-	var statusChanged bool
-
 	for key, col := range columnMap {
 		if val, ok := updates[key]; ok {
 			setClauses = append(setClauses, col+" = ?")
 			args = append(args, val)
-
-			if key == "status" {
-				oldStatus = oldJob.Status
-				newStatus = fmt.Sprint(val)
-				statusChanged = oldStatus != newStatus
-			}
 		}
 	}
 
 	if len(setClauses) == 0 {
-		return oldJob, nil
+		return nil
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339)
-	setClauses = append(setClauses, "updated_at = ?")
-	args = append(args, now)
 	args = append(args, id)
-
 	query := fmt.Sprintf("UPDATE jobs SET %s WHERE id = ?", strings.Join(setClauses, ", "))
 	if _, err := s.Exec(query, args...); err != nil {
-		return Job{}, fmt.Errorf("update job: %w", err)
+		return fmt.Errorf("update job: %w", err)
 	}
-
-	// Record history
-	if statusChanged {
-		if err := s.AddHistory(id, "Status", oldStatus, newStatus); err != nil {
-			return Job{}, fmt.Errorf("add status history: %w", err)
-		}
-	} else {
-		if err := s.AddHistory(id, "Updated", "", ""); err != nil {
-			return Job{}, fmt.Errorf("add update history: %w", err)
-		}
-	}
-
-	return s.GetJob(id)
+	return nil
 }
 
 // DeleteJob deletes a job by ID. History is automatically cascade-deleted
