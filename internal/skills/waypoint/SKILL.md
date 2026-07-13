@@ -9,6 +9,8 @@ description: Manage job applications with the waypoint CLI. Use when the user me
 
 When the user wants to find new jobs or see what's new — `read` [scraping](references/scraping.md). Promoted results enter the pipeline at Step 2 (Enrich).
 
+Scrape is the primary path. Do not use Exa for job discovery — the scraping reference instructs when to fall back to Exa if no relevant scrapers exist or all return empty.
+
 ## Pipeline
 
 ### Step 1 — Enroll
@@ -96,7 +98,7 @@ Suggest a natural next step:
 
 ## Data sources
 
-- **Exa MCP** → `read` [data/exa-search](references/data/exa-search.md). Save via `jobs update --contact` / `--notes`. If exa not connected, offer setup — see [data/exa-setup](references/data/exa-setup.md)
+- **Exa MCP** → `read` [data/exa-search](references/data/exa-search.md). Save via `jobs update --contact` / `--notes`. If exa not connected, offer setup — see [data/exa-setup](references/data/exa-setup.md). Not for primary job discovery — use the Discovery section for that
 - **PDFs** → `read` [data/pdf-extract](references/data/pdf-extract.md) if `pdftotext` available
 - **Job parsing** → `read` [data/job-extract](references/data/job-extract.md)
 
@@ -118,7 +120,7 @@ Suggest a natural next step:
 | Ref | Output |
 |-----|--------|
 | [data/job-extract](references/data/job-extract.md) | parse job from URL/PDF/text → jobs add |
-| [data/exa-search](references/data/exa-search.md) | company/people/news research (if exa MCP) |
+| [data/exa-search](references/data/exa-search.md) | company/people/news research on tracked jobs (not discovery) |
 | [data/pdf-extract](references/data/pdf-extract.md) | extract text from PDFs (if pdftotext) |
 
 Skill IDs: `email-generator` `cover-letter` `resume-optimizer` `interview-prep` `career-summary` `statement-of-purpose`
