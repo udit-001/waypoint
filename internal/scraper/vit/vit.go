@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"math/rand"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -23,7 +21,9 @@ const (
 	sourceName  = "VIT Vellore"
 )
 
-type VIT struct{}
+type VIT struct {
+	Fetcher scraper.Fetcher
+}
 
 func init() {
 	scraper.Register(VIT{})
@@ -39,7 +39,7 @@ func (n VIT) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.Res
 	var allResults []scraper.Result
 
 	for _, cat := range categories {
-		results, err := fetchJobs(ctx, cat)
+		results, err := n.fetchJobs(ctx, cat)
 		if err != nil {
 			continue
 		}
@@ -61,7 +61,15 @@ type zwayamJob struct {
 	CreatedDate     int64    `json:"createdDate"`
 }
 
-func fetchJobs(ctx context.Context, category string) ([]scraper.Result, error) {
+func (n VIT) fetchJobs(ctx context.Context, category string) ([]scraper.Result, error) {
+	if n.Fetcher != nil {
+		body, err := n.Fetcher.Fetch(ctx, apiURL)
+		if err != nil {
+			return nil, err
+		}
+		return parseZwayamJobs(body, category)
+	}
+
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	writer.WriteField("id", companyID)
@@ -74,99 +82,67 @@ func fetchJobs(ctx context.Context, category string) ([]scraper.Result, error) {
 	writer.WriteField("fieldValue", category)
 	writer.Close()
 
-	const maxRetries = 6
-	delay := time.Second
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Referer", "https://careers.vit.ac.in/")
 
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, body)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-		req.Header.Set("Accept", "application/json, text/plain, */*")
-		req.Header.Set("Content-Type", writer.FormDataContentType())
-		req.Header.Set("Referer", "https://careers.vit.ac.in/")
+	raw, err := scraper.DoWithRetry(ctx, req)
+	if err != nil {
+		return nil, err
+	}
 
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return nil, err
-		}
+	return parseZwayamJobs(raw, category)
+}
 
-		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
-			resp.Body.Close()
-			if attempt == maxRetries {
-				return nil, fmt.Errorf("request failed: %d", resp.StatusCode)
-			}
-			jitter := time.Duration(rand.Intn(500)) * time.Millisecond
-			select {
-			case <-time.After(delay + jitter):
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-			delay *= 2
-			if delay > 10*time.Second {
-				delay = 10 * time.Second
-			}
+func parseZwayamJobs(raw string, category string) ([]scraper.Result, error) {
+	var jobs []struct {
+		Source zwayamJob `json:"_source"`
+	}
+	if err := json.Unmarshal([]byte(raw), &jobs); err != nil {
+		return nil, fmt.Errorf("parse JSON: %w", err)
+	}
+
+	var results []scraper.Result
+	for _, j := range jobs {
+		s := j.Source
+		if s.JobTitle == "" {
 			continue
 		}
 
-		if resp.StatusCode != 200 {
-			resp.Body.Close()
-			return nil, fmt.Errorf("request failed: %d", resp.StatusCode)
+		createdDate := ""
+		if s.CreatedDate > 0 {
+			createdDate = time.UnixMilli(s.CreatedDate).Format("2006-01-02")
 		}
 
-		raw, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			return nil, err
+		skills := s.SkillSet
+		if len(s.MandatorySkills) > 0 {
+			skills = strings.Join(s.MandatorySkills, ", ")
 		}
 
-		var jobs []struct {
-			Source zwayamJob `json:"_source"`
-		}
-		if err := json.Unmarshal(raw, &jobs); err != nil {
-			return nil, fmt.Errorf("parse JSON: %w", err)
+		url := careersBase + s.JobURL
+		if !strings.HasPrefix(s.JobURL, "http") && !strings.HasPrefix(s.JobURL, "/") {
+			url = careersBase + s.JobURL
 		}
 
-		var results []scraper.Result
-		for _, j := range jobs {
-			s := j.Source
-			if s.JobTitle == "" {
-				continue
-			}
-
-			createdDate := ""
-			if s.CreatedDate > 0 {
-				createdDate = time.UnixMilli(s.CreatedDate).Format("2006-01-02")
-			}
-
-			skills := s.SkillSet
-			if len(s.MandatorySkills) > 0 {
-				skills = strings.Join(s.MandatorySkills, ", ")
-			}
-
-			url := careersBase + s.JobURL
-			if !strings.HasPrefix(s.JobURL, "http") && !strings.HasPrefix(s.JobURL, "/") {
-				url = careersBase + s.JobURL
-			}
-
-			results = append(results, scraper.Result{
-				ID:       fmt.Sprintf("%d", s.JobCode),
-				Title:    s.JobTitle,
-				Company:  sourceName,
-				Location: s.Location,
-				Date:     createdDate,
-				URL:      url,
-				Metadata: map[string]string{
-					"experience": s.ExperienceUI,
-					"skills":     skills,
-					"category":   category,
-				},
-			})
-		}
-
-		return results, nil
+		results = append(results, scraper.Result{
+			ID:       fmt.Sprintf("%d", s.JobCode),
+			Title:    s.JobTitle,
+			Company:  sourceName,
+			Location: s.Location,
+			Date:     createdDate,
+			URL:      url,
+			Metadata: map[string]string{
+				"experience": s.ExperienceUI,
+				"skills":     skills,
+				"category":   category,
+			},
+		})
 	}
 
-	return nil, fmt.Errorf("request failed after max retries")
+	return results, nil
 }

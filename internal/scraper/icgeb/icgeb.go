@@ -48,7 +48,7 @@ func (n ICGEB) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.R
 type googlebotFetcher struct{}
 
 func (g *googlebotFetcher) Fetch(ctx context.Context, url string) (string, error) {
-	return fetchWithUA(ctx, url, googlebotUA)
+	return (&scraper.HTTPFetcher{UserAgent: googlebotUA}).Fetch(ctx, url)
 }
 
 func parseArticles(body string) []scraper.Result {
