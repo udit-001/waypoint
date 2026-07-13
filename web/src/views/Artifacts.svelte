@@ -7,6 +7,7 @@ import { setPage } from '../stores/page.svelte.js';
   import * as api from '../stores/api.svelte.js';
 
   import { skillLabel } from '../stores/skillMeta.js';
+  import { formatDate } from '../lib/format.js';
 
   let artifactsList = $state([]);
   let jobMap = $state({});
@@ -24,11 +25,6 @@ import { setPage } from '../stores/page.svelte.js';
     jobMap = map;
   });
 
-  function formatDate(d) {
-    if (!d) return '';
-    try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-    catch { return d; }
-  }
 </script>
 
 {#if api.artifacts.loading && artifactsList.length === 0}

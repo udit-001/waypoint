@@ -1,16 +1,12 @@
 <script>
   import { getFilter } from '../stores/filter.svelte.js';
   import * as api from '../stores/api.svelte.js';
+  import { applyFilter } from '../lib/filter.js';
 
   const filter = getFilter();
 
   let totalJobs = $derived((api.jobs.value || []).length);
-  let filteredJobs = $derived.by(() => {
-    let result = api.jobs.value || [];
-    if (filter.category) result = result.filter(j => j.category === filter.category);
-    if (filter.status) result = result.filter(j => j.status === filter.status);
-    return result;
-  });
+  let filteredJobs = $derived(applyFilter(api.jobs.value, filter));
 
   function hasActiveFilter() {
     return filter.category || filter.status;

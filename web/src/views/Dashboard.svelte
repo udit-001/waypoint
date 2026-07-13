@@ -2,6 +2,10 @@
 import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { deadlineClass, deadlineLabel } from '../lib/deadline.js';
+  import { parseSalary } from '../lib/salary.js';
+  import { formatDateTime } from '../lib/format.js';
+  import { STATUSES } from '../lib/status.js';
+  import { applyFilter } from '../lib/filter.js';
   import Spinner from '../components/Spinner.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
@@ -24,17 +28,7 @@ import { setPage } from '../stores/page.svelte.js';
   let allHistory = $state([]);
   let loaded = $state(false);
 
-  // Filtered jobs based on selected category and status
-  let filteredJobs = $derived.by(() => {
-    let result = jobs || [];
-    if (filter.category) {
-      result = result.filter(j => j.category === filter.category);
-    }
-    if (filter.status) {
-      result = result.filter(j => j.status === filter.status);
-    }
-    return result;
-  });
+  let filteredJobs = $derived(applyFilter(jobs, filter));
 
   let hasActiveFilter = $derived(filter.category || filter.status);
 
@@ -55,29 +49,24 @@ import { setPage } from '../stores/page.svelte.js';
 
   // Pipeline chart data
   let pipelineData = $derived.by(() => {
-    const stages = ['Not Applied', 'Applied', 'Offer', 'Rejected', 'Withdrawn'];
-    return stages.filter(s => statusCounts[s] > 0).map(s => ({ stage: s, count: statusCounts[s] }));
+    return STATUSES.filter(s => statusCounts[s] > 0).map(s => ({ stage: s, count: statusCounts[s] }));
   });
 
-  // Salary chart data — detects monthly vs annual and normalises to monthly
+  // Salary chart data — parseSalary normalises to monthly (k-units) + currency
   let salaryData = $derived.by(() => {
     return (jobs || [])
-      .filter(j => j.salary && j.salary.trim())
       .map(j => {
         const parsed = parseSalary(j.salary);
-        const unit = detectSalaryUnit(j.salary);
-        // Convert annual to monthly so all entries share a common axis
-        if (unit === 'annual' && parsed.mid > 0) {
-          parsed.low = Math.round(parsed.low / 12);
-          parsed.high = Math.round(parsed.high / 12);
-          parsed.mid = Math.round(parsed.mid / 12);
-        }
-        return { ...j, ...parsed, unit };
+        return parsed ? { ...j, ...parsed } : null;
       })
+      .filter(Boolean)
       .filter(j => j.mid > 0)
       .sort((a, b) => b.mid - a.mid)
       .slice(0, 12);
   });
+
+  // Salaries are single-currency per user; the axis label uses the set's currency.
+  let salaryCurrency = $derived(salaryData[0]?.currency ?? '');
 
   // Week-over-week
   let thisWeek = $derived.by(() => {
@@ -271,7 +260,7 @@ import { setPage } from '../stores/page.svelte.js';
             callbacks: {
               label: (ctx) => {
                 const raw = ctx.raw;
-                const sym = '₹';
+                const sym = salaryCurrency;
                 return `${sym}${raw[0]}k – ${sym}${raw[1]}k`;
               }
             }
@@ -284,7 +273,7 @@ import { setPage } from '../stores/page.svelte.js';
             ticks: {
               color: textColor,
               callback: v => {
-                const sym = '₹';
+                const sym = salaryCurrency;
                 return `${sym}${v}k`;
               },
               padding: 4,
@@ -303,98 +292,6 @@ import { setPage } from '../stores/page.svelte.js';
     chartInstances.push(chart);
   }
 
-  function parseSalary(str) {
-    if (!str) return { low: 0, high: 0, mid: 0 };
-
-    // Handle "OR" patterns (e.g., "Rs. 37,000 + HRA (GATE/NET) OR Rs. 31,000 + HRA")
-    if (/\s+OR\s+/i.test(str)) {
-      const parts = str.split(/\s+OR\s+/i);
-      const parsedOptions = parts.map(p => parseSalary(p)).filter(p => p.mid > 0);
-      if (parsedOptions.length > 0) {
-        const lows = parsedOptions.map(p => p.low);
-        const highs = parsedOptions.map(p => p.high);
-        // Pick the best (highest mid) as the primary, show full range
-        const best = parsedOptions.reduce((a, b) => a.mid > b.mid ? a : b);
-        return {
-          low: Math.min(...lows),
-          high: Math.max(...highs),
-          mid: best.mid,
-        };
-      }
-    }
-
-    // Normalize: strip currency symbols, thousand-separator commas, suffixes like "+ HRA"
-    let clean = str
-      .replace(/Rs\.?\s*/gi, '')
-      .replace(/\$\s*/g, '')
-      .replace(/,\s*/g, '')
-      .replace(/\s*\+.*/g, '')
-      .trim();
-
-    // Try matching k-format first (e.g., "70k-100k", "$100k") — backward compatible
-    const kMatch = clean.match(/(\d+)\s*k/gi);
-    if (kMatch) {
-      const nums = kMatch.map(s => parseInt(s.match(/(\d+)/)[1]));
-      if (nums.length >= 2) {
-        return { low: nums[0], high: nums[1], mid: Math.round((nums[0] + nums[1]) / 2) };
-      }
-      return { low: nums[0], high: nums[0], mid: nums[0] };
-    }
-
-    // Extract all numbers, then decide what they mean
-    const allNums = clean.match(/\d+/g);
-    if (!allNums) return { low: 0, high: 0, mid: 0 };
-
-    const vals = allNums.map(s => parseInt(s, 10));
-
-    // Check for a range like "25000-35000" or "25000 – 35000"
-    const rangeMatch = clean.match(/(\d+)\s*[-–]\s*(\d+)/);
-    if (rangeMatch) {
-      let low = parseInt(rangeMatch[1], 10);
-      let high = parseInt(rangeMatch[2], 10);
-      // Convert full INR (e.g., 37000) to k
-      if (low > 1000) low = Math.round(low / 1000);
-      if (high > 1000) high = Math.round(high / 1000);
-      if (low > high) [low, high] = [high, low]; // swap if reversed
-      return { low, high, mid: Math.round((low + high) / 2) };
-    }
-
-    // Single number: pick the most salary-like candidate (largest value)
-    const salaryNum = Math.max(...vals);
-    let val = salaryNum;
-    if (val > 1000) val = Math.round(val / 1000);
-    return { low: val, high: val, mid: val };
-  }
-
-  // detectSalaryUnit classifies a raw salary string as monthly or annual.
-  // Used to normalise all entries to monthly for the chart.
-  function detectSalaryUnit(str) {
-    // Monthly signals: Indian Rs./HRA format with comma thousands
-    if (/Rs\./i.test(str) || /\+\s*HRA/i.test(str)) return 'monthly';
-    // Monthly signals: comma-formatted Indian number (e.g. "37,000")
-    if (/\d{1,2},\d{3}/.test(str)) return 'monthly';
-    // ₹ without annual qualifier → monthly (Indian salaries default monthly)
-    if (/₹/.test(str) && !/LPA|lakh|\/yr|\/year|\bPA\b/i.test(str)) return 'monthly';
-    // Annual signals: $, LPA, lakh, /year, /yr, PA, L as lakh suffix
-    if (/\$/.test(str)) return 'annual';
-    if (/LPA|lakh|\/yr|\/year|\bPA\b/i.test(str)) return 'annual';
-    // k-format without any Rs./₹ → annual (e.g. "160k-200k", "100k")
-    if (/\d+\s*k/i.test(str)) return 'annual';
-    // No prefix → ambiguous, default annual
-    return 'annual';
-  }
-
-  function formatDate(d) {
-    if (!d) return '';
-    try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-    catch { return d; }
-  }
-
-  function formatDateTime(d) {
-    if (!d) return '';
-    try { return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-    catch { return d; }
-  }
 </script>
 
 {#if !loaded}
