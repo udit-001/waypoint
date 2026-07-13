@@ -2,6 +2,22 @@
 
 Scrape job portals, review new results in **staging**, then promote picks to tracked jobs or dismiss rejects.
 
+## Entry condition
+
+Before running scrapers, check whether any are relevant:
+
+```bash
+waypoint scrape list --json
+waypoint profile show --json
+```
+
+Match the user's `industry` against each scraper's `categories`.
+
+- **Zero relevant scrapers** → stop. Fall back to Exa — `read` [data/exa-search](references/data/exa-search.md) and search manually.
+- **Relevant scrapers exist** → proceed to Flow below. If every relevant scraper returns 0 results at Step 2, fall back to Exa the same way.
+
+**Done when**: entry gate passed (relevant scrapers found) or fallback decision made.
+
 ## Flow
 
 ### Step 1 — Select scrapers
