@@ -7,8 +7,8 @@ type Store interface {
 	// Jobs
 	GetJobs() ([]Job, error)
 	GetJob(id int64) (Job, error)
-	AddJob(j Job) (Job, error)
-	UpdateJob(id int64, updates map[string]any) (Job, error)
+	InsertJob(j Job) (Job, error)
+	UpdateJobFields(id int64, updates map[string]any) error
 	DeleteJob(id int64) error
 	SearchJobs(query string, status, category string) ([]Job, error)
 	FilterJobs(status, category string) ([]Job, error)

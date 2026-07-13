@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/SwatiBio/waypoint/internal/db"
 	"github.com/spf13/cobra"
 )
 
@@ -78,7 +79,7 @@ Examples:
 			return fmt.Errorf("no fields to update — use --flags to specify changes")
 		}
 
-		updated, err := store.UpdateJob(id, updates)
+		updated, err := db.IntakeUpdateJob(store, id, updates)
 		if err != nil {
 			return formatError("failed to update job", err)
 		}

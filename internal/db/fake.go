@@ -71,26 +71,18 @@ func (f *FakeStore) GetJob(id int64) (Job, error) {
 	return j, nil
 }
 
-func (f *FakeStore) AddJob(j Job) (Job, error) {
+func (f *FakeStore) InsertJob(j Job) (Job, error) {
 	f.nextJobID++
 	j.ID = f.nextJobID
-	if j.Status == "" {
-		j.Status = "Not Applied"
-	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	j.CreatedAt = now
-	j.UpdatedAt = now
 	f.Jobs[j.ID] = j
-	f.AddHistory(j.ID, "Created", "", j.Status)
 	return j, nil
 }
 
-func (f *FakeStore) UpdateJob(id int64, updates map[string]any) (Job, error) {
+func (f *FakeStore) UpdateJobFields(id int64, updates map[string]any) error {
 	j, ok := f.Jobs[id]
 	if !ok {
-		return Job{}, fmt.Errorf("job %d not found", id)
+		return fmt.Errorf("job %d not found", id)
 	}
-	oldStatus := j.Status
 	if v, ok := updates["company"]; ok {
 		j.Company = fmt.Sprint(v)
 	}
@@ -120,14 +112,11 @@ func (f *FakeStore) UpdateJob(id int64, updates map[string]any) (Job, error) {
 	if v, ok := updates["notes"]; ok {
 		j.Notes = fmt.Sprint(v)
 	}
-	j.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	f.Jobs[id] = j
-	if oldStatus != j.Status {
-		f.AddHistory(id, "Status", oldStatus, j.Status)
-	} else {
-		f.AddHistory(id, "Updated", "", "")
+	if v, ok := updates["updated_at"]; ok {
+		j.UpdatedAt = fmt.Sprint(v)
 	}
-	return j, nil
+	f.Jobs[id] = j
+	return nil
 }
 
 func (f *FakeStore) DeleteJob(id int64) error {
