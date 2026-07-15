@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/SwatiBio/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/db"
 	"github.com/spf13/cobra"
 )
 

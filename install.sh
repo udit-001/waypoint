@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-REPO="SwatiBio/waypoint"
+REPO="udit-001/waypoint"
 BIN="waypoint"
 VERSION="${1:-latest}"
 

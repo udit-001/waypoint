@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/SwatiBio/waypoint/internal/server"
+	"github.com/udit-001/waypoint/internal/server"
 	"github.com/spf13/cobra"
 )
 

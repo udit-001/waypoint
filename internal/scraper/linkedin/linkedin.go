@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/SwatiBio/waypoint/internal/scraper"
+	"github.com/udit-001/waypoint/internal/scraper"
 )
 
 const (

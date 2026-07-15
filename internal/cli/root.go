@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/SwatiBio/waypoint/internal/db"
-	"github.com/SwatiBio/waypoint/internal/version"
+	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/version"
 	"github.com/spf13/cobra"
 )
 

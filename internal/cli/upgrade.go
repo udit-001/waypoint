@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/SwatiBio/waypoint/internal/version"
+	"github.com/udit-001/waypoint/internal/version"
 )
 
 var upgradeForce bool
@@ -23,7 +23,7 @@ func init() {
 }
 
 const (
-	ghOwner = "SwatiBio"
+	ghOwner = "udit-001"
 	ghRepo  = "waypoint"
 )
 
@@ -35,7 +35,7 @@ var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
 	Short: "Upgrade waypoint to the latest version via 'go install'",
 	Long: `Upgrade waypoint to the latest release by running:
-  go install github.com/SwatiBio/waypoint/cmd/waypoint@latest
+  go install github.com/udit-001/waypoint/cmd/waypoint@latest
 
 This compiles from source — no binary download, no Windows SmartScreen flags.
 
@@ -161,12 +161,21 @@ func semverCompare(a, b string) int {
 			return 1
 		}
 	}
-	// Longer version wins (1.0.0 > 1.0)
+	// Remaining components of the longer version — treat missing as 0.
+	// 1.0 == 1.0.0, but 1.0.1 > 1.0
 	switch {
 	case len(aVer) < len(bVer):
-		return -1
+		for i := len(aVer); i < len(bVer); i++ {
+			if bVer[i] > 0 {
+				return -1
+			}
+		}
 	case len(aVer) > len(bVer):
-		return 1
+		for i := len(bVer); i < len(aVer); i++ {
+			if aVer[i] > 0 {
+				return 1
+			}
+		}
 	}
 
 	// Numeric versions are equal — compare pre-release.

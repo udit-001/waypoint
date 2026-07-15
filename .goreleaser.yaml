@@ -10,7 +10,7 @@ builds:
   - main: ./cmd/waypoint/main.go
     binary: waypoint
     ldflags:
-      - -s -w -X github.com/SwatiBio/waypoint/internal/version.Version={{ .Version }}
+      - -s -w -X github.com/udit-001/waypoint/internal/version.Version={{ .Version }}
     env:
       - CGO_ENABLED=0
     goos:
@@ -42,5 +42,5 @@ changelog:
 
 release:
   github:
-    owner: SwatiBio
+    owner: udit-001
     name: waypoint
