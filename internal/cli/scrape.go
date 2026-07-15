@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/spf13/cobra"
 	"github.com/udit-001/waypoint/internal/scraper"
 	_ "github.com/udit-001/waypoint/internal/scraper/bitspilani"      // activate BITS Pilani scraper
 	_ "github.com/udit-001/waypoint/internal/scraper/ccmb"            // activate CCMB scraper
@@ -27,7 +28,6 @@ import (
 	_ "github.com/udit-001/waypoint/internal/scraper/niab"            // activate NIAB scraper
 	_ "github.com/udit-001/waypoint/internal/scraper/nipgr"           // activate NIPGR scraper
 	_ "github.com/udit-001/waypoint/internal/scraper/vit"             // activate VIT Vellore scraper
-	"github.com/spf13/cobra"
 )
 
 func defaultStagingPath() string {
@@ -289,38 +289,101 @@ Examples:
 
 // --- scrape dismiss ---
 
+var scrapeDismissFlags struct {
+	all bool
+}
+
 var scrapeDismissCmd = &cobra.Command{
-	Use:   "dismiss <url>",
-	Short: "Dismiss a staged result",
-	Long: `Mark a staged scrape result as dismissed so it doesn't reappear
+	Use:   "dismiss [<url>...]",
+	Short: "Dismiss staged results",
+	Long: `Mark staged scrape results as dismissed so they don't reappear
 on future scrape runs.
 
-Examples:
-  waypoint scrape dismiss "https://www.ncbs.res.in/jobportal/node/142669"`,
-	Args: cobra.ExactArgs(1),
+  waypoint scrape dismiss "https://www.ncbs.res.in/jobportal/node/142669"
+  waypoint scrape dismiss "url1" "url2" "url3"
+  waypoint scrape dismiss --all
+
+--all dismisses every "new" status result. Entries that are "dismissed"
+or "imported" are skipped.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		legacyStagingHint()
 
-		url := args[0]
+		if scrapeDismissFlags.all {
+			results, err := store.ListStaging("new")
+			if err != nil {
+				return formatError("list staging", err)
+			}
 
-		_, ok, err := store.GetStaged(url)
-		if err != nil {
-			return formatError("check staging", err)
-		}
-		if !ok {
-			return fmt.Errorf("no staged result with URL %q", url)
-		}
+			dismissed := 0
+			for _, r := range results {
+				if err := store.SetStagingStatus(r.Result.URL, "dismissed"); err != nil {
+					return formatError("dismiss "+r.Result.URL, err)
+				}
+				dismissed++
+			}
 
-		if err := store.SetStagingStatus(url, "dismissed"); err != nil {
-			return formatError("dismiss", err)
-		}
+			if jsonOut {
+				printJSON(map[string]int{"dismissed": dismissed})
+				return nil
+			}
 
-		if jsonOut {
-			printJSON(map[string]string{"status": "dismissed", "url": url})
+			fmt.Printf("  Dismissed %d results.\n", dismissed)
 			return nil
 		}
 
-		fmt.Printf("  ✓ Dismissed: %s\n", url)
+		if len(args) == 0 {
+			return fmt.Errorf("provide at least one URL or use --all")
+		}
+
+		// Single URL — backward compatible path.
+		if len(args) == 1 {
+			url := args[0]
+
+			_, ok, err := store.GetStaged(url)
+			if err != nil {
+				return formatError("check staging", err)
+			}
+			if !ok {
+				return fmt.Errorf("no staged result with URL %q", url)
+			}
+
+			if err := store.SetStagingStatus(url, "dismissed"); err != nil {
+				return formatError("dismiss", err)
+			}
+
+			if jsonOut {
+				printJSON(map[string]string{"status": "dismissed", "url": url})
+				return nil
+			}
+
+			fmt.Printf("  ✓ Dismissed: %s\n", url)
+			return nil
+		}
+
+		// Multiple URLs — batch path. Errors for non-existent URLs
+		// are reported to stderr but processing continues.
+		dismissed := 0
+		for _, url := range args {
+			_, ok, err := store.GetStaged(url)
+			if err != nil {
+				return formatError("check staging", err)
+			}
+			if !ok {
+				fmt.Fprintf(os.Stderr, "  ✗ no staged result with URL %q\n", url)
+				continue
+			}
+			if err := store.SetStagingStatus(url, "dismissed"); err != nil {
+				return formatError("dismiss", err)
+			}
+			dismissed++
+		}
+
+		if jsonOut {
+			printJSON(map[string]int{"dismissed": dismissed})
+			return nil
+		}
+
+		fmt.Printf("  Dismissed %d results.\n", dismissed)
 		return nil
 	},
 }
@@ -583,6 +646,8 @@ func init() {
 	scrapeStagedCmd.Flags().StringVar(&scrapeStagedFlags.status, "status", "", "Filter by status (new|dismissed|imported)")
 
 	scrapePruneCmd.Flags().IntVar(&scrapePruneFlags.days, "days", 30, "Remove entries older than N days")
+
+	scrapeDismissCmd.Flags().BoolVar(&scrapeDismissFlags.all, "all", false, "Dismiss all 'new' status results")
 
 	scrapePromoteCmd.Flags().BoolVar(&scrapePromoteFlags.all, "all", false, "Promote all 'new' status results")
 }
