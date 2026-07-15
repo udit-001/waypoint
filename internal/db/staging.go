@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jmoiron/sqlx"
+	"github.com/udit-001/waypoint/internal/dates"
 	"github.com/udit-001/waypoint/internal/scraper"
 )
 
@@ -172,4 +174,125 @@ func (s *SQLiteStore) EnrichStaging(url, desc string, meta map[string]string) er
 		return fmt.Errorf("enrich staging: %w", err)
 	}
 	return nil
+}
+
+// MigrateStaging imports legacy staging entries from the JSON-file era,
+// preserving their original first_seen and status values. Uses INSERT OR
+// IGNORE so re-running migration is safe. Returns the number of entries
+// actually inserted (skips URLs already present).
+func (s *SQLiteStore) MigrateStaging(entries []scraper.StagedResult) (int, error) {
+	imported := 0
+	for _, sr := range entries {
+		metaJSON := "{}"
+		if len(sr.Result.Metadata) > 0 {
+			raw, err := json.Marshal(sr.Result.Metadata)
+			if err != nil {
+				return imported, fmt.Errorf("marshal staging metadata: %w", err)
+			}
+			metaJSON = string(raw)
+		}
+		status := sr.Status
+		if status == "" {
+			status = "new"
+		}
+		firstSeen := sr.FirstSeen
+		if firstSeen == "" {
+			firstSeen = time.Now().UTC().Format("2006-01-02")
+		}
+		result, err := s.Exec(
+			`INSERT OR IGNORE INTO scrape_staging (url, title, company, location, date, description, metadata, first_seen, status)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			sr.Result.URL, sr.Result.Title, sr.Result.Company,
+			sr.Result.Location, sr.Result.Date, sr.Result.Description,
+			metaJSON, firstSeen, status,
+		)
+		if err != nil {
+			return imported, fmt.Errorf("migrate staging insert: %w", err)
+		}
+		if n, _ := result.RowsAffected(); n > 0 {
+			imported++
+		}
+	}
+	return imported, nil
+}
+
+// Promote moves a staged result into the tracked jobs table.
+// If the URL already exists in jobs, job creation is skipped but the
+// staging entry is still marked "imported". The entire operation runs
+// in a single transaction.
+func (s *SQLiteStore) Promote(url string) (Job, error) {
+	var job Job
+	err := s.tx(func(tx *sqlx.Tx) error {
+		// 1. Look up staged result by URL (reuses scanStagedResult helper).
+		row := tx.QueryRowx(
+			fmt.Sprintf("SELECT %s FROM scrape_staging WHERE url = ?", stagingColumns),
+			url,
+		)
+		sr, err := scanStagedResult(row)
+		if err != nil {
+			if err.Error() == "sql: no rows in result set" {
+				return fmt.Errorf("no staged result with URL %q", url)
+			}
+			return fmt.Errorf("lookup staged result: %w", err)
+		}
+
+		// 2. Check idempotency — skip if URL already in jobs.
+		var count int
+		if err := tx.Get(&count, "SELECT COUNT(*) FROM jobs WHERE url = ?", url); err != nil {
+			return fmt.Errorf("check jobs for url: %w", err)
+		}
+
+		if count == 0 {
+			// 3. Create the job with defaults + history (inlined IntakeAddJob
+			//    because IntakeAddJob takes Store, not *sqlx.Tx).
+			now := time.Now().UTC().Format(time.RFC3339)
+			job = Job{
+				Company:   sr.Result.Company,
+				Position:  sr.Result.Title,
+				URL:       sr.Result.URL,
+				Location:  sr.Result.Location,
+				Date:      dates.NormalizeDate(sr.Result.Date),
+				Status:    "Not Applied",
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			result, err := tx.Exec(
+				`INSERT INTO jobs (company, position, date, applied_date, status, category_id, salary, location, contact, url, notes, reminder_date, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				job.Company, job.Position, job.Date, job.AppliedDate, job.Status,
+				job.Salary, job.Location, job.Contact, job.URL, job.Notes,
+				job.ReminderDate, job.CreatedAt, job.UpdatedAt,
+			)
+			if err != nil {
+				return fmt.Errorf("insert promoted job: %w", err)
+			}
+			id, _ := result.LastInsertId()
+			job.ID = id
+
+			if _, err := tx.Exec(
+				`INSERT INTO history (job_id, action, from_value, to_value) VALUES (?, ?, ?, ?)`,
+				job.ID, "Created", "", job.Status,
+			); err != nil {
+				return fmt.Errorf("add promote history: %w", err)
+			}
+		}
+
+		// 4. Mark staging entry as imported.
+		if _, err := tx.Exec(
+			"UPDATE scrape_staging SET status = 'imported' WHERE url = ?", url,
+		); err != nil {
+			return fmt.Errorf("set staging imported: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return Job{}, err
+	}
+
+	// Fetch the full job with category join if one was created.
+	if job.ID > 0 {
+		return s.GetJob(job.ID)
+	}
+	return job, nil
 }

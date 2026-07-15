@@ -18,6 +18,14 @@ type Result struct {
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
+// StagedResult is a scraped result persisted in the staging table,
+// awaiting review (promote or dismiss).
+type StagedResult struct {
+	FirstSeen string `json:"first_seen"`
+	Status    string `json:"status"` // "new" | "dismissed" | "imported"
+	Result    Result `json:"result"`
+}
+
 // SearchOpts controls a scraper search.
 type SearchOpts struct {
 	Query    string

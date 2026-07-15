@@ -57,8 +57,6 @@ type Store interface {
 	Close() error
 
 	// Staging — scraped results persisted before promotion to jobs.
-	// Expand phase: existing scrape commands still use the JSON-file
-	// Staging type; these methods are the SQL-backed replacement.
 	IsSeen(url string) (bool, error)
 	AddStaging(results []scraper.Result) error
 	ListStaging(status string) ([]scraper.StagedResult, error)
@@ -66,4 +64,8 @@ type Store interface {
 	SetStagingStatus(url, status string) error
 	PruneStaging(days int) (int, error)
 	EnrichStaging(url, desc string, meta map[string]string) error
+	MigrateStaging(entries []scraper.StagedResult) (int, error)
+
+	// Promote — moves a staged result into the tracked jobs table.
+	Promote(url string) (Job, error)
 }
