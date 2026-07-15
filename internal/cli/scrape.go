@@ -7,25 +7,25 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/SwatiBio/waypoint/internal/scraper"
-	_ "github.com/SwatiBio/waypoint/internal/scraper/bitspilani"      // activate BITS Pilani scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/ccmb"            // activate CCMB scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/google"          // activate Google Jobs scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/icgeb"           // activate ICGEB scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/iisc"            // activate IISc scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/iisertirupati"   // activate IISER Tirupati scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/indeed"          // activate Indeed scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/indiabioscience" // activate IndiaBioscience aggregator
-	_ "github.com/SwatiBio/waypoint/internal/scraper/instem"          // activate inStem scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/ipu"             // activate GGSIPU scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/jncasr"          // activate JNCASR scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/linkedin"        // activate LinkedIn scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/manipal"         // activate MAHE Manipal scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/nabi"            // activate NABI scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/ncbs"            // activate NCBS scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/niab"            // activate NIAB scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/nipgr"           // activate NIPGR scraper
-	_ "github.com/SwatiBio/waypoint/internal/scraper/vit"             // activate VIT Vellore scraper
+	"github.com/udit-001/waypoint/internal/scraper"
+	_ "github.com/udit-001/waypoint/internal/scraper/bitspilani"      // activate BITS Pilani scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/ccmb"            // activate CCMB scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/google"          // activate Google Jobs scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/icgeb"           // activate ICGEB scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/iisc"            // activate IISc scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/iisertirupati"   // activate IISER Tirupati scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/indeed"          // activate Indeed scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/indiabioscience" // activate IndiaBioscience aggregator
+	_ "github.com/udit-001/waypoint/internal/scraper/instem"          // activate inStem scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/ipu"             // activate GGSIPU scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/jncasr"          // activate JNCASR scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/linkedin"        // activate LinkedIn scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/manipal"         // activate MAHE Manipal scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/nabi"            // activate NABI scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/ncbs"            // activate NCBS scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/niab"            // activate NIAB scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/nipgr"           // activate NIPGR scraper
+	_ "github.com/udit-001/waypoint/internal/scraper/vit"             // activate VIT Vellore scraper
 	"github.com/spf13/cobra"
 )
 

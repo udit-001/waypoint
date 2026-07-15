@@ -37,5 +37,6 @@ Run without flags for interactive mode, or pass --agent to skip prompts.`,
 func init() {
 	rootCmd.AddCommand(skillsCmd)
 	skillsCmd.AddCommand(skillsInstallCmd)
+	skillsCmd.AddCommand(skillsCheckCmd)
 	skillsInstallCmd.Flags().String("agent", "", "Agent to install for (opencode, claude-code, codex, pi)")
 }

@@ -2,15 +2,15 @@ package cli
 
 import (
 	"bufio"
-	"embed"
 	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
-	"github.com/SwatiBio/waypoint/internal/skills"
+	"github.com/udit-001/waypoint/internal/skills"
 	"github.com/spf13/cobra"
 )
 
@@ -58,7 +58,12 @@ func runSkillsInstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	n, err := installSkillDir(skills.Files, skills.SkillName, selected.dir)
+	files, err := skillFilesMap()
+	if err != nil {
+		return fmt.Errorf("read skill files: %w", err)
+	}
+
+	n, err := installSkillDir(files, selected.dir)
 	if err != nil {
 		return err
 	}
@@ -71,43 +76,34 @@ func runSkillsInstall(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// installSkillDir walks srcDir inside fsys and writes every file under destDir,
-// preserving relative structure. Returns the number of files written.
-func installSkillDir(fsys embed.FS, srcDir, destDir string) (int, error) {
+// installSkillDir writes every file from the map under destDir, then
+// writes a manifest for change detection. Returns the number of files written.
+func installSkillDir(files map[string][]byte, destDir string) (int, error) {
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return 0, fmt.Errorf("create directories: %w", err)
 	}
 
-	count := 0
-	err := fs.WalkDir(fsys, srcDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(srcDir, path)
-		if err != nil {
-			return err
-		}
-		data, err := fsys.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("read %s: %w", path, err)
-		}
+	paths := make([]string, 0, len(files))
+	for p := range files {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	for _, rel := range paths {
 		out := filepath.Join(destDir, rel)
 		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
-			return err
+			return 0, err
 		}
-		if err := os.WriteFile(out, data, 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", out, err)
+		if err := os.WriteFile(out, files[rel], 0o644); err != nil {
+			return 0, fmt.Errorf("write %s: %w", out, err)
 		}
-		count++
-		return nil
-	})
-	if err != nil {
-		return count, fmt.Errorf("install skill: %w", err)
 	}
-	return count, nil
+
+	if err := skills.WriteManifestFromMap(destDir, files); err != nil {
+		return len(files), fmt.Errorf("write manifest: %w", err)
+	}
+
+	return len(files), nil
 }
 
 func pickAgent() agentTarget {
@@ -204,12 +200,18 @@ func printNextSteps(a agentTarget) {
 func offerSkillInstall() {
 	detected := detectAgents()
 
+	files, err := skillFilesMap()
+	if err != nil {
+		fmt.Printf("  Warning: could not read skill files: %v\n", err)
+		return
+	}
+
 	switch len(detected) {
 	case 1:
 		// One agent detected — install for it without prompting
 		fmt.Println()
 		fmt.Printf("  Detected %s — installing waypoint skill...\n", detected[0].name)
-		n, err := installSkillDir(skills.Files, skills.SkillName, detected[0].dir)
+		n, err := installSkillDir(files, detected[0].dir)
 		if err != nil {
 			fmt.Printf("  Warning: skill install failed: %v\n", err)
 		} else {
@@ -222,7 +224,7 @@ func offerSkillInstall() {
 		fmt.Print("  No AI coding agent detected. Install the waypoint skill anyway? [y/N] ")
 		if promptYes() {
 			selected := pickAgent()
-			n, err := installSkillDir(skills.Files, skills.SkillName, selected.dir)
+			n, err := installSkillDir(files, selected.dir)
 			if err != nil {
 				fmt.Printf("  Warning: skill install failed: %v\n", err)
 			} else {
@@ -237,7 +239,7 @@ func offerSkillInstall() {
 		fmt.Print("  Install the waypoint skill for an AI coding agent? [Y/n] ")
 		if promptDefaultYes() {
 			selected := pickAgent()
-			n, err := installSkillDir(skills.Files, skills.SkillName, selected.dir)
+			n, err := installSkillDir(files, selected.dir)
 			if err != nil {
 				fmt.Printf("  Warning: skill install failed: %v\n", err)
 			} else {
@@ -274,23 +276,37 @@ func skillFilesMap() (map[string][]byte, error) {
 }
 
 // skillFilesChanged returns true if any file in the embedded skill differs
-// from the installed copy at dir. Compares every file (SKILL.md and all
-// references), not just the top-level SKILL.md.
+// from the installed copy at dir. Uses the manifest for change detection;
+// falls back to byte-by-byte comparison for legacy installs without one.
 func skillFilesChanged(dir string, embedded map[string][]byte) bool {
+	m, err := skills.ReadManifest(dir)
+	if err != nil {
+		// No manifest — legacy install, compare file-by-file.
+		return legacySkillFilesChanged(dir, embedded)
+	}
+	if m.Hash != skills.ManifestHash(embedded) {
+		return true
+	}
+	for _, f := range m.Files {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// legacySkillFilesChanged compares every embedded file against the installed
+// copy byte-by-byte. Used for skill dirs installed before manifests existed.
+func legacySkillFilesChanged(dir string, embedded map[string][]byte) bool {
 	for rel, want := range embedded {
 		got, err := os.ReadFile(filepath.Join(dir, rel))
 		if err != nil {
-			// Installed dir is missing a file the embedded version has ⇒ outdated.
-			// A missing file under .pi/skills/waypoint/ references/ means the agent
-			// has an older install that didn't include that file.
 			return true
 		}
 		if string(got) != string(want) {
 			return true
 		}
 	}
-	// Also detect if the installed dir has extra files the embedded version
-	// doesn't — counts as changed so stale cruft doesn't linger.
 	installedCount := 0
 	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -343,7 +359,7 @@ func offerSkillUpgrade() {
 	}
 
 	for _, a := range outdated {
-		n, err := installSkillDir(skills.Files, skills.SkillName, a.dir)
+		n, err := installSkillDir(embedded, a.dir)
 		if err != nil {
 			fmt.Printf("  Warning: failed to update skill for %s: %v\n", a.name, err)
 		} else {

@@ -3,7 +3,7 @@ package google
 import (
 	"testing"
 
-	"github.com/SwatiBio/waypoint/internal/scraper"
+	"github.com/udit-001/waypoint/internal/scraper"
 )
 
 func TestParseJobArray(t *testing.T) {

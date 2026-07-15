@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/SwatiBio/waypoint/internal/db"
-	"github.com/SwatiBio/waypoint/web"
+	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/web"
 )
 
 // Config holds the server configuration.

@@ -46,7 +46,7 @@ jobs:
           ext=""
           if [ "${{ matrix.os }}" = "windows" ]; then ext=".exe"; fi
           GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} CGO_ENABLED=0 \
-            go build -ldflags="-s -w -X github.com/SwatiBio/waypoint/internal/version.Version=${GITHUB_REF_NAME#v}" \
+            go build -ldflags="-s -w -X github.com/udit-001/waypoint/internal/version.Version=${GITHUB_REF_NAME#v}" \
             -o "waypoint${ext}" ./cmd/waypoint/
 
       - name: Archive

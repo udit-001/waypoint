@@ -13,7 +13,7 @@ The entire web UI is compiled into a single self-contained binary.
 ### Recommended: `go install` (works everywhere, no binary downloads)
 
 ```bash
-go install github.com/SwatiBio/waypoint/cmd/waypoint@latest
+go install github.com/udit-001/waypoint/cmd/waypoint@latest
 ```
 
 This compiles Waypoint from source with the web UI embedded. No pre-built
@@ -22,19 +22,19 @@ binaries to download, no Windows SmartScreen warnings, no trust decisions.
 ### From a release (if you don't have Go installed)
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh
+curl -sfL https://raw.githubusercontent.com/udit-001/waypoint/main/install.sh | sh
 ```
 
 Install a specific version:
 
 ```bash
-curl -sfL https://raw.githubusercontent.com/SwatiBio/waypoint/main/install.sh | sh -s -- v0.4.0
+curl -sfL https://raw.githubusercontent.com/udit-001/waypoint/main/install.sh | sh -s -- v0.4.0
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/SwatiBio/waypoint.git
+git clone https://github.com/udit-001/waypoint.git
 cd waypoint
 make build     # builds frontend + Go binary
 ```
@@ -60,7 +60,7 @@ into the Go binary at compile time via `//go:embed`. This means:
 waypoint upgrade
 ```
 
-This runs `go install github.com/SwatiBio/waypoint/cmd/waypoint@latest` internally,
+This runs `go install github.com/udit-001/waypoint/cmd/waypoint@latest` internally,
 stopping and restarting the server if it's running.
 
 ## Quick Start

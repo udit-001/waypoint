@@ -1,4 +1,4 @@
-module github.com/SwatiBio/waypoint
+module github.com/udit-001/waypoint
 
 go 1.25.10
 

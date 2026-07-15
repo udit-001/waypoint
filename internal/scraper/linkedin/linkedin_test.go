@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SwatiBio/waypoint/internal/scraper"
+	"github.com/udit-001/waypoint/internal/scraper"
 )
 
 type mockFetcher struct{ html string }

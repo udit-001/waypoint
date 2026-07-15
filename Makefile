@@ -1,6 +1,6 @@
 BIN           = waypoint
 CMD           = ./cmd/waypoint
-MODULE        = github.com/SwatiBio/waypoint
+MODULE        = github.com/udit-001/waypoint
 
 # Colors for output
 BLUE  = \033[36m
