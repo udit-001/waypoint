@@ -255,14 +255,14 @@ func TestStaging_addPreservesResultFields(t *testing.T) {
 
 	results := []scraper.Result{
 		{
-			ID:       "42",
-			Title:    "Senior Engineer",
-			Company:  "Acme",
-			Location: "Remote",
-			Date:     "2026-08-01",
-			URL:      "https://example.com/job/42",
+			ID:          "42",
+			Title:       "Senior Engineer",
+			Company:     "Acme",
+			Location:    "Remote",
+			Date:        "2026-08-01",
+			URL:         "https://example.com/job/42",
 			Description: "Full-stack role",
-			Metadata: map[string]string{"level": "senior", "team": "platform"},
+			Metadata:    map[string]string{"level": "senior", "team": "platform"},
 		},
 	}
 
@@ -294,5 +294,105 @@ func TestStaging_addPreservesResultFields(t *testing.T) {
 	}
 	if sr.Result.Metadata["team"] != "platform" {
 		t.Errorf("expected metadata team=platform, got %v", sr.Result.Metadata)
+	}
+}
+
+// --- Dismiss batch tests ---
+
+func TestDismiss_multipleURLs(t *testing.T) {
+	f := NewFakeStore()
+
+	f.AddStaging([]scraper.Result{
+		{ID: "1", Title: "Job A", URL: "https://example.com/1"},
+		{ID: "2", Title: "Job B", URL: "https://example.com/2"},
+		{ID: "3", Title: "Job C", URL: "https://example.com/3"},
+	})
+
+	// Dismiss multiple URLs, simulating the batch path: a non-existent
+	// URL errors but doesn't prevent dismissing the others.
+	urls := []string{
+		"https://example.com/1",
+		"https://example.com/missing",
+		"https://example.com/3",
+	}
+	dismissed := 0
+	for _, url := range urls {
+		if err := f.SetStagingStatus(url, "dismissed"); err != nil {
+			continue
+		}
+		dismissed++
+	}
+
+	if dismissed != 2 {
+		t.Errorf("expected 2 dismissed, got %d", dismissed)
+	}
+
+	// Dismissed URLs should be "dismissed"
+	sr, _, _ := f.GetStaged("https://example.com/1")
+	if sr.Status != "dismissed" {
+		t.Errorf("URL 1: expected status 'dismissed', got %q", sr.Status)
+	}
+	sr, _, _ = f.GetStaged("https://example.com/3")
+	if sr.Status != "dismissed" {
+		t.Errorf("URL 3: expected status 'dismissed', got %q", sr.Status)
+	}
+
+	// Untouched URL should still be "new"
+	sr, _, _ = f.GetStaged("https://example.com/2")
+	if sr.Status != "new" {
+		t.Errorf("URL 2: expected status 'new', got %q", sr.Status)
+	}
+}
+
+func TestDismiss_allBatch(t *testing.T) {
+	f := NewFakeStore()
+
+	// Three "new" results
+	f.AddStaging([]scraper.Result{
+		{ID: "1", Title: "Job A", URL: "https://example.com/1"},
+		{ID: "2", Title: "Job B", URL: "https://example.com/2"},
+		{ID: "3", Title: "Job C", URL: "https://example.com/3"},
+	})
+
+	// One dismissed — should be skipped by --all
+	f.AddStaging([]scraper.Result{
+		{ID: "4", Title: "Job D", URL: "https://example.com/4"},
+	})
+	f.SetStagingStatus("https://example.com/4", "dismissed")
+
+	// One already imported — should be skipped by --all
+	f.AddStaging([]scraper.Result{
+		{ID: "5", Title: "Job E", URL: "https://example.com/5"},
+	})
+	f.SetStagingStatus("https://example.com/5", "imported")
+
+	// Dismiss all "new" results
+	newResults, _ := f.ListStaging("new")
+	dismissed := 0
+	for _, r := range newResults {
+		if err := f.SetStagingStatus(r.Result.URL, "dismissed"); err != nil {
+			t.Fatalf("SetStagingStatus %s failed: %v", r.Result.URL, err)
+		}
+		dismissed++
+	}
+
+	if dismissed != 3 {
+		t.Errorf("expected 3 dismissed, got %d", dismissed)
+	}
+
+	// All "new" entries should now be "dismissed"
+	newAfter, _ := f.ListStaging("new")
+	if len(newAfter) != 0 {
+		t.Errorf("expected 0 new after --all, got %d", len(newAfter))
+	}
+
+	// Dismissed and imported entries should be unchanged
+	sr, _, _ := f.GetStaged("https://example.com/4")
+	if sr.Status != "dismissed" {
+		t.Errorf("dismissed entry should stay dismissed, got %q", sr.Status)
+	}
+	sr, _, _ = f.GetStaged("https://example.com/5")
+	if sr.Status != "imported" {
+		t.Errorf("imported entry should stay imported, got %q", sr.Status)
 	}
 }
