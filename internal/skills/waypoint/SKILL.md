@@ -46,23 +46,36 @@ waypoint profile set --name "Jane Doe" --title "Senior Engineer" --skills '["Go"
 
 **Done when**: job ID resolved, profile complete.
 
-### Notes render markdown
+### Notes — shell-safe
 
-The `--notes` field renders as GitHub-flavoured markdown in the web UI (and the form preview). Write **structured markdown**, not flat prose: headings, bullet/numbered lists, tables, blockquotes, bold/italic, task lists, and inline code all render. This applies wherever notes are written — `jobs add --notes`, `jobs update --notes`, and saved research.
+The `--notes` field renders as GitHub-flavoured markdown in the web UI. Write **structured markdown**: headings, lists, tables, blockquotes, bold/italic, task lists, inline code.
 
-Good:
+Use `--notes-file` for any content that contains `$`, backticks, quotes, or multi-line text — bash interprets these characters on the command line. Write the notes to a temp file first, then pass the path:
+
 ```bash
-waypoint jobs update 5 --notes "## Interview process
+cat > /tmp/notes.md << 'EOF'
+## Interview process
 1. ~~Recruiter screen~~
 2. **On-site** pending
 
-> Follow up by Jun 25 if no reply."
+> Follow up by Jun 25 if no reply.
+EOF
+waypoint jobs update 5 --notes-file /tmp/notes.md
 ```
 
-Bad (renders as one run-on paragraph):
+The file is read directly — no shell interpretation of its contents. Use `--notes-file` for all research results, multi-section notes, and any text containing `$`, `"`, `` ` ``, `\`, or `!`.
+
+Use inline `--notes "..."` only for short, simple strings with no shell-significant characters:
 ```bash
-waypoint jobs update 5 --notes "Interview process. Recruiter screen done. On site pending. Follow up by Jun 25 if no reply."
+waypoint jobs update 5 --notes "Reached out by recruiter"
 ```
+
+Bad (inline notes with shell-significant chars — bash will expand `$` and break multi-line strings):
+```bash
+waypoint jobs update 5 --notes "Salary: $35-55/hr — great fit"
+```
+
+**Done when**: notes content is written in structured markdown and passed via `--notes-file` unless it is a short, shell-safe string.
 
 ### Step 3 — Generate
 
@@ -98,7 +111,7 @@ Suggest a natural next step:
 
 ## Data sources
 
-- **Exa MCP** → `read` [data/exa-search](references/data/exa-search.md). Save via `jobs update --contact` / `--notes`. If exa not connected, offer setup — see [data/exa-setup](references/data/exa-setup.md). Not for primary job discovery — use the Discovery section for that
+- **Exa MCP** → `read` [data/exa-search](references/data/exa-search.md). Save research via `jobs update --contact` / `--notes-file`. If exa not connected, offer setup — see [data/exa-setup](references/data/exa-setup.md). Not for primary job discovery — use the Discovery section for that
 - **PDFs** → `read` [data/pdf-extract](references/data/pdf-extract.md) if `pdftotext` available
 - **Job parsing** → `read` [data/job-extract](references/data/job-extract.md)
 
