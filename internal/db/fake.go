@@ -2,8 +2,11 @@ package db
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/udit-001/waypoint/internal/scraper"
 )
 
 // FakeStore is an in-memory implementation of Store for tests.
@@ -19,6 +22,7 @@ type FakeStore struct {
 	History    []HistoryEntry
 	Profile    Profile
 	Settings   Settings
+	Staging    map[string]scraper.StagedResult
 
 	nextJobID  int64
 	nextCatID  int64
@@ -33,6 +37,7 @@ func NewFakeStore() *FakeStore {
 		Artifacts:  make(map[int64]Artifact),
 		History:    []HistoryEntry{},
 		Settings:   defaultSettings,
+		Staging:    make(map[string]scraper.StagedResult),
 	}
 }
 
@@ -521,3 +526,86 @@ func (f *FakeStore) UpsertSettings(updates map[string]any) error {
 
 func (f *FakeStore) RunMigrations(dbPath string) error { return nil }
 func (f *FakeStore) Close() error                      { return nil }
+
+// --- Staging ---
+
+func (f *FakeStore) IsSeen(url string) (bool, error) {
+	_, ok := f.Staging[url]
+	return ok, nil
+}
+
+func (f *FakeStore) AddStaging(results []scraper.Result) error {
+	now := time.Now().UTC().Format("2006-01-02")
+	for _, r := range results {
+		if _, ok := f.Staging[r.URL]; ok {
+			continue
+		}
+		f.Staging[r.URL] = scraper.StagedResult{
+			FirstSeen: now,
+			Status:    "new",
+			Result:    r,
+		}
+	}
+	return nil
+}
+
+func (f *FakeStore) ListStaging(status string) ([]scraper.StagedResult, error) {
+	var out []scraper.StagedResult
+	for _, sr := range f.Staging {
+		if status != "" && sr.Status != status {
+			continue
+		}
+		out = append(out, sr)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].FirstSeen > out[j].FirstSeen
+	})
+	return out, nil
+}
+
+func (f *FakeStore) GetStaged(url string) (scraper.StagedResult, bool, error) {
+	sr, ok := f.Staging[url]
+	return sr, ok, nil
+}
+
+func (f *FakeStore) SetStagingStatus(url, status string) error {
+	sr, ok := f.Staging[url]
+	if !ok {
+		return fmt.Errorf("no staged result with URL %q", url)
+	}
+	sr.Status = status
+	f.Staging[url] = sr
+	return nil
+}
+
+func (f *FakeStore) PruneStaging(days int) (int, error) {
+	cutoff := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
+	removed := 0
+	for url, sr := range f.Staging {
+		if sr.FirstSeen < cutoff {
+			delete(f.Staging, url)
+			removed++
+		}
+	}
+	return removed, nil
+}
+
+func (f *FakeStore) EnrichStaging(url, desc string, meta map[string]string) error {
+	sr, ok := f.Staging[url]
+	if !ok {
+		return nil
+	}
+	if desc != "" {
+		sr.Result.Description = desc
+	}
+	if len(meta) > 0 {
+		if sr.Result.Metadata == nil {
+			sr.Result.Metadata = map[string]string{}
+		}
+		for k, v := range meta {
+			sr.Result.Metadata[k] = v
+		}
+	}
+	f.Staging[url] = sr
+	return nil
+}
