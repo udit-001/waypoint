@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,6 +38,29 @@ func defaultStagingPath() string {
 	return filepath.Join(home, ".waypoint", "scrape-cache.json")
 }
 
+// legacyStagingHint checks for a legacy scrape-cache.json file and prints
+// a migration hint if one exists without a corresponding .migrated marker.
+func legacyStagingHint() {
+	path := defaultStagingPath()
+	migrated := path + ".migrated"
+
+	if _, err := os.Stat(migrated); err == nil {
+		return // already migrated
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return // no legacy file
+	}
+	var data map[string]scraper.StagedResult
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return // corrupt — skip hint
+	}
+	if len(data) == 0 {
+		return
+	}
+	fmt.Printf("  Found legacy scrape-cache.json — run 'waypoint scrape migrate' to import %d staged results.\n", len(data))
+}
+
 var scrapeCmd = &cobra.Command{
 	Use:   "scrape",
 	Short: "Search job portals for new postings",
@@ -56,6 +80,8 @@ var scrapeListCmd = &cobra.Command{
 	Short: "List registered job scrapers",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		legacyStagingHint()
+
 		scrapers := scraper.All()
 
 		type info struct {
@@ -113,7 +139,7 @@ var scrapeRunFlags struct {
 var scrapeRunCmd = &cobra.Command{
 	Use:   "run <name>",
 	Short: "Run a job scraper and print results",
-	Long: `Fetch job postings from a portal, stage them to a seen-cache file,
+	Long: `Fetch job postings from a portal, stage them to the database,
 and print only new results (deduplicated against staging and the jobs table).
 
 Examples:
@@ -122,6 +148,8 @@ Examples:
   waypoint scrape run ncbs -q "officer" --limit 5`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		legacyStagingHint()
+
 		name := args[0]
 		s, ok := scraper.Get(name)
 		if !ok {
@@ -142,16 +170,14 @@ Examples:
 
 		results = scraper.Truncate(results, scrapeRunFlags.limit)
 
-		// Open staging file
-		staging, err := scraper.OpenStaging(defaultStagingPath())
-		if err != nil {
-			return formatError("open staging", err)
-		}
-
 		// Dedup: filter out results already in staging or already tracked as jobs
 		var newResults []scraper.Result
 		for _, r := range results {
-			if staging.IsSeen(r.URL) {
+			seen, err := store.IsSeen(r.URL)
+			if err != nil {
+				return formatError("check staging", err)
+			}
+			if seen {
 				continue
 			}
 			tracked, err := store.JobExists(r.URL)
@@ -166,7 +192,7 @@ Examples:
 
 		// Stage all new results before printing
 		if len(newResults) > 0 {
-			if err := staging.Add(newResults); err != nil {
+			if err := store.AddStaging(newResults); err != nil {
 				return formatError("stage results", err)
 			}
 		}
@@ -213,7 +239,7 @@ var scrapeStagedFlags struct {
 var scrapeStagedCmd = &cobra.Command{
 	Use:   "staged",
 	Short: "View staged scrape results",
-	Long: `List results that have been scraped and staged to the seen-cache file.
+	Long: `List results that have been scraped and staged to the database.
 Optionally filter by status.
 
 Examples:
@@ -222,12 +248,12 @@ Examples:
   waypoint scrape staged --status dismissed --json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		staging, err := scraper.OpenStaging(defaultStagingPath())
-		if err != nil {
-			return formatError("open staging", err)
-		}
+		legacyStagingHint()
 
-		results := staging.List(scrapeStagedFlags.status)
+		results, err := store.ListStaging(scrapeStagedFlags.status)
+		if err != nil {
+			return formatError("list staging", err)
+		}
 
 		if jsonOut {
 			if results == nil {
@@ -248,13 +274,14 @@ Examples:
 		for _, r := range results {
 			rows = append(rows, []string{
 				truncate(r.Result.Title, 45),
-				r.Result.Company,
+				truncate(r.Result.Company, 20),
+				truncate(r.Result.URL, 50),
 				r.Status,
 				r.FirstSeen,
 			})
 		}
 
-		fmt.Println(formatTable([]string{"Title", "Source", "Status", "First Seen"}, rows))
+		fmt.Println(formatTable([]string{"Title", "Company", "URL", "Status", "First Seen"}, rows))
 		fmt.Println()
 		return nil
 	},
@@ -272,18 +299,19 @@ Examples:
   waypoint scrape dismiss "https://www.ncbs.res.in/jobportal/node/142669"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		legacyStagingHint()
+
 		url := args[0]
 
-		staging, err := scraper.OpenStaging(defaultStagingPath())
+		_, ok, err := store.GetStaged(url)
 		if err != nil {
-			return formatError("open staging", err)
+			return formatError("check staging", err)
 		}
-
-		if !staging.IsSeen(url) {
+		if !ok {
 			return fmt.Errorf("no staged result with URL %q", url)
 		}
 
-		if err := staging.Dismiss(url); err != nil {
+		if err := store.SetStagingStatus(url, "dismissed"); err != nil {
 			return formatError("dismiss", err)
 		}
 
@@ -312,6 +340,8 @@ Examples:
   waypoint scrape detail linkedin "https://www.linkedin.com/jobs/view/4439995582"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		legacyStagingHint()
+
 		name := args[0]
 		id := args[1]
 
@@ -330,11 +360,7 @@ Examples:
 			return formatError("fetch detail", err)
 		}
 
-		staging, err := scraper.OpenStaging(defaultStagingPath())
-		if err != nil {
-			return formatError("open staging", err)
-		}
-		if err := staging.Enrich(result.ID, result.Description, result.Metadata); err != nil {
+		if err := store.EnrichStaging(result.URL, result.Description, result.Metadata); err != nil {
 			return formatError("enrich staging", err)
 		}
 
@@ -385,12 +411,9 @@ Examples:
   waypoint scrape prune --days 7`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		staging, err := scraper.OpenStaging(defaultStagingPath())
-		if err != nil {
-			return formatError("open staging", err)
-		}
+		legacyStagingHint()
 
-		removed, err := staging.Prune(scrapePruneFlags.days)
+		removed, err := store.PruneStaging(scrapePruneFlags.days)
 		if err != nil {
 			return formatError("prune", err)
 		}
@@ -410,6 +433,135 @@ Examples:
 	},
 }
 
+// --- scrape migrate ---
+
+var scrapeMigrateCmd = &cobra.Command{
+	Use:   "migrate",
+	Short: "Import legacy scrape-cache.json into the database",
+	Long: `Reads the legacy ~/.waypoint/scrape-cache.json file and imports
+each entry into the scrape_staging table. The JSON file is renamed to
+scrape-cache.json.migrated after import.
+
+This is a one-time migration — safe to re-run (idempotent).`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path := defaultStagingPath()
+		migrated := path + ".migrated"
+
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Println("  No legacy scrape-cache.json found — nothing to migrate.")
+				return nil
+			}
+			return formatError("read legacy file", err)
+		}
+
+		var data map[string]scraper.StagedResult
+		if err := json.Unmarshal(raw, &data); err != nil {
+			return formatError("parse legacy file", err)
+		}
+
+		entries := make([]scraper.StagedResult, 0, len(data))
+		for _, sr := range data {
+			entries = append(entries, sr)
+		}
+
+		imported, err := store.MigrateStaging(entries)
+		if err != nil {
+			return formatError("migrate staging", err)
+		}
+
+		if err := os.Rename(path, migrated); err != nil {
+			return formatError("rename legacy file", err)
+		}
+
+		if jsonOut {
+			printJSON(map[string]int{"imported": imported})
+			return nil
+		}
+
+		fmt.Printf("  ✓ Imported %d staged result(s).\n", imported)
+		return nil
+	},
+}
+
+// --- scrape promote ---
+
+var scrapePromoteFlags struct {
+	all bool
+}
+
+var scrapePromoteCmd = &cobra.Command{
+	Use:   "promote [<url>]",
+	Short: "Promote staged results into the tracked jobs table",
+	Long: `Move staged scrape results into the tracked jobs table.
+
+  waypoint scrape promote "https://www.ncbs.res.in/jobportal/node/142669"
+  waypoint scrape promote --all
+
+--all promotes every "new" status result. Entries that are "dismissed"
+or "imported" are skipped. If a URL already exists in the jobs table,
+the result is skipped but still marked "imported" so it won't reappear.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		legacyStagingHint()
+
+		if scrapePromoteFlags.all {
+			results, err := store.ListStaging("new")
+			if err != nil {
+				return formatError("list staging", err)
+			}
+
+			promoted, skipped := 0, 0
+			for _, r := range results {
+				job, err := store.Promote(r.Result.URL)
+				if err != nil {
+					return formatError("promote "+r.Result.URL, err)
+				}
+				if job.ID > 0 {
+					promoted++
+				} else {
+					skipped++
+				}
+			}
+
+			if jsonOut {
+				printJSON(map[string]int{
+					"promoted": promoted,
+					"skipped":  skipped,
+				})
+				return nil
+			}
+
+			fmt.Printf("  Promoted %d, skipped %d (already imported).\n", promoted, skipped)
+			return nil
+		}
+
+		if len(args) == 0 {
+			return fmt.Errorf("provide a URL or use --all")
+		}
+
+		url := args[0]
+		job, err := store.Promote(url)
+		if err != nil {
+			return formatError("promote", err)
+		}
+
+		if jsonOut {
+			printJSON(job)
+			return nil
+		}
+
+		if job.ID > 0 {
+			fmt.Printf("  ✓ Promoted: %s → Job #%d\n", url, job.ID)
+		} else {
+			fmt.Printf("  → Skipped (already tracked): %s\n", url)
+		}
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(scrapeCmd)
 	scrapeCmd.AddCommand(scrapeListCmd)
@@ -418,6 +570,8 @@ func init() {
 	scrapeCmd.AddCommand(scrapeDismissCmd)
 	scrapeCmd.AddCommand(scrapeDetailCmd)
 	scrapeCmd.AddCommand(scrapePruneCmd)
+	scrapeCmd.AddCommand(scrapeMigrateCmd)
+	scrapeCmd.AddCommand(scrapePromoteCmd)
 
 	scrapeRunCmd.Flags().StringVarP(&scrapeRunFlags.query, "query", "q", "", "Filter results by keyword")
 	scrapeRunCmd.Flags().StringVarP(&scrapeRunFlags.location, "location", "l", "", "Location to search (e.g. 'Bengaluru, India', 'Remote')")
@@ -426,7 +580,9 @@ func init() {
 	scrapeRunCmd.Flags().StringVar(&scrapeRunFlags.remote, "remote", "", "Workplace type: remote|hybrid|onsite (LinkedIn only)")
 	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.page, "page", 1, "Page number, 1-indexed (LinkedIn/Indeed only)")
 
-	scrapeStagedCmd.Flags().StringVar(&scrapeStagedFlags.status, "status", "", "Filter by status (new|dismissed)")
+	scrapeStagedCmd.Flags().StringVar(&scrapeStagedFlags.status, "status", "", "Filter by status (new|dismissed|imported)")
 
 	scrapePruneCmd.Flags().IntVar(&scrapePruneFlags.days, "days", 30, "Remove entries older than N days")
+
+	scrapePromoteCmd.Flags().BoolVar(&scrapePromoteFlags.all, "all", false, "Promote all 'new' status results")
 }

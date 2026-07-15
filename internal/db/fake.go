@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/udit-001/waypoint/internal/dates"
 	"github.com/udit-001/waypoint/internal/scraper"
 )
 
@@ -608,4 +609,67 @@ func (f *FakeStore) EnrichStaging(url, desc string, meta map[string]string) erro
 	}
 	f.Staging[url] = sr
 	return nil
+}
+
+func (f *FakeStore) MigrateStaging(entries []scraper.StagedResult) (int, error) {
+	imported := 0
+	for _, sr := range entries {
+		if _, ok := f.Staging[sr.Result.URL]; ok {
+			continue
+		}
+		status := sr.Status
+		if status == "" {
+			status = "new"
+		}
+		firstSeen := sr.FirstSeen
+		if firstSeen == "" {
+			firstSeen = time.Now().UTC().Format("2006-01-02")
+		}
+		f.Staging[sr.Result.URL] = scraper.StagedResult{
+			FirstSeen: firstSeen,
+			Status:    status,
+			Result:    sr.Result,
+		}
+		imported++
+	}
+	return imported, nil
+}
+
+func (f *FakeStore) Promote(url string) (Job, error) {
+	sr, ok, err := f.GetStaged(url)
+	if err != nil {
+		return Job{}, err
+	}
+	if !ok {
+		return Job{}, fmt.Errorf("no staged result with URL %q", url)
+	}
+
+	// Check idempotency — skip if URL already in jobs.
+	exists, err := f.JobExists(url)
+	if err != nil {
+		return Job{}, err
+	}
+
+	var job Job
+	if !exists {
+		// Create the job via IntakeAddJob (defaults, timestamps, history).
+		job = Job{
+			Company:  sr.Result.Company,
+			Position: sr.Result.Title,
+			URL:      sr.Result.URL,
+			Location: sr.Result.Location,
+			Date:     dates.NormalizeDate(sr.Result.Date),
+		}
+		job, err = IntakeAddJob(f, job)
+		if err != nil {
+			return Job{}, fmt.Errorf("promote job: %w", err)
+		}
+	}
+
+	// Mark staging entry as imported.
+	if err := f.SetStagingStatus(url, "imported"); err != nil {
+		return Job{}, err
+	}
+
+	return job, nil
 }
