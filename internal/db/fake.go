@@ -109,8 +109,22 @@ func (f *FakeStore) UpdateJobFields(id int64, updates map[string]any) error {
 	if v, ok := updates["url"]; ok {
 		j.URL = fmt.Sprint(v)
 	}
+	if v, ok := updates["date"]; ok {
+		j.Date = fmt.Sprint(v)
+	}
+	if v, ok := updates["applied_date"]; ok {
+		j.AppliedDate = fmt.Sprint(v)
+	}
 	if v, ok := updates["notes"]; ok {
 		j.Notes = fmt.Sprint(v)
+	}
+	if v, ok := updates["reminder_date"]; ok {
+		s := fmt.Sprint(v)
+		if s == "" {
+			j.ReminderDate = nil
+		} else {
+			j.ReminderDate = &s
+		}
 	}
 	if v, ok := updates["updated_at"]; ok {
 		j.UpdatedAt = fmt.Sprint(v)
