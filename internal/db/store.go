@@ -1,5 +1,7 @@
 package db
 
+import "github.com/udit-001/waypoint/internal/scraper"
+
 // Store is the persistence interface. The concrete implementation
 // (SQLiteStore) wraps sqlx + SQLite. Tests use FakeStore (in-memory maps).
 // Define tests against this interface, not the concrete type.
@@ -53,4 +55,15 @@ type Store interface {
 	// Lifecycle
 	RunMigrations(dbPath string) error
 	Close() error
+
+	// Staging — scraped results persisted before promotion to jobs.
+	// Expand phase: existing scrape commands still use the JSON-file
+	// Staging type; these methods are the SQL-backed replacement.
+	IsSeen(url string) (bool, error)
+	AddStaging(results []scraper.Result) error
+	ListStaging(status string) ([]scraper.StagedResult, error)
+	GetStaged(url string) (scraper.StagedResult, bool, error)
+	SetStagingStatus(url, status string) error
+	PruneStaging(days int) (int, error)
+	EnrichStaging(url, desc string, meta map[string]string) error
 }
