@@ -7,7 +7,7 @@ description: Manage job applications with the waypoint CLI. Use when the user me
 
 ## Discovery
 
-When the user wants to find new jobs or see what's new — `read` [scraping](references/scraping.md). Promoted results enter the pipeline at Step 2 (Enrich).
+When the user wants to find new jobs or see what's new — `read` [scraping](references/scraping.md). Extraction happens inside Step 4 (Promote picks) — the promoted result leaves the scraping flow enriched, ready for generate/save.
 
 Scrape is the primary path. Do not use Exa for job discovery — the scraping reference instructs when to fall back to Exa if no relevant scrapers exist or all return empty.
 
@@ -112,7 +112,7 @@ Suggest a natural next step:
 ## Data sources
 
 - **Exa MCP** → `read` [data/exa-search](references/data/exa-search.md). Save research via `jobs update --contact` / `--notes-file`. If exa not connected, offer setup — see [data/exa-setup](references/data/exa-setup.md). Not for primary job discovery — use the Discovery section for that
-- **PDFs** → `read` [data/pdf-extract](references/data/pdf-extract.md) if `pdftotext` available
+- **PDFs** → `read` [data/pdf-extract](references/data/pdf-extract.md). Missing `pdftotext`? Install it — see the reference for each OS.
 - **Job parsing** → `read` [data/job-extract](references/data/job-extract.md)
 
 ## References
