@@ -76,12 +76,17 @@ them inline — they help the user decide.
 
 ### Step 4 — Promote picks
 
-For LinkedIn results, fetch the full description first to populate `--notes`:
-```bash
-waypoint scrape detail linkedin <id> --json
-```
-The enriched data (description, seniority, employment type, job function,
-industries) is saved to staging automatically.
+Each promoted result is **raw** — its URL content must be extracted before
+adding. The result's URL type decides the extraction method:
+
+| If the URL ends in… | The result is a… | Extract with |
+|---------------------|------------------|--------------|
+| `.pdf` | **PDF notification** | `read` [data/pdf-extract](references/data/pdf-extract.md) — extract position, deadline, salary, eligibility from the PDF text |
+| `linkedin.com/jobs/…` | **LinkedIn posting** | `waypoint scrape detail linkedin <id> --json` — fetches description, seniority, employment type, job function, industries |
+| Anything else | **Web page** | `read` [data/job-extract](references/data/job-extract.md) — fetch the page, parse structured fields |
+
+Use the extracted data — not the generic scraper result fields — to
+populate `jobs add`:
 
 ```bash
 waypoint jobs add "<company>" "<position>" \
@@ -89,25 +94,26 @@ waypoint jobs add "<company>" "<position>" \
   --location "<location>" \
   --date "<date>" \
   --salary "<salary>" \
-  --notes "<description or key details>"
+  --notes "<extracted description or key details>"
 ```
 
-Field mapping from result to `jobs add`:
+Field mapping from result and extraction to `jobs add`:
 
-| Result field | Flag | Notes |
-|-------------|------|-------|
-| `title` | `<position>` (2nd arg) | |
-| `company` | `<company>` (1st arg) | |
-| `url` | `--url` | |
-| `location` | `--location` | |
-| `date` | `--date` | Deadline (academic scrapers) or posted date (LinkedIn, Indeed, Google Jobs, VIT) |
-| `metadata.salary` | `--salary` | If present |
-| `description` | `--notes` | Summarize if long |
+| Source | `jobs add` flag | Notes |
+|--------|-----------------|-------|
+| Extracted title | `<position>` (2nd arg) | Override the scraper's generic title |
+| `result.company` | `<company>` (1st arg) | |
+| `result.url` | `--url` | |
+| `result.location` | `--location` | |
+| Extracted deadline | `--date` | The real deadline from the PDF/page — not a guess from filename |
+| `result.metadata.salary` | `--salary` | If present |
+| Extracted description | `--notes` | Real extracted content, summarised if long |
 
-After promoting, the job is in the pipeline — offer to enrich it (`jobs get`)
-or generate materials (cover letter, email).
+After adding, the job is enriched. Move to the next promoted result.
 
-**Done when**: every user pick added as a job, ID confirmed.
+**Done when**: every promoted result enriched with real extracted data and
+added with accurate fields. No result left with a generic title, empty date,
+or "Check PDF" note.
 
 ### Step 5 — Dismiss rejects
 
