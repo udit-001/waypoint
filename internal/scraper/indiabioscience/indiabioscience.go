@@ -57,6 +57,8 @@ func (n IndiaBioscience) Search(ctx context.Context, opts scraper.SearchOpts) ([
 		results = results[:opts.Limit]
 	}
 
+	results = scraper.FilterByQuery(results, opts.Query)
+
 	return results, nil
 }
 

@@ -41,6 +41,8 @@ func (n ICGEB) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.R
 
 	results := parseArticles(body)
 
+	results = scraper.FilterByQuery(results, opts.Query)
+
 	return results, nil
 }
 

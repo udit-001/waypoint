@@ -39,6 +39,8 @@ func (n IPU) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.Res
 
 	results := parseTable(body)
 
+	results = scraper.FilterByQuery(results, opts.Query)
+
 	return results, nil
 }
 

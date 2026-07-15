@@ -101,6 +101,31 @@ func (s *Staging) Dismiss(url string) error {
 	return s.save()
 }
 
+// Enrich updates a staged result's Description and Metadata fields.
+// Finds the entry by Result.ID (not URL). Does not overwrite search fields
+// (Title, Company, Location, Date, URL). No-op if the ID isn't staged.
+func (s *Staging) Enrich(id string, desc string, meta map[string]string) error {
+	for url, entry := range s.data {
+		if entry.Result.ID != id {
+			continue
+		}
+		if desc != "" {
+			entry.Result.Description = desc
+		}
+		if len(meta) > 0 {
+			if entry.Result.Metadata == nil {
+				entry.Result.Metadata = map[string]string{}
+			}
+			for k, v := range meta {
+				entry.Result.Metadata[k] = v
+			}
+		}
+		s.data[url] = entry
+		return s.save()
+	}
+	return nil
+}
+
 // Prune removes entries older than days. Returns count removed.
 func (s *Staging) Prune(days int) (int, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")

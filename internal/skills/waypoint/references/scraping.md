@@ -36,8 +36,21 @@ explicitly excluded with a reason.
 ### Step 2 — Run each relevant scraper
 
 ```bash
-waypoint scrape run <name> -q "<query>" --json
+waypoint scrape run <name> -q "<query>" -l "<location>" --json
 ```
+
+Optional flags (supported by portals that offer them; ignored by the rest):
+
+| Flag | What it does | Supported by |
+|------|-------------|--------------|
+| `-q, --query <text>` | Keyword search | All |
+| `-l, --location <text>` | Location to search | LinkedIn (defaults to "India" if omitted), Indeed, Google Jobs |
+| `--limit <n>` | Cap results (0 = all) | All |
+| `--jobage <days>` | Posted within N days | LinkedIn, Indeed |
+| `--remote <mode>` | `remote` / `hybrid` / `onsite` | LinkedIn |
+| `--page <n>` | Page number, 1-indexed | LinkedIn, Indeed |
+
+Results are already filtered by query — no need to filter again.
 
 Results are staged automatically — the CLI deduplicates against the staging
 file and the jobs table by URL, so only new postings appear.
@@ -53,7 +66,7 @@ succeeded.
 
 ### Step 3 — Present new results
 
-Show the user a numbered list: title, company, location, deadline. Ask which
+Show the user a numbered list: title, company, location, date. Ask which
 to track.
 
 If results have `metadata` fields (qualification, salary, vacancy), include
@@ -63,11 +76,18 @@ them inline — they help the user decide.
 
 ### Step 4 — Promote picks
 
+For LinkedIn results, fetch the full description first to populate `--notes`:
+```bash
+waypoint scrape detail linkedin <id> --json
+```
+The enriched data (description, seniority, employment type, job function,
+industries) is saved to staging automatically.
+
 ```bash
 waypoint jobs add "<company>" "<position>" \
   --url "<url>" \
   --location "<location>" \
-  --date "<deadline>" \
+  --date "<date>" \
   --salary "<salary>" \
   --notes "<description or key details>"
 ```
@@ -80,7 +100,7 @@ Field mapping from result to `jobs add`:
 | `company` | `<company>` (1st arg) | |
 | `url` | `--url` | |
 | `location` | `--location` | |
-| `date` | `--date` | Deadline |
+| `date` | `--date` | Deadline (academic scrapers) or posted date (LinkedIn, Indeed, Google Jobs, VIT) |
 | `metadata.salary` | `--salary` | If present |
 | `description` | `--notes` | Summarize if long |
 
@@ -106,9 +126,10 @@ reappear until pruned.
 | Command | What it does |
 |---------|-------------|
 | `scrape list [--json]` | List registered scrapers with categories |
-| `scrape run <name> [-q "..."] [--json]` | Fetch, stage, print new results |
+| `scrape run <name> [flags]` | Fetch, stage, print new results (see Step 2 for flags) |
 | `scrape staged [--status new\|dismissed] [--json]` | Review staged backlog |
 | `scrape dismiss <url>` | Mark a staged result as dismissed |
+| `scrape detail <name> <id> [--json]` | Fetch full description + metadata for a staged result (LinkedIn only) |
 | `scrape prune [--days 30]` | Remove old staged entries |
 
 ## Notes
@@ -117,5 +138,3 @@ reappear until pruned.
   preserved — the next run deduplicates correctly.
 - Results already tracked as jobs (via `jobs add --url`) are automatically
   filtered out by `scrape run` — no need to dismiss them.
-- Dismissed entries stay in staging (they don't reappear in `scrape run`).
-  `prune` is the only command that removes entries, and only old ones.

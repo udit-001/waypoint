@@ -23,6 +23,9 @@ type SearchOpts struct {
 	Query    string
 	Location string
 	Limit    int
+	JobAge   int    // days (0 = all). Supported by scrapers whose portal offers a recency filter.
+	Remote   string // "remote" | "hybrid" | "onsite" ("" = any). Supported by scrapers whose portal offers a workplace-type filter.
+	Page     int    // 1-indexed page number (0 = page 1). Supported by scrapers whose portal offers pagination.
 }
 
 // Scraper fetches job postings from a specific portal.
@@ -33,22 +36,46 @@ type Scraper interface {
 	Search(ctx context.Context, opts SearchOpts) ([]Result, error)
 }
 
-// ApplyFilters applies query substring filtering and limit to results.
-// Called by the CLI after Search() returns — scrapers themselves don't filter.
-func ApplyFilters(results []Result, opts SearchOpts) []Result {
-	if opts.Query != "" {
-		q := strings.ToLower(opts.Query)
-		filtered := results[:0]
-		for _, r := range results {
-			if strings.Contains(strings.ToLower(r.Title), q) {
-				filtered = append(filtered, r)
-			}
+// Detailer fetches the full detail of a single job posting.
+// Optional capability — scrapers implement this only if their portal
+// has a detail endpoint. The CLI type-asserts: s, ok := scraper.(Detailer).
+type Detailer interface {
+	Detail(ctx context.Context, id string) (*Result, error)
+}
+
+// FilterByQuery keeps only results whose Title contains the query substring
+// (case-insensitive). Used by listing scrapers that don't support server-side
+// keyword search — API-based scrapers (LinkedIn, Indeed, Google Jobs) filter
+// server-side and should NOT call this.
+func FilterByQuery(results []Result, query string) []Result {
+	if query == "" {
+		return results
+	}
+	q := strings.ToLower(query)
+	filtered := results[:0]
+	for _, r := range results {
+		if strings.Contains(strings.ToLower(r.Title), q) {
+			filtered = append(filtered, r)
 		}
-		results = filtered
 	}
-	if opts.Limit > 0 && len(results) > opts.Limit {
-		results = results[:opts.Limit]
+	return filtered
+}
+
+// Truncate caps results to at most limit entries (0 = no cap).
+func Truncate(results []Result, limit int) []Result {
+	if limit > 0 && len(results) > limit {
+		return results[:limit]
 	}
+	return results
+}
+
+// ApplyFilters applies query substring filtering and limit to results.
+// Deprecated: listing scrapers should call FilterByQuery inside their Search
+// method; the CLI should call Truncate. Kept for backward compatibility with
+// existing tests.
+func ApplyFilters(results []Result, opts SearchOpts) []Result {
+	results = FilterByQuery(results, opts.Query)
+	results = Truncate(results, opts.Limit)
 	return results
 }
 

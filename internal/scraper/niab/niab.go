@@ -38,6 +38,8 @@ func (n NIAB) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.Re
 
 	results := parseListings(body)
 
+	results = scraper.FilterByQuery(results, opts.Query)
+
 	return results, nil
 }
 

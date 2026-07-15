@@ -46,6 +46,8 @@ func (n VIT) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.Res
 		allResults = append(allResults, results...)
 	}
 
+	allResults = scraper.FilterByQuery(allResults, opts.Query)
+
 	return allResults, nil
 }
 

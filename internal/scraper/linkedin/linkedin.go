@@ -2,6 +2,7 @@ package linkedin
 
 import (
 	"context"
+	"fmt"
 	"html"
 	"net/url"
 	"regexp"
@@ -13,6 +14,7 @@ import (
 
 const (
 	searchURL  = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
+	detailURL  = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting"
 	sourceName = "LinkedIn"
 )
 
@@ -37,10 +39,14 @@ func (n LinkedIn) Search(ctx context.Context, opts scraper.SearchOpts) ([]scrape
 		f = &scraper.HTTPFetcher{}
 	}
 
-	// LinkedIn requires a location. Default to India if not specified.
 	location := opts.Location
 	if location == "" {
 		location = "India"
+	}
+
+	start := 0
+	if opts.Page > 1 {
+		start = (opts.Page - 1) * 10
 	}
 
 	params := url.Values{}
@@ -48,7 +54,14 @@ func (n LinkedIn) Search(ctx context.Context, opts scraper.SearchOpts) ([]scrape
 		params.Set("keywords", opts.Query)
 	}
 	params.Set("location", location)
-	params.Set("start", "0")
+	params.Set("start", strconv.Itoa(start))
+
+	if tpr := jobageToTPR(opts.JobAge); tpr != "" {
+		params.Set("f_TPR", tpr)
+	}
+	if wt := workTypeFlag(opts.Remote); wt != "" {
+		params.Set("f_WT", wt)
+	}
 
 	fetchURL := searchURL + "?" + params.Encode()
 
@@ -144,4 +157,114 @@ func jobageToTPR(days int) string {
 		return ""
 	}
 	return "r" + strconv.Itoa(days*86400)
+}
+
+// workTypeFlag converts a workplace-type string to LinkedIn's f_WT value.
+func workTypeFlag(mode string) string {
+	switch strings.ToLower(mode) {
+	case "remote":
+		return "2"
+	case "hybrid":
+		return "3"
+	case "onsite", "on-site":
+		return "1"
+	default:
+		return ""
+	}
+}
+
+// normalizeID extracts a numeric job ID from a raw ID, a job-view URL, or a URN.
+func normalizeID(input string) string {
+	if m := regexp.MustCompile(`urn:li:jobPosting:(\d+)`).FindStringSubmatch(input); m != nil {
+		return m[1]
+	}
+	if m := regexp.MustCompile(`-(\d{6,})(?:\?|$)`).FindStringSubmatch(input); m != nil {
+		return m[1]
+	}
+	if m := regexp.MustCompile(`/(\d{6,})(?:\?|$)`).FindStringSubmatch(input); m != nil {
+		return m[1]
+	}
+	if regexp.MustCompile(`^\d{6,}$`).MatchString(input) {
+		return input
+	}
+	return ""
+}
+
+func (n LinkedIn) Detail(ctx context.Context, id string) (*scraper.Result, error) {
+	rawID := normalizeID(id)
+	if rawID == "" {
+		return nil, fmt.Errorf("could not parse a job ID from %q", id)
+	}
+
+	f := n.Fetcher
+	if f == nil {
+		f = &scraper.HTTPFetcher{}
+	}
+
+	body, err := f.Fetch(ctx, detailURL+"/"+rawID)
+	if err != nil {
+		return nil, err
+	}
+	if body == "" {
+		return nil, fmt.Errorf("job %s not found", rawID)
+	}
+
+	result := parseJobDetail(body, rawID)
+	return result, nil
+}
+
+func parseJobDetail(htmlBody, id string) *scraper.Result {
+	r := &scraper.Result{
+		ID:  id,
+		URL: "https://www.linkedin.com/jobs/view/" + id,
+	}
+
+	// Title
+	if m := regexp.MustCompile(`class="(?:top-card-layout__title|topcard__title)[^"]*"[^>]*>([\s\S]*?)</h[12]>`).FindStringSubmatch(htmlBody); m != nil {
+		r.Title = scraper.CleanHTML(m[1])
+	}
+
+	// Company + company URL
+	if m := regexp.MustCompile(`class="topcard__org-name-link[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)</a>`).FindStringSubmatch(htmlBody); m != nil {
+		r.Company = scraper.CleanHTML(m[2])
+		r.Metadata = map[string]string{
+			"company_url": html.UnescapeString(m[1]),
+		}
+	}
+
+	// Location
+	if m := regexp.MustCompile(`class="topcard__flavor topcard__flavor--bullet"[^>]*>([\s\S]*?)</span>`).FindStringSubmatch(htmlBody); m != nil {
+		r.Location = scraper.CleanHTML(m[1])
+	}
+
+	// Description
+	if m := regexp.MustCompile(`class="(?:show-more-less-html__markup|description__text[^"]*)"[^>]*>([\s\S]*?)</div>`).FindStringSubmatch(htmlBody); m != nil {
+		desc := m[1]
+		desc = regexp.MustCompile(`<\s*br\s*/?>`).ReplaceAllString(desc, "\n")
+		desc = regexp.MustCompile(`</(?:p|li|ul|ol|div|h\d)>`).ReplaceAllString(desc, "\n")
+		r.Description = scraper.CleanHTML(desc)
+	}
+
+	// Job criteria (seniority, employment type, job function, industries)
+	criteriaRE := regexp.MustCompile(`class="description__job-criteria-subheader"[^>]*>([\s\S]*?)</h3>[\s\S]*?class="description__job-criteria-text[^"]*"[^>]*>([\s\S]*?)</span>`)
+	if r.Metadata == nil && criteriaRE.MatchString(htmlBody) {
+		r.Metadata = map[string]string{}
+	}
+	for _, m := range criteriaRE.FindAllStringSubmatch(htmlBody, -1) {
+		key := strings.ToLower(scraper.CleanHTML(m[1]))
+		val := scraper.CleanHTML(m[2])
+		if key != "" && val != "" {
+			r.Metadata[key] = val
+		}
+	}
+
+	// Apply URL
+	if m := regexp.MustCompile(`class="topcard__link[^"]*"[^>]*href="([^"]+)"`).FindStringSubmatch(htmlBody); m != nil {
+		if r.Metadata == nil {
+			r.Metadata = map[string]string{}
+		}
+		r.Metadata["apply_url"] = html.UnescapeString(m[1])
+	}
+
+	return r
 }
