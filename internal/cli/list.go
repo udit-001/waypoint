@@ -9,11 +9,13 @@ import (
 )
 
 var listFlags struct {
-	status   string
-	category string
-	search   string
-	limit    int
-	all      bool
+	status       string
+	category     string
+	search       string
+	limit        int
+	all          bool
+	expired      bool
+	expiringSoon bool
 }
 
 var listCmd = &cobra.Command{
@@ -26,13 +28,17 @@ Examples:
   waypoint jobs list --status Applied   # Only applied jobs
   waypoint jobs list --category Tech    # Tech category
   waypoint jobs list --search "google"  # Search company/position/notes
+  waypoint jobs list --expired          # Past deadlines
+  waypoint jobs list --expiring-soon    # Deadlines within 7 days
   waypoint jobs list --json             # Machine-readable output`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jobs, err := db.ListJobs(store, db.ListOpts{
-			Search:   listFlags.search,
-			Status:   listFlags.status,
-			Category: listFlags.category,
+			Search:       listFlags.search,
+			Status:       listFlags.status,
+			Category:     listFlags.category,
+			Expired:      listFlags.expired,
+			ExpiringSoon: listFlags.expiringSoon,
 		})
 		if err != nil {
 			return formatError("failed to list jobs", err)
@@ -72,10 +78,15 @@ Examples:
 
 		rows := make([][]string, 0, len(jobs))
 		for _, j := range jobs {
+			deadline := j.Date
+			if deadline == "" {
+				deadline = "-"
+			}
 			rows = append(rows, []string{
 				fmt.Sprintf("%d", j.ID),
 				truncate(j.Company, 28),
 				truncate(j.Position, 30),
+				deadline,
 				j.Status,
 				j.CategoryName,
 				formatDateShort(j.UpdatedAt),
@@ -83,7 +94,7 @@ Examples:
 		}
 
 		fmt.Println(formatTable(
-			[]string{"ID", "Company", "Position", "Status", "Category", "Updated"},
+			[]string{"ID", "Company", "Position", "Deadline", "Status", "Category", "Updated"},
 			rows,
 		))
 		fmt.Println()
@@ -99,6 +110,8 @@ func init() {
 	listCmd.Flags().StringVar(&listFlags.search, "search", "", "Search in company, position, notes")
 	listCmd.Flags().IntVar(&listFlags.limit, "limit", 0, "Max results")
 	listCmd.Flags().BoolVar(&listFlags.all, "all", false, "Show all results regardless of count")
+	listCmd.Flags().BoolVar(&listFlags.expired, "expired", false, "Show only jobs with past deadlines")
+	listCmd.Flags().BoolVar(&listFlags.expiringSoon, "expiring-soon", false, "Show only jobs with deadlines within 7 days")
 }
 
 // formatDateShort formats an RFC3339 timestamp as YYYY-MM-DD.
