@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/udit-001/waypoint/internal/db"
@@ -18,6 +19,7 @@ var updateFlags struct {
 	contact      string
 	url          string
 	notes        string
+	notesFile    string
 	date         string
 	appliedDate  string
 	reminderDate string
@@ -32,6 +34,7 @@ Only the flags you provide are changed — all other fields remain untouched.
 
 Examples:
   waypoint jobs update 42 --status Offer --notes "Got the offer!"
+  waypoint jobs update 42 --notes-file /tmp/notes.txt
   waypoint jobs update 42 --company "Google LLC" --position "Senior Engineer"
   waypoint jobs update 42 --salary "$180k" --location "Mountain View, CA"`,
 	Args: cobra.ExactArgs(1),
@@ -39,6 +42,15 @@ Examples:
 		id, err := strconv.ParseInt(args[0], 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid job ID: %s", args[0])
+		}
+
+		// Read notes from file if provided (overrides --notes)
+		if updateFlags.notesFile != "" {
+			content, err := os.ReadFile(updateFlags.notesFile)
+			if err != nil {
+				return fmt.Errorf("reading notes file: %w", err)
+			}
+			updateFlags.notes = string(content)
 		}
 
 		// Build updates map from non-empty flags
@@ -128,7 +140,8 @@ func init() {
 	updateCmd.Flags().StringVar(&updateFlags.location, "location", "", "Job location")
 	updateCmd.Flags().StringVar(&updateFlags.contact, "contact", "", "Contact person or email")
 	updateCmd.Flags().StringVar(&updateFlags.url, "url", "", "Job posting URL")
-	updateCmd.Flags().StringVar(&updateFlags.notes, "notes", "", "Notes about the job")
+	updateCmd.Flags().StringVar(&updateFlags.notes, "notes", "", "Notes about the job (inline)")
+	updateCmd.Flags().StringVar(&updateFlags.notesFile, "notes-file", "", "Read notes from a file (overrides --notes)")
 	updateCmd.Flags().StringVar(&updateFlags.date, "date", "", "Deadline date (YYYY-MM-DD)")
 	updateCmd.Flags().StringVar(&updateFlags.appliedDate, "applied-date", "", "Date applied (YYYY-MM-DD)")
 	updateCmd.Flags().StringVar(&updateFlags.reminderDate, "reminder-date", "", "Follow-up reminder (datetime-local)")

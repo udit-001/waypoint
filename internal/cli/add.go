@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/udit-001/waypoint/internal/db"
 	"github.com/spf13/cobra"
@@ -15,6 +16,7 @@ var addFlags struct {
 	contact      string
 	url          string
 	notes        string
+	notesFile    string
 	date         string
 	appliedDate  string
 	reminderDate string
@@ -34,9 +36,19 @@ Use flags to add details like status, category, salary, etc.
 Examples:
   waypoint jobs add "Acme Corp" "Senior Engineer"
   waypoint jobs add "Acme Corp" "Senior Engineer" --status Applied --salary "$150k"
-  waypoint jobs add "Acme Corp" "Senior Engineer" --notes "Applied via referral"`,
+  waypoint jobs add "Acme Corp" "Senior Engineer" --notes "Applied via referral"
+  waypoint jobs add "Acme Corp" "Senior Engineer" --notes-file /tmp/notes.txt`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Read notes from file if provided (overrides --notes)
+		if addFlags.notesFile != "" {
+			content, err := os.ReadFile(addFlags.notesFile)
+			if err != nil {
+				return fmt.Errorf("reading notes file: %w", err)
+			}
+			addFlags.notes = string(content)
+		}
+
 		job := db.Job{
 			Company:      args[0],
 			Position:     args[1],
@@ -99,7 +111,8 @@ func init() {
 	addCmd.Flags().StringVar(&addFlags.location, "location", "", "Job location")
 	addCmd.Flags().StringVar(&addFlags.contact, "contact", "", "Contact person or email")
 	addCmd.Flags().StringVar(&addFlags.url, "url", "", "Job posting URL")
-	addCmd.Flags().StringVar(&addFlags.notes, "notes", "", "Notes about the job")
+	addCmd.Flags().StringVar(&addFlags.notes, "notes", "", "Notes about the job (inline)")
+	addCmd.Flags().StringVar(&addFlags.notesFile, "notes-file", "", "Read notes from a file (overrides --notes)")
 	addCmd.Flags().StringVar(&addFlags.date, "date", "", "Deadline date (YYYY-MM-DD)")
 	addCmd.Flags().StringVar(&addFlags.appliedDate, "applied-date", "", "Date applied (YYYY-MM-DD)")
 	addCmd.Flags().StringVar(&addFlags.reminderDate, "reminder-date", "", "Follow-up reminder (datetime-local)")
