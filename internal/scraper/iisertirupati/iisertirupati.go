@@ -38,6 +38,8 @@ func (n IISERTirupati) Search(ctx context.Context, opts scraper.SearchOpts) ([]s
 
 	results := parseJobs(body)
 
+	results = scraper.FilterByQuery(results, opts.Query)
+
 	return results, nil
 }
 

@@ -44,6 +44,8 @@ func (n Manipal) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper
 		allResults = append(allResults, parseTable(body)...)
 	}
 
+	allResults = scraper.FilterByQuery(allResults, opts.Query)
+
 	return allResults, nil
 }
 

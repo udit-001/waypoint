@@ -41,6 +41,8 @@ func (n InStem) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.
 
 	results := parseJobRows(htmlBody)
 
+	results = scraper.FilterByQuery(results, opts.Query)
+
 	return results, nil
 }
 

@@ -36,6 +36,8 @@ func (n BITSPilani) Search(ctx context.Context, opts scraper.SearchOpts) ([]scra
 
 	results := parseTable(body)
 
+	results = scraper.FilterByQuery(results, opts.Query)
+
 	return results, nil
 }
 

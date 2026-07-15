@@ -38,6 +38,8 @@ func (n NIPGR) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.R
 
 	results := parseTable(body)
 
+	results = scraper.FilterByQuery(results, opts.Query)
+
 	return results, nil
 }
 

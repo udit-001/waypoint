@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/SwatiBio/waypoint/internal/scraper"
 	_ "github.com/SwatiBio/waypoint/internal/scraper/bitspilani"      // activate BITS Pilani scraper
@@ -104,6 +105,9 @@ var scrapeRunFlags struct {
 	query    string
 	location string
 	limit    int
+	jobage   int
+	remote   string
+	page     int
 }
 
 var scrapeRunCmd = &cobra.Command{
@@ -128,15 +132,15 @@ Examples:
 			Query:    scrapeRunFlags.query,
 			Location: scrapeRunFlags.location,
 			Limit:    scrapeRunFlags.limit,
+			JobAge:   scrapeRunFlags.jobage,
+			Remote:   scrapeRunFlags.remote,
+			Page:     scrapeRunFlags.page,
 		})
 		if err != nil {
 			return formatError("scrape failed", err)
 		}
 
-		results = scraper.ApplyFilters(results, scraper.SearchOpts{
-			Query: scrapeRunFlags.query,
-			Limit: scrapeRunFlags.limit,
-		})
+		results = scraper.Truncate(results, scrapeRunFlags.limit)
 
 		// Open staging file
 		staging, err := scraper.OpenStaging(defaultStagingPath())
@@ -293,6 +297,77 @@ Examples:
 	},
 }
 
+// --- scrape detail ---
+
+var scrapeDetailCmd = &cobra.Command{
+	Use:   "detail <name> <id>",
+	Short: "Fetch full details for a job posting",
+	Long: `Fetch the full description, seniority, employment type, job function,
+and industries for a job posting. Enriches the staged result if found.
+
+Currently only LinkedIn supports detail fetching.
+
+Examples:
+  waypoint scrape detail linkedin 4439995582
+  waypoint scrape detail linkedin "https://www.linkedin.com/jobs/view/4439995582"`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := args[0]
+		id := args[1]
+
+		s, ok := scraper.Get(name)
+		if !ok {
+			return fmt.Errorf("unknown scraper %q — run 'waypoint scrape list' to see available", name)
+		}
+
+		d, ok := s.(scraper.Detailer)
+		if !ok {
+			return fmt.Errorf("scraper %q does not support detail", name)
+		}
+
+		result, err := d.Detail(context.Background(), id)
+		if err != nil {
+			return formatError("fetch detail", err)
+		}
+
+		staging, err := scraper.OpenStaging(defaultStagingPath())
+		if err != nil {
+			return formatError("open staging", err)
+		}
+		if err := staging.Enrich(result.ID, result.Description, result.Metadata); err != nil {
+			return formatError("enrich staging", err)
+		}
+
+		if jsonOut {
+			printJSON(result)
+			return nil
+		}
+
+		fmt.Printf("  %s\n", result.Title)
+		fmt.Printf("  %s · %s\n", result.Company, result.Location)
+		if result.Description != "" {
+			fmt.Printf("\n%s\n", result.Description)
+		}
+		if len(result.Metadata) > 0 {
+			fmt.Println()
+			for _, k := range sortedKeys(result.Metadata) {
+				fmt.Printf("  %s: %s\n", k, result.Metadata[k])
+			}
+		}
+		fmt.Printf("\n  URL: %s\n", result.URL)
+		return nil
+	},
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // --- scrape prune ---
 
 var scrapePruneFlags struct {
@@ -341,11 +416,15 @@ func init() {
 	scrapeCmd.AddCommand(scrapeRunCmd)
 	scrapeCmd.AddCommand(scrapeStagedCmd)
 	scrapeCmd.AddCommand(scrapeDismissCmd)
+	scrapeCmd.AddCommand(scrapeDetailCmd)
 	scrapeCmd.AddCommand(scrapePruneCmd)
 
 	scrapeRunCmd.Flags().StringVarP(&scrapeRunFlags.query, "query", "q", "", "Filter results by keyword")
 	scrapeRunCmd.Flags().StringVarP(&scrapeRunFlags.location, "location", "l", "", "Location to search (e.g. 'Bengaluru, India', 'Remote')")
 	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.limit, "limit", 0, "Max results (0 = all)")
+	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.jobage, "jobage", 0, "Posted within N days (0 = all). LinkedIn/Indeed only.")
+	scrapeRunCmd.Flags().StringVar(&scrapeRunFlags.remote, "remote", "", "Workplace type: remote|hybrid|onsite (LinkedIn only)")
+	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.page, "page", 1, "Page number, 1-indexed (LinkedIn/Indeed only)")
 
 	scrapeStagedCmd.Flags().StringVar(&scrapeStagedFlags.status, "status", "", "Filter by status (new|dismissed)")
 
