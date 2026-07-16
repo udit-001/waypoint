@@ -10,70 +10,384 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/udit-001/waypoint/internal/skills"
 	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/skills"
 )
 
-type agentTarget struct {
+// --- Types ---
+
+// provider is a supported AI coding agent. Used for detection (which
+// providers are installed) and display (which providers read each family).
+// The read paths are encoded in the families struct, not here.
+type provider struct {
 	name    string
-	dir     string
+	aliases []string
 	detect  func() bool
 }
 
-var agents = []agentTarget{
-	{name: "opencode", dir: ".opencode/skills/waypoint", detect: func() bool { return hasBinary("opencode") || hasDir(".opencode") }},
-	{name: "claude-code", dir: ".claude/skills/waypoint", detect: func() bool { return hasBinary("claude") || hasDir(".claude") }},
-	{name: "codex", dir: ".codex/skills/waypoint", detect: func() bool { return hasBinary("codex") || hasDir(".codex") }},
-	{name: "pi.dev", dir: ".pi/skills/waypoint", detect: func() bool { return hasBinary("pi") || hasDir(".pi") }},
+// installFamily is a write target: a directory name + which providers
+// read it. readers is for display ("read by"); installFor is which
+// detected providers trigger writing to this family.
+type installFamily struct {
+	name       string
+	subdir     string
+	readers    []string
+	installFor []string
 }
 
-func runSkillsInstall(cmd *cobra.Command, args []string) error {
-	agent, _ := cmd.Flags().GetString("agent")
+// skillLocation is a discovered skill directory with its classification.
+type skillLocation struct {
+	dir       string
+	subdir    string
+	scope     string
+	readers   []string
+	family    string
+	status    string
+	unmanaged bool
+}
 
-	var selected agentTarget
-	if agent != "" {
-		for _, a := range agents {
-			if a.name == agent {
-				selected = a
-				break
-			}
+// --- Vars ---
+
+var providers = []provider{
+	{name: "opencode", detect: func() bool { return hasBinary("opencode") || hasDir(".opencode") }},
+	{name: "codex", detect: func() bool { return hasBinary("codex") || hasDir(".codex") }},
+	{name: "pi.dev", aliases: []string{"pi"}, detect: func() bool { return hasBinary("pi") || hasDir(".pi") }},
+	{name: "claude-code", aliases: []string{"claude"}, detect: func() bool { return hasBinary("claude") || hasDir(".claude") }},
+}
+
+var families = []installFamily{
+	{
+		name:       "agents",
+		subdir:     ".agents/skills",
+		readers:    []string{"opencode", "codex", "pi.dev"},
+		installFor: []string{"opencode", "codex", "pi.dev"},
+	},
+	{
+		name:       "claude",
+		subdir:     ".claude/skills",
+		readers:    []string{"opencode", "claude-code"},
+		installFor: []string{"claude-code"},
+	},
+}
+
+// --- Discovery ---
+
+// discover finds skill installs at the two family subdirs (.agents/skills,
+// .claude/skills) at global (home) and project (CWD) scope. No ancestor
+// walk — only checks these four locations.
+func discover() []skillLocation {
+	home, _ := os.UserHomeDir()
+	cwd, _ := os.Getwd()
+	cwd, _ = filepath.Abs(cwd)
+	return discoverAt(home, cwd)
+}
+
+// discoverAt is the testable core of discover — takes home and cwd as
+// parameters so tests can control the scan without touching the real
+// filesystem.
+func discoverAt(home, cwd string) []skillLocation {
+	var locs []skillLocation
+	for _, f := range families {
+		globalDir := filepath.Join(home, f.subdir)
+		if dirExists(globalDir) {
+			locs = append(locs, skillLocation{
+				dir:     globalDir,
+				subdir:  f.subdir,
+				scope:   "global",
+				readers: f.readers,
+				family:  f.name,
+			})
 		}
-		if selected.name == "" {
-			return fmt.Errorf("unknown agent %q\n  Supported: opencode, claude-code, codex, pi.dev", agent)
+		projectDir := filepath.Join(cwd, f.subdir)
+		if projectDir != globalDir && dirExists(projectDir) {
+			locs = append(locs, skillLocation{
+				dir:     projectDir,
+				subdir:  f.subdir,
+				scope:   "project",
+				readers: f.readers,
+				family:  f.name,
+			})
 		}
-	} else {
-		selected = pickAgent()
 	}
 
-	// Confirm overwrite if the target dir already exists.
-	if _, err := os.Stat(selected.dir); err == nil {
-		fmt.Printf("  %s/ already exists.\n", selected.dir)
-		fmt.Print("  Overwrite? [y/N] ")
-		reader := bufio.NewReader(os.Stdin)
-		answer, _ := reader.ReadString('\n')
-		answer = strings.TrimSpace(strings.ToLower(answer))
-		if answer != "y" && answer != "yes" {
-			fmt.Println("  Skipped.")
+	embedded, _ := skillFilesMap(skills.SkillName)
+	for i := range locs {
+		classifyLocation(&locs[i], embedded)
+	}
+	return locs
+}
+
+func classifyLocation(loc *skillLocation, embedded map[string][]byte) {
+	if anySkillChanged(loc.dir, skills.SkillName, embedded) {
+		loc.status = "outdated"
+	} else {
+		loc.status = "current"
+	}
+	manifestPath := skills.ManifestPath(filepath.Join(loc.dir, skills.SkillName))
+	if _, err := os.Stat(manifestPath); err != nil {
+		loc.unmanaged = true
+	}
+}
+
+func dirExists(p string) bool {
+	info, err := os.Stat(p)
+	return err == nil && info.IsDir()
+}
+
+// --- Detection ---
+
+func detectProviders() []provider {
+	var found []provider
+	for _, p := range providers {
+		if p.detect() {
+			found = append(found, p)
+		}
+	}
+	return found
+}
+
+func familiesForProviders(detected []provider) []installFamily {
+	var result []installFamily
+	for _, f := range families {
+		for _, name := range f.installFor {
+			for _, p := range detected {
+				if p.name == name {
+					result = append(result, f)
+					break
+				}
+			}
+		}
+	}
+	return result
+}
+
+func hasBinary(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+func hasDir(name string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(home, name)); err == nil {
+		return true
+	}
+	if _, err := os.Stat(name); err == nil {
+		return true
+	}
+	return false
+}
+
+// --- Install ---
+
+func runSkillsInstall(cmd *cobra.Command, args []string) error {
+	agentsOnly, _ := cmd.Flags().GetBool("agents-only")
+	claudeOnly, _ := cmd.Flags().GetBool("claude-only")
+	all, _ := cmd.Flags().GetBool("all")
+	project, _ := cmd.Flags().GetBool("project")
+
+	if all && (agentsOnly || claudeOnly) {
+		return fmt.Errorf("--all is mutually exclusive with --agents-only and --claude-only")
+	}
+	if agentsOnly && claudeOnly {
+		return fmt.Errorf("use --all to install both families, not --agents-only and --claude-only together")
+	}
+
+	nonInteractive := all || agentsOnly || claudeOnly
+
+	detected := detectProviders()
+	if len(detected) == 0 {
+		if !nonInteractive {
+			fmt.Println()
+			fmt.Print("  No AI coding agent detected. Install the waypoint skill anyway? [y/N] ")
+			if !promptYes() {
+				return nil
+			}
+		}
+		return installFamilies(families, project)
+	}
+
+	names := make([]string, len(detected))
+	for i, p := range detected {
+		names[i] = p.name
+	}
+	fmt.Println()
+	fmt.Printf("  Detected: %s\n", strings.Join(names, ", "))
+
+	var selectedFamilies []installFamily
+	switch {
+	case agentsOnly:
+		selectedFamilies = []installFamily{families[0]}
+	case claudeOnly:
+		selectedFamilies = []installFamily{families[1]}
+	case all:
+		selectedFamilies = familiesForProviders(detected)
+		if len(selectedFamilies) == 0 {
+			fmt.Println("  No installable families for detected providers.")
+			return nil
+		}
+	default:
+		avail := familiesForProviders(detected)
+		if len(avail) == 0 {
+			fmt.Println("  No installable families for detected providers.")
+			return nil
+		}
+		if len(avail) <= 1 {
+			selectedFamilies = avail
+		} else {
+			selectedFamilies = promptFamilySelect(avail)
+			if selectedFamilies == nil {
+				fmt.Println("  Cancelled.")
+				return nil
+			}
+		}
+	}
+
+	if !nonInteractive && !project {
+		var cancelled bool
+		project, cancelled = promptInstallScope(selectedFamilies)
+		if cancelled {
+			fmt.Println("  Cancelled.")
 			return nil
 		}
 	}
 
-	files, err := skillFilesMap()
-	if err != nil {
-		return fmt.Errorf("read skill files: %w", err)
-	}
+	return installFamilies(selectedFamilies, project)
+}
 
-	n, err := installSkillDir(files, selected.dir)
-	if err != nil {
-		return err
-	}
+func promptFamilySelect(avail []installFamily) []installFamily {
+	fmt.Println()
+	fmt.Println("  Install to:")
+	fmt.Printf("    1. Both           — %s, %s\n", familyGlobalDir(families[0]), familyGlobalDir(families[1]))
+	fmt.Printf("    2. Standard only  — %s  (%s)\n", familyGlobalDir(families[0]), strings.Join(families[0].readers, ", "))
+	fmt.Printf("    3. Claude only    — %s  (%s)\n", familyGlobalDir(families[1]), strings.Join(families[1].readers, ", "))
+	fmt.Println("    0. Cancel")
+	fmt.Println()
+	fmt.Print("  Enter number [1]: ")
 
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	switch input {
+	case "0":
+		return nil
+	case "2":
+		return []installFamily{families[0]}
+	case "3":
+		return []installFamily{families[1]}
+	default:
+		return avail
+	}
+}
+
+func promptInstallScope(selectedFamilies []installFamily) (bool, bool) {
+	globalDirs := make([]string, len(selectedFamilies))
+	projectDirs := make([]string, len(selectedFamilies))
+	for i, f := range selectedFamilies {
+		globalDirs[i] = familyGlobalDir(f)
+		projectDirs[i] = "./" + f.subdir
+	}
 	fmt.Println()
-	fmt.Printf("  ✓ Installed waypoint skill to %s (%d files)\n", selected.dir, n)
+	fmt.Println("  Scope:")
+	fmt.Printf("    1. Globally     — %s\n", strings.Join(globalDirs, ", "))
+	fmt.Printf("    2. This project — %s\n", strings.Join(projectDirs, ", "))
+	fmt.Println("    0. Cancel")
 	fmt.Println()
-	printNextSteps(selected)
+	fmt.Print("  Enter number [1]: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	switch input {
+	case "0":
+		return false, true
+	case "2":
+		return true, false
+	default:
+		return false, false
+	}
+}
+
+func familyGlobalDir(f installFamily) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return f.subdir
+	}
+	return filepath.Join(home, f.subdir)
+}
+
+func familyDir(f installFamily, project bool) string {
+	if project {
+		return f.subdir
+	}
+	return familyGlobalDir(f)
+}
+
+func installFamilies(selectedFamilies []installFamily, project bool) error {
+	var errors []string
+	for _, f := range families {
+		if !familyInList(f, selectedFamilies) {
+			continue
+		}
+		baseDir := familyDir(f, project)
+		action := "Installed"
+		if isSkillInstalled(baseDir) {
+			if anySkillChangedForAll(baseDir) {
+				action = "Updated"
+			} else {
+				fmt.Printf("  ✓ Already current at %s (%s)\n", baseDir, strings.Join(f.readers, ", "))
+				continue
+			}
+		}
+		n, err := installAllSkills(baseDir)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", f.name, err))
+			continue
+		}
+		fmt.Printf("  ✓ %s waypoint skill to %s/ (%d files) — %s\n", action, baseDir, n, strings.Join(f.readers, ", "))
+	}
+	fmt.Println()
+	printNextSteps()
+	if len(errors) > 0 {
+		fmt.Println("  Errors:")
+		for _, e := range errors {
+			fmt.Printf("    • %s\n", e)
+		}
+	}
 	fmt.Println()
 	return nil
+}
+
+func familyInList(f installFamily, list []installFamily) bool {
+	for _, x := range list {
+		if x.name == f.name {
+			return true
+		}
+	}
+	return false
+}
+
+// installAllSkills installs every embedded skill into baseDir/<skillName>,
+// then writes a manifest for change detection. Returns total file count.
+func installAllSkills(baseDir string) (int, error) {
+	total := 0
+	for _, skill := range skills.All {
+		skillDir := filepath.Join(baseDir, skill)
+		files, err := skillFilesMap(skill)
+		if err != nil {
+			return total, fmt.Errorf("read %s skill files: %w", skill, err)
+		}
+		n, err := installSkillDir(files, skillDir)
+		if err != nil {
+			return total, fmt.Errorf("install %s skill: %w", skill, err)
+		}
+		total += n
+	}
+	return total, nil
 }
 
 // installSkillDir writes every file from the map under destDir, then
@@ -106,158 +420,12 @@ func installSkillDir(files map[string][]byte, destDir string) (int, error) {
 	return len(files), nil
 }
 
-func pickAgent() agentTarget {
-	detected := detectAgents()
+// --- Skill content helpers ---
 
-	switch len(detected) {
-	case 0:
-		// None found — show all options
-		fmt.Println()
-		fmt.Println("  No AI coding agent detected. Pick one:")
-		fmt.Println()
-		for i, a := range agents {
-			fmt.Printf("    %d. %s\n", i+1, a.name)
-		}
-		fmt.Println()
-		fmt.Print("  Enter number [1]: ")
-		return readChoice(agents)
-
-	case 1:
-		// Exactly one — auto-select
-		fmt.Println()
-		fmt.Printf("  Detected %s\n", detected[0].name)
-		return detected[0]
-
-	default:
-		// Multiple — show only detected
-		fmt.Println()
-		fmt.Println("  Detected AI coding agents:")
-		fmt.Println()
-		for i, a := range detected {
-			fmt.Printf("    %d. %s\n", i+1, a.name)
-		}
-		fmt.Println()
-		fmt.Print("  Enter number [1]: ")
-		return readChoice(detected)
-	}
-}
-
-func detectAgents() []agentTarget {
-	var found []agentTarget
-	for _, a := range agents {
-		if a.detect() {
-			found = append(found, a)
-		}
-	}
-	return found
-}
-
-func hasBinary(name string) bool {
-	_, err := exec.LookPath(name)
-	return err == nil
-}
-
-func hasDir(name string) bool {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return false
-	}
-	if _, err := os.Stat(filepath.Join(home, name)); err == nil {
-		return true
-	}
-	// Also check current directory
-	if _, err := os.Stat(name); err == nil {
-		return true
-	}
-	return false
-}
-
-func readChoice(list []agentTarget) agentTarget {
-	reader := bufio.NewReader(os.Stdin)
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSpace(input)
-
-	if input == "" {
-		return list[0]
-	}
-
-	var n int
-	if _, err := fmt.Sscanf(input, "%d", &n); err != nil || n < 1 || n > len(list) {
-		return list[0]
-	}
-	return list[n-1]
-}
-
-func printNextSteps(a agentTarget) {
-	fmt.Println("  Next steps:")
-	fmt.Printf("  - Skills are auto-discovered at session start\n")
-	fmt.Printf("  - Ask your agent to manage job applications with waypoint\n")
-}
-
-// offerSkillInstall is the shared skill-install flow for init.
-// It detects agents, branches by count, and installs without
-// redundant prompting.
-func offerSkillInstall() {
-	detected := detectAgents()
-
-	files, err := skillFilesMap()
-	if err != nil {
-		fmt.Printf("  Warning: could not read skill files: %v\n", err)
-		return
-	}
-
-	switch len(detected) {
-	case 1:
-		// One agent detected — install for it without prompting
-		fmt.Println()
-		fmt.Printf("  Detected %s — installing waypoint skill...\n", detected[0].name)
-		n, err := installSkillDir(files, detected[0].dir)
-		if err != nil {
-			fmt.Printf("  Warning: skill install failed: %v\n", err)
-		} else {
-			fmt.Printf("  ✓ Installed waypoint skill to %s (%d files)\n", detected[0].dir, n)
-		}
-
-	case 0:
-		// No agent detected — offer to pick from all
-		fmt.Println()
-		fmt.Print("  No AI coding agent detected. Install the waypoint skill anyway? [y/N] ")
-		if promptYes() {
-			selected := pickAgent()
-			n, err := installSkillDir(files, selected.dir)
-			if err != nil {
-				fmt.Printf("  Warning: skill install failed: %v\n", err)
-			} else {
-				fmt.Println()
-				fmt.Printf("  ✓ Installed waypoint skill to %s (%d files)\n", selected.dir, n)
-			}
-		}
-
-	default:
-		// Multiple detected — pick which one
-		fmt.Println()
-		fmt.Print("  Install the waypoint skill for an AI coding agent? [Y/n] ")
-		if promptDefaultYes() {
-			selected := pickAgent()
-			n, err := installSkillDir(files, selected.dir)
-			if err != nil {
-				fmt.Printf("  Warning: skill install failed: %v\n", err)
-			} else {
-				fmt.Println()
-				fmt.Printf("  ✓ Installed waypoint skill to %s (%d files)\n", selected.dir, n)
-				printNextSteps(selected)
-			}
-		}
-	}
-}
-
-// skillFilesMap walks the embedded skill directory and returns a map of
-// relative path → file contents. Used by offerSkillUpgrade to detect
-// changes in any skill file, not just SKILL.md.
-func skillFilesMap() (map[string][]byte, error) {
+func skillFilesMap(skill string) (map[string][]byte, error) {
 	files := make(map[string][]byte)
-	prefix := skills.SkillName + "/"
-	err := fs.WalkDir(skills.Files, skills.SkillName, func(path string, d fs.DirEntry, err error) error {
+	prefix := skill + "/"
+	err := fs.WalkDir(skills.Files, skill, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -275,10 +443,21 @@ func skillFilesMap() (map[string][]byte, error) {
 	return files, err
 }
 
-// skillFilesChanged returns true if any file in the embedded skill differs
-// from the installed copy at dir. Uses the manifest for change detection;
-// falls back to byte-by-byte comparison for legacy installs without one.
-func skillFilesChanged(dir string, embedded map[string][]byte) bool {
+func anySkillChangedForAll(baseDir string) bool {
+	for _, skill := range skills.All {
+		embedded, err := skillFilesMap(skill)
+		if err != nil {
+			return true
+		}
+		if anySkillChanged(baseDir, skill, embedded) {
+			return true
+		}
+	}
+	return false
+}
+
+func anySkillChanged(baseDir, skill string, embedded map[string][]byte) bool {
+	dir := filepath.Join(baseDir, skill)
 	m, err := skills.ReadManifest(dir)
 	if err != nil {
 		// No manifest — legacy install, compare file-by-file.
@@ -320,22 +499,59 @@ func legacySkillFilesChanged(dir string, embedded map[string][]byte) bool {
 	return installedCount != len(embedded)
 }
 
-// offerSkillUpgrade checks for installed waypoint skills that differ from
-// the embedded version and offers to update them. Shared with upgrade.
-func offerSkillUpgrade() {
-	embedded, err := skillFilesMap()
-	if err != nil {
+func isSkillInstalled(baseDir string) bool {
+	_, err := os.Stat(filepath.Join(baseDir, skills.SkillName, "SKILL.md"))
+	return err == nil
+}
+
+// --- Startup hooks ---
+
+func offerSkillInstall() {
+	detected := detectProviders()
+	if len(detected) == 0 {
 		return
 	}
+	avail := familiesForProviders(detected)
+	if len(avail) == 0 {
+		return
+	}
+	allCurrent := true
+	for _, f := range avail {
+		baseDir := familyGlobalDir(f)
+		if !isSkillInstalled(baseDir) || anySkillChangedForAll(baseDir) {
+			allCurrent = false
+			break
+		}
+	}
+	if allCurrent {
+		return
+	}
+	fmt.Println()
+	names := make([]string, len(detected))
+	for i, p := range detected {
+		names[i] = p.name
+	}
+	if len(detected) == 1 {
+		fmt.Printf("  Detected %s — install the waypoint skill? [Y/n] ", detected[0].name)
+	} else {
+		fmt.Printf("  Detected %s — install the waypoint skill? [Y/n] ", strings.Join(names, ", "))
+	}
+	if !promptDefaultYes() {
+		return
+	}
+	installFamilies(avail, false)
+}
 
-	// Find which agents have the skill installed and outdated.
-	var outdated []agentTarget
-	for _, a := range agents {
-		if !isSkillInstalled(a.dir) {
+func offerSkillUpgrade() {
+	locs := discover()
+
+	var outdated []skillLocation
+	for _, loc := range locs {
+		if !isSkillInstalled(loc.dir) {
 			continue
 		}
-		if skillFilesChanged(a.dir, embedded) {
-			outdated = append(outdated, a)
+		if loc.status == "outdated" {
+			outdated = append(outdated, loc)
 		}
 	}
 
@@ -344,39 +560,37 @@ func offerSkillUpgrade() {
 	}
 
 	fmt.Println()
-	if len(outdated) == 1 {
-		fmt.Printf("  The waypoint skill for %s has changed. Update it? [Y/n] ", outdated[0].name)
-	} else {
-		names := make([]string, len(outdated))
-		for i, a := range outdated {
-			names[i] = a.name
-		}
-		fmt.Printf("  Waypoint skills have changed for %s. Update them? [Y/n] ", strings.Join(names, ", "))
+	fmt.Println("  Outdated skill installs found:")
+	for _, o := range outdated {
+		fmt.Printf("    ⚠ %s\n", formatLocationLine(o))
 	}
-
-	if !promptDefaultYes() {
-		return
-	}
-
-	for _, a := range outdated {
-		n, err := installSkillDir(embedded, a.dir)
-		if err != nil {
-			fmt.Printf("  Warning: failed to update skill for %s: %v\n", a.name, err)
-		} else {
-			fmt.Printf("  ✓ Updated %s skill (%d files)\n", a.name, n)
+	fmt.Print("  Update them? [Y/n] ")
+	if promptDefaultYes() {
+		for _, o := range outdated {
+			n, err := installAllSkills(o.dir)
+			if err != nil {
+				fmt.Printf("  Warning: failed to update %s: %v\n", o.dir, err)
+			} else {
+				fmt.Printf("  ✓ Updated %s (%d files)\n", o.dir, n)
+			}
 		}
 	}
 }
 
-// isSkillInstalled returns true if the SKILL.md exists at dir.
-func isSkillInstalled(dir string) bool {
-	_, err := os.Stat(filepath.Join(dir, "SKILL.md"))
-	return err == nil
+// formatLocationLine renders a skillLocation for human-readable output.
+func formatLocationLine(loc skillLocation) string {
+	parts := []string{loc.dir, "—", loc.status, "—", loc.scope}
+	if len(loc.readers) > 0 {
+		parts = append(parts, "—", strings.Join(loc.readers, ", "))
+	}
+	if loc.unmanaged {
+		parts = append(parts, "[unmanaged]")
+	}
+	return strings.Join(parts, " ")
 }
 
+// --- Prompts ---
 
-
-// promptYes reads a y/N prompt. Returns true only on explicit "y" or "yes".
 func promptYes() bool {
 	reader := bufio.NewReader(os.Stdin)
 	answer, _ := reader.ReadString('\n')
@@ -384,10 +598,15 @@ func promptYes() bool {
 	return answer == "y" || answer == "yes"
 }
 
-// promptDefaultYes reads a Y/n prompt. Returns true on enter, "y", or "yes".
 func promptDefaultYes() bool {
 	reader := bufio.NewReader(os.Stdin)
 	answer, _ := reader.ReadString('\n')
 	answer = strings.TrimSpace(strings.ToLower(answer))
 	return answer == "" || answer == "y" || answer == "yes"
+}
+
+func printNextSteps() {
+	fmt.Println("  Next steps:")
+	fmt.Printf("  - Skills are auto-discovered at session start\n")
+	fmt.Printf("  - Ask your agent to manage job applications with waypoint\n")
 }
