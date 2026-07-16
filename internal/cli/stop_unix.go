@@ -13,7 +13,11 @@ func killProcess(pid int) error {
 	if err != nil {
 		return fmt.Errorf("no process with PID %d found", pid)
 	}
-	if err := proc.Signal(syscall.SIGTERM); err != nil {
+	// SIGINT allows graceful shutdown — the server closes the database
+	// and releases the port cleanly. The server handles both SIGINT and
+	// SIGTERM identically (see server.go signal.Notify), but SIGINT is
+	// the convention for "interrupt" (what Ctrl+C sends).
+	if err := proc.Signal(syscall.SIGINT); err != nil {
 		// ESRCH means process already exited — treat as success
 	}
 	return nil

@@ -3,9 +3,11 @@ module github.com/udit-001/waypoint
 go 1.25.10
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/pressly/goose/v3 v3.27.2
 	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.9
 	modernc.org/sqlite v1.53.0
 )
 
@@ -18,7 +20,6 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
-	github.com/spf13/pflag v1.0.9 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect

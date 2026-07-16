@@ -4,21 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/version"
-	"github.com/spf13/cobra"
 )
-
-func defaultDBPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "jobtracker.db"
-	}
-	return filepath.Join(home, ".waypoint", "waypoint.db")
-}
 
 var (
 	store     db.Store
@@ -37,6 +29,17 @@ to create one, then add, list, update, and delete your job entries.
 
 Most commands support --json for machine-readable output.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Resolve DB path: --db flag (if explicitly set) → config file → default.
+		// This runs for all commands including init, so storePath is always
+		// resolved before any command's RunE executes.
+		if !cmd.Flags().Changed("db") {
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+			storePath = config.DBPath(cfg)
+		}
+
 		// Skip DB connection for non-DB commands
 		if cmd.Name() == "init" || cmd.Name() == "help" || cmd.Name() == "completion" || cmd.Name() == "version" {
 			return nil
@@ -57,7 +60,7 @@ Most commands support --json for machine-readable output.`,
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&storePath, "db", defaultDBPath(), "Path to SQLite database")
+	rootCmd.PersistentFlags().StringVar(&storePath, "db", config.DBPath(nil), "Path to SQLite database")
 	rootCmd.PersistentFlags().BoolVar(&jsonOut, "json", false, "Output as JSON")
 }
 
