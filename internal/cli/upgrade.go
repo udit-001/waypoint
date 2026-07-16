@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-
+	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/version"
 )
 
@@ -63,22 +63,20 @@ restarted afterwards.`,
 
 		// Stop server if running — the binary can't be replaced while
 		// the process is alive, and the DB lock will conflict on restart.
-		var pid int
-		if data, err := os.ReadFile(pidFilePath()); err == nil {
-			if p, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
-				pid = p
-			}
+		var info *pidInfo
+		if i, err := readPidFile(); err == nil {
+			info = i
 		}
 
-		if pid > 0 {
-			fmt.Printf("  Stopping server (PID %d)...\n", pid)
-			if err := killProcess(pid); err != nil {
+		if info != nil && info.PID > 0 {
+			fmt.Printf("  Stopping server (PID %d)...\n", info.PID)
+			if err := killProcess(info.PID); err != nil {
 				fmt.Printf("  Warning: could not stop server: %v\n", err)
 				fmt.Printf("  Please stop it manually and re-run upgrade.\n")
 				fmt.Println()
 				return nil
 			}
-			_ = os.Remove(pidFilePath())
+			_ = os.Remove(config.PidPath())
 			fmt.Printf("  Server stopped.\n")
 		}
 
@@ -104,9 +102,12 @@ restarted afterwards.`,
 		fmt.Printf("  Upgraded to %s\n", rel.TagName)
 
 		// Restart the server if it was running before the upgrade.
-		if pid > 0 {
+		if info != nil && info.PID > 0 {
 			fmt.Printf("  Restarting server...\n")
-			restartPort := startFlags.port
+			restartPort := info.Port
+			if restartPort == 0 {
+				restartPort = startFlags.port
+			}
 			daemonArgs := []string{
 				os.Args[0], "start",
 				"--port", strconv.Itoa(restartPort),
@@ -122,7 +123,7 @@ restarted afterwards.`,
 				fmt.Printf("  Warning: could not restart server: %v\n", err)
 				fmt.Printf("  Run 'waypoint start' manually.\n")
 			} else {
-				_ = os.WriteFile(pidFilePath(), []byte(fmt.Sprintf("%d", rc.Process.Pid)), 0644)
+				_ = writePidFile(restartPort, rc.Process.Pid)
 				fmt.Printf("  Server restarted in background (PID: %d)\n", rc.Process.Pid)
 				fmt.Printf("  http://127.0.0.1:%d\n", restartPort)
 			}
@@ -236,5 +237,3 @@ func fetchLatestRelease() (*ghRelease, error) {
 	}
 	return &rel, nil
 }
-
-

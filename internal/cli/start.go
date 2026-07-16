@@ -4,20 +4,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
+	"time"
 
-	"github.com/udit-001/waypoint/internal/server"
 	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/config"
+	"github.com/udit-001/waypoint/internal/server"
 )
-
-func pidFilePath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "server.pid"
-	}
-	return filepath.Join(home, ".waypoint", "server.pid")
-}
 
 var startFlags struct {
 	port       int
@@ -43,6 +36,31 @@ Examples:
   waypoint start --no-open     # Don't auto-open browser`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Resolve port: --port flag (if explicitly set) → config file → default.
+		if !cmd.Flags().Changed("port") {
+			if cfg, err := config.Load(); err == nil && cfg != nil && cfg.Port > 0 {
+				startFlags.port = cfg.Port
+			}
+		}
+
+		// Check if server is already running. This prevents silent port
+		// conflicts when a user runs `waypoint start` while a server is
+		// already serving. The health check is the source of truth — a
+		// stale PID file without a responding server is ignored.
+		if info, err := readPidFile(); err == nil && info.Port > 0 && isServerRunning(info.Port) {
+			url := fmt.Sprintf("http://127.0.0.1:%d", info.Port)
+			if jsonOut {
+				printJSON(map[string]any{"running": true, "port": info.Port, "pid": info.PID, "url": url})
+				return nil
+			}
+			fmt.Println()
+			fmt.Printf("  Waypoint server already running (PID: %d)\n", info.PID)
+			fmt.Printf("  %s\n", url)
+			fmt.Printf("  Use 'waypoint stop' to stop\n")
+			fmt.Println()
+			return nil
+		}
+
 		background := startFlags.background && !startFlags.foreground
 		if background && !startFlags.daemon {
 			daemonArgs := []string{
@@ -59,7 +77,20 @@ Examples:
 			if err := c.Start(); err != nil {
 				return fmt.Errorf("failed to start background server: %w", err)
 			}
-			_ = os.WriteFile(pidFilePath(), []byte(fmt.Sprintf("%d", c.Process.Pid)), 0644)
+			if err := writePidFile(startFlags.port, c.Process.Pid); err != nil {
+				return fmt.Errorf("failed to write PID file: %w", err)
+			}
+
+			// Poll isServerRunning every 100ms for up to 2 seconds (20 attempts).
+			// This catches silent failures — port in use, child crash, etc.
+			// On timeout, kill the child and clean up so the user isn't left
+			// with a zombie process and a stale PID file.
+			if !waitForServerReady(startFlags.port, 20, 100*time.Millisecond) {
+				c.Process.Kill()
+				_ = os.Remove(config.PidPath())
+				return fmt.Errorf("Server failed to start — port may be in use")
+			}
+
 			fmt.Println()
 			fmt.Printf("  Waypoint server started in background (PID: %d)\n", c.Process.Pid)
 			fmt.Printf("  http://127.0.0.1:%d\n", startFlags.port)
@@ -90,9 +121,21 @@ Examples:
 	},
 }
 
+// waitForServerReady polls isServerRunning every interval up to maxAttempts.
+// Returns true if the server responds within the deadline, false on timeout.
+func waitForServerReady(port, maxAttempts int, interval time.Duration) bool {
+	for i := 0; i < maxAttempts; i++ {
+		if isServerRunning(port) {
+			return true
+		}
+		time.Sleep(interval)
+	}
+	return false
+}
+
 func init() {
 	rootCmd.AddCommand(startCmd)
-	startCmd.Flags().IntVar(&startFlags.port, "port", 8080, "HTTP server port")
+	startCmd.Flags().IntVar(&startFlags.port, "port", config.DefaultPort, "HTTP server port")
 	startCmd.Flags().BoolVar(&startFlags.noOpen, "no-open", false, "Don't auto-open browser")
 	startCmd.Flags().BoolVarP(&startFlags.foreground, "foreground", "f", false, "Run server in foreground")
 	startCmd.Flags().BoolVarP(&startFlags.background, "background", "b", true, "Run server in background")
