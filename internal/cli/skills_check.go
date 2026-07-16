@@ -2,59 +2,73 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/udit-001/waypoint/internal/skills"
 	"github.com/spf13/cobra"
 )
 
 var skillsCheckCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check installed skills and their status",
-	Long: `Report which agent skill directories exist and whether they are
-current or outdated.
+	Long: `Report which skill locations exist and whether they are current
+or outdated.
 
-Reads the manifest (waypoint.skill.json) in each installed skill
-directory to determine status.
+Checks the Agent Skills Open Standard locations:
+  ~/.agents/skills  (global, read by opencode, codex, pi.dev)
+  ~/.claude/skills  (global, read by claude-code)
+  ./.agents/skills  (project)
+  ./.claude/skills  (project)
 
 Examples:
-  waypoint skills check`,
+  waypoint skills check
+  waypoint skills check --json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		embedded, err := skillFilesMap()
-		if err != nil {
-			return fmt.Errorf("read embedded skill files: %w", err)
+		locs := discover()
+
+		if jsonOut {
+			type skillStatus struct {
+				Dir       string   `json:"dir"`
+				Scope     string   `json:"scope"`
+				Family    string   `json:"family"`
+				Status    string   `json:"status"`
+				Readers   []string `json:"readers"`
+				Unmanaged bool     `json:"unmanaged"`
+			}
+			var results []skillStatus
+			for _, loc := range locs {
+				if !isSkillInstalled(loc.dir) {
+					continue
+				}
+				results = append(results, skillStatus{
+					Dir:       loc.dir,
+					Scope:     loc.scope,
+					Family:    loc.family,
+					Status:    loc.status,
+					Readers:   loc.readers,
+					Unmanaged: loc.unmanaged,
+				})
+			}
+			if results == nil {
+				results = []skillStatus{}
+			}
+			printJSON(results)
+			return nil
 		}
 
 		fmt.Println()
 		var installed bool
 		var outdatedCount int
-
-		for _, a := range agents {
-			if !isSkillInstalled(a.dir) {
+		for _, loc := range locs {
+			if !isSkillInstalled(loc.dir) {
 				continue
 			}
 			installed = true
-
-			manifestPath := skills.ManifestPath(a.dir)
-			_, hasManifest := os.Stat(manifestPath)
-
-			status := "current"
-			if skillFilesChanged(a.dir, embedded) {
-				status = "outdated"
-			}
-
 			icon := "✓"
-			if status == "outdated" {
+			if loc.status == "outdated" {
 				icon = "⚠"
 				outdatedCount++
 			}
-
-			unmanaged := ""
-			if hasManifest != nil {
-				unmanaged = " [unmanaged]"
-			}
-			fmt.Printf("  %s %s — %s%s\n", icon, a.dir, status, unmanaged)
+			fmt.Printf("  %s %s\n", icon, formatLocationLine(loc))
 		}
 
 		if !installed {
@@ -67,10 +81,12 @@ Examples:
 		fmt.Println()
 		if outdatedCount > 0 {
 			fmt.Printf("  %d outdated install(s) found. Run 'waypoint skills install' to update.\n", outdatedCount)
-		} else {
-			fmt.Println("  All skills are up to date.")
 		}
 		fmt.Println()
 		return nil
 	},
+}
+
+func init() {
+	skillsCmd.AddCommand(skillsCheckCmd)
 }
