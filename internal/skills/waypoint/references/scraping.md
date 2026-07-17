@@ -46,7 +46,7 @@ Optional flags (supported by portals that offer them; ignored by the rest):
 | `-q, --query <text>` | Keyword search | All |
 | `-l, --location <text>` | Location to search | LinkedIn (defaults to "India" if omitted), Indeed, Google Jobs |
 | `--limit <n>` | Cap results (0 = all) | All |
-| `--jobage <days>` | Posted within N days | LinkedIn, Indeed |
+| `--jobage <days>` | Posted within N days (default: 90; 0 = all) | All |
 | `--remote <mode>` | `remote` / `hybrid` / `onsite` | LinkedIn |
 | `--page <n>` | Page number, 1-indexed | LinkedIn, Indeed |
 

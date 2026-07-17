@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" id="theme-color" content="#f8fafc" />
+  <title>Waypoint</title>
   <!-- Blocking theme init — runs before Svelte mounts, prevents flash -->
   <script>
     (function() {
@@ -10,25 +14,36 @@
       }
       document.documentElement.dataset.theme = theme;
 
+      // Theme-color must match the page background (--color-slate-50 in app.css).
+      // Can't use getComputedStyle here because CSS hasn't loaded yet — these
+      // values mirror --color-slate-50 for light (#f8fafc) and dark (#2e3440).
+      var m = document.getElementById('theme-color');
+      if (m) m.content = theme === 'dark' ? '#2e3440' : '#f8fafc';
+
       var font = localStorage.getItem('waypoint_font');
       if (font) {
         document.documentElement.dataset.font = font;
       }
     })();
   </script>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Waypoint</title>
-  <meta name="theme-color" content="#5E81AC" />
+  <meta name="waypoint-app" content="1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Waypoint" />
+  <link rel="manifest" href="/manifest.json" />
   <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg" />
-  <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
-  <script type="module" crossorigin src="/assets/index-Yv-PMpDY.js"></script>
+  <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <script type="module" crossorigin src="/assets/index-BOCvydjI.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-B65KsUH_.css">
 </head>
 <body>
   <div id="app"></div>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(function(){});
+    }
+  </script>
 </body>
 </html>
