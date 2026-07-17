@@ -10,6 +10,9 @@
       }
       document.documentElement.dataset.theme = theme;
 
+      // Theme-color must match the page background (--color-slate-50 in app.css).
+      // Can't use getComputedStyle here because CSS hasn't loaded yet — these
+      // values mirror --color-slate-50 for light (#f8fafc) and dark (#2e3440).
       var m = document.getElementById('theme-color');
       if (m) m.content = theme === 'dark' ? '#2e3440' : '#f8fafc';
 
