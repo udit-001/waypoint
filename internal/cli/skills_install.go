@@ -609,4 +609,5 @@ func printNextSteps() {
 	fmt.Println("  Next steps:")
 	fmt.Printf("  - Skills are auto-discovered at session start\n")
 	fmt.Printf("  - Ask your agent to manage job applications with waypoint\n")
+	fmt.Printf("  - Run 'waypoint skills uninstall' to remove installed skills\n")
 }
