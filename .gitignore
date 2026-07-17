@@ -9,9 +9,7 @@ user-profile/
 
 # Go
 job-tracker
-waypoint
-!cmd/waypoint/
-!internal/skills/waypoint/
+/bin/
 *.exe
 *.test
 *.out

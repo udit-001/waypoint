@@ -1,4 +1,4 @@
-BIN           = waypoint
+BIN           = bin/waypoint
 CMD           = ./cmd/waypoint
 MODULE        = github.com/udit-001/waypoint
 
@@ -6,13 +6,14 @@ MODULE        = github.com/udit-001/waypoint
 BLUE  = \033[36m
 RESET = \033[0m
 
-.PHONY: all build install dev frontend clean distclean
+.PHONY: all build install dev frontend clean distclean fmt test-frontend check
 
 all: frontend build
 
 ## Build the full binary (frontend + Go)
 build: frontend
 	@echo "$(BLUE)→ Building $(BIN)...$(RESET)"
+	@mkdir -p bin
 	CGO_ENABLED=0 go build -o $(BIN) $(CMD)
 
 ## Install via Go (compiles from source)
@@ -36,10 +37,15 @@ tidy:
 	@echo "$(BLUE)→ Tidying Go modules...$(RESET)"
 	go mod tidy
 
+## Format Go code
+fmt:
+	@echo "$(BLUE)→ Formatting Go...$(RESET)"
+	gofmt -s -w .
+
 ## Clean build artifacts
 clean:
 	@echo "$(BLUE)→ Cleaning...$(RESET)"
-	rm -f $(BIN)
+	rm -rf bin
 	go clean
 
 ## Remove frontend build output (stub so go build still works)
@@ -49,7 +55,20 @@ distclean: clean
 	mkdir -p web/dist
 	echo "Frontend not built — run 'make frontend' first" > web/dist/index.html
 
-## Run tests
+## Run Go tests
 test:
-	@echo "$(BLUE)→ Running tests...$(RESET)"
+	@echo "$(BLUE)→ Running Go tests...$(RESET)"
 	go test ./...
+
+## Run frontend tests
+test-frontend:
+	@echo "$(BLUE)→ Running frontend tests...$(RESET)"
+	cd web && pnpm test
+
+## Pre-commit gate: formatting check, vet, all tests
+check:
+	@echo "$(BLUE)→ Pre-commit gate...$(RESET)"
+	@test -z "$$(gofmt -l .)" || { echo "  gofmt needed — run 'make fmt'"; exit 1; }
+	go vet ./...
+	go test ./...
+	cd web && pnpm test
