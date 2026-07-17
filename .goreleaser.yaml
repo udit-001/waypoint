@@ -1,16 +1,30 @@
+# GoReleaser config for Waypoint.
+# Docs: https://goreleaser.com
+#
+# Local dry-run:   goreleaser release --snapshot --clean
+# Validate config:  goreleaser check
+# Full release:     triggered by `git tag v0.x.x && git push --tags`
+#
+# Publishing targets that need external repos + secrets (Homebrew tap,
+# Scoop bucket, winget) are commented out below — uncomment after creating
+# the corresponding repos and setting the PAT secrets in GitHub.
+
 version: 2
 
 project_name: waypoint
 
+# Run before any build: install go-winres and generate Windows PE resource
+# metadata (.syso) so the .exe carries company/product name, version, and a
+# DPI-aware manifest. AV heuristics treat absence of PE metadata as suspicion.
 before:
   hooks:
-    - go mod tidy
+    - go install github.com/tc-hib/go-winres@latest
+    - ./scripts/gen-winres.sh {{ .Version }}
 
 builds:
-  - main: ./cmd/waypoint/main.go
+  - id: waypoint
+    main: ./cmd/waypoint
     binary: waypoint
-    ldflags:
-      - -s -w -X github.com/udit-001/waypoint/internal/version.Version={{ .Version }}
     env:
       - CGO_ENABLED=0
     goos:
@@ -20,27 +34,117 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/udit-001/waypoint/internal/version.Version={{.Version}}
+      - -X github.com/udit-001/waypoint/internal/version.Commit={{.Commit}}
+      - -X github.com/udit-001/waypoint/internal/version.Date={{.Date}}
+    mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
-  - formats: ["tar.gz"]
+  - id: default
+    formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        formats: ["zip"]
+        formats:
+          - zip
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - docs/architecture.md
+      - docs/cli.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: '{{ incpatch .Version }}-next'
 
 changelog:
+  use: git
   sort: asc
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
-      - "^ci:"
-      - Merge pull request
-      - Merge branch
+      - '^docs:'
+      - '^chore:'
+      - '^test:'
+      - '^ci:'
+      - 'Merge pull request'
+      - 'Merge branch'
 
 release:
   github:
     owner: udit-001
     name: waypoint
+  prerelease: auto
+  name_template: 'v{{ .Version }}'
+
+# Cosign keyless signing of checksums.txt (uses GitHub OIDC, no long-lived keys).
+# Requires `permissions: id-token: write` on the release workflow.
+signs:
+  - id: cosign
+    cmd: cosign
+    signature: '${artifact}.sigstore.json'
+    args:
+      - sign-blob
+      - --bundle=${artifact}.sigstore.json
+      - ${artifact}
+      - --yes
+    artifacts: checksum
+
+# Linux packages (.deb, .rpm) attached to the GitHub release.
+nfpms:
+  - id: waypoint
+    package_name: waypoint
+    vendor: udit-001
+    homepage: https://github.com/udit-001/waypoint
+    maintainer: Udit <23015406+udit-001@users.noreply.github.com>
+    description: A job application tracker with a Go backend and Svelte frontend
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    file_name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+
+# --- Publishing targets (uncomment after creating the repos + secrets) -------
+#
+# brews:
+#   - name: waypoint
+#     repository:
+#       owner: udit-001
+#       name: homebrew-tap
+#       branch: main
+#       token: '{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}'
+#     homepage: https://github.com/udit-001/waypoint
+#     description: A job application tracker with a Go backend and Svelte frontend
+#     license: MIT
+#     test: |
+#       system "#{bin}/waypoint", "--version"
+#     install: |
+#       bin.install "waypoint"
+#
+# scoops:
+#   - name: waypoint
+#     repository:
+#       owner: udit-001
+#       name: scoop-bucket
+#       branch: main
+#       token: '{{ .Env.SCOOP_BUCKET_GITHUB_TOKEN }}'
+#     homepage: https://github.com/udit-001/waypoint
+#     description: A job application tracker with a Go backend and Svelte frontend
+#     license: MIT
+#
+# winget:
+#   - name: udit-001.waypoint
+#     publisher: udit-001
+#     license: MIT
+#     short_description: A job application tracker with a Go backend and Svelte frontend
+#     repository:
+#       owner: udit-001
+#       name: winget-pkgs
+#       branch: master
+#       token: '{{ .Env.WINGET_GITHUB_TOKEN }}'
