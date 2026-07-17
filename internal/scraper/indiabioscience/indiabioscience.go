@@ -70,12 +70,12 @@ type atomFeed struct {
 }
 
 type atomEntry struct {
-	Title     string       `xml:"title"`
-	Links     []atomLink   `xml:"link"`
-	ID        string       `xml:"id"`
-	Published string       `xml:"published"`
-	Updated   string       `xml:"updated"`
-	Content   string       `xml:"content"`
+	Title      string         `xml:"title"`
+	Links      []atomLink     `xml:"link"`
+	ID         string         `xml:"id"`
+	Published  string         `xml:"published"`
+	Updated    string         `xml:"updated"`
+	Content    string         `xml:"content"`
 	Categories []atomCategory `xml:"category"`
 }
 

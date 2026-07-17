@@ -62,11 +62,10 @@ func TestFilterByRecency_keepsBoundaryDay(t *testing.T) {
 	// A result dated exactly today-N (UTC) must be kept when jobAgeDays=N:
 	// the recency window is inclusive of its boundary day. The cutoff must
 	// be date-aligned (midnight) so the time-of-day doesn't exclude it.
-	boundary := time.Now().UTC().Truncate(24 * time.Hour).AddDate(0, 0, -30).Format("2006-01-02")
+	boundary := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -30).Format("2006-01-02")
 	results := []Result{{Title: "boundary ad", Date: boundary}}
 	got := FilterByRecency(results, 30)
 	if len(got) != 1 {
 		t.Errorf("expected boundary day (today-30) kept with JobAge=30, got %d", len(got))
 	}
 }
-

@@ -91,16 +91,16 @@ var initialHeaders = map[string]string{
 }
 
 var jobsHeaders = map[string]string{
-	"Accept":           "*/*",
-	"Accept-Language":  "en-US,en;q=0.9",
-	"Referer":          "https://www.google.com/",
-	"Sec-Ch-Ua":        `"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"`,
-	"Sec-Ch-Ua-Mobile": "?0",
+	"Accept":             "*/*",
+	"Accept-Language":    "en-US,en;q=0.9",
+	"Referer":            "https://www.google.com/",
+	"Sec-Ch-Ua":          `"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"`,
+	"Sec-Ch-Ua-Mobile":   "?0",
 	"Sec-Ch-Ua-Platform": `"macOS"`,
-	"Sec-Fetch-Dest":   "empty",
-	"Sec-Fetch-Mode":   "cors",
-	"Sec-Fetch-Site":   "same-origin",
-	"User-Agent":       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+	"Sec-Fetch-Dest":     "empty",
+	"Sec-Fetch-Mode":     "cors",
+	"Sec-Fetch-Site":     "same-origin",
+	"User-Agent":         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
 }
 
 func extractCursor(body string) string {

@@ -5,8 +5,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/udit-001/waypoint/internal/db"
 	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/db"
 )
 
 var updateFlags struct {

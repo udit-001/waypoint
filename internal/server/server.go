@@ -346,7 +346,7 @@ func handleListArtifacts(store db.Store) http.HandlerFunc {
 		arts, err := store.GetArtifacts(skill, jobID, all)
 		if err != nil {
 			jsonError(w, err.Error(), http.StatusInternalServerError)
-				return
+			return
 		}
 		if arts == nil {
 			arts = []db.Artifact{}
