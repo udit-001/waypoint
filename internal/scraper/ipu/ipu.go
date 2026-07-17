@@ -96,10 +96,19 @@ func parseTable(body string) []scraper.Result {
 	return results
 }
 
+// nonAdTypes are the notice types that filterNonAds drops. Anything not in
+// this set is kept (conservative — better to include than miss a real ad).
+var nonAdTypes = map[string]bool{
+	"schedule": true, "result": true, "cancellation": true,
+	"postponement": true, "refund": true, "empanelment": true,
+	"procurement": true, "syllabus": true, "objections": true,
+}
+
 // classifyNotice returns the notice type derived from the title's keywords.
-// The default "ad" covers advertisements, extensions, corrigenda, walk-in
-// interviews, and any title that matches no non-ad pattern (conservative —
-// better to include than miss).
+// Non-ad types (schedules, results, cancellations, …) are matched first and
+// dropped by filterNonAds. Kept notices get a specific type (advertisement,
+// extension, corrigendum, walk_in, employment_notice) for traceability; any
+// title that matches no pattern returns "ad" (conservative — kept).
 func classifyNotice(title string) string {
 	l := strings.ToLower(title)
 	if strings.Contains(l, "schedule") {
@@ -134,6 +143,21 @@ func classifyNotice(title string) string {
 	if strings.Contains(l, "inviting objections") {
 		return "objections"
 	}
+	if strings.Contains(l, "walk-in") || strings.Contains(l, "walk in") {
+		return "walk_in"
+	}
+	if strings.Contains(l, "corrigendum") {
+		return "corrigendum"
+	}
+	if strings.Contains(l, "extension") {
+		return "extension"
+	}
+	if strings.Contains(l, "employment notice") {
+		return "employment_notice"
+	}
+	if strings.Contains(l, "advertisement") {
+		return "advertisement"
+	}
 	return "ad"
 }
 
@@ -144,7 +168,7 @@ func filterNonAds(results []scraper.Result) []scraper.Result {
 	filtered := results[:0]
 	for _, r := range results {
 		typ := classifyNotice(r.Title)
-		if typ != "ad" {
+		if nonAdTypes[typ] {
 			continue
 		}
 		if r.Metadata == nil {

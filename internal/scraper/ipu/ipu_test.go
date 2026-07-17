@@ -61,19 +61,28 @@ func TestSearch_query(t *testing.T) {
 }
 
 func TestFilterNonAds_keepsAdsAndRecordsType(t *testing.T) {
-	results := []scraper.Result{
-		{Title: "Advertisement for Guest Faculty for M.Sc. Courses (CEPS)"},
-		{Title: "Extension notice for the post of Assistant Professor (On Contract basis)"},
-		{Title: "Corrigendum - Advertisement for the post of Assistant Professor"},
-		{Title: "Walk-in interview for the post of JRF"},
+	cases := []struct {
+		title    string
+		wantType string
+	}{
+		{"Advertisement for Guest Faculty for M.Sc. Courses (CEPS)", "advertisement"},
+		{"Extension notice for the post of Assistant Professor (On Contract basis)", "extension"},
+		{"Corrigendum - Advertisement for the post of Assistant Professor", "corrigendum"},
+		{"Walk-in interview for the post of JRF", "walk_in"},
+		{"Employment Notice for Non-Teaching Posts", "employment_notice"},
+		{"Notification regarding Guest Faculty recruitment", "ad"},
+	}
+	results := make([]scraper.Result, 0, len(cases))
+	for _, c := range cases {
+		results = append(results, scraper.Result{Title: c.title})
 	}
 	got := filterNonAds(results)
-	if len(got) != 4 {
-		t.Fatalf("got %d results, want 4 (all ads kept)", len(got))
+	if len(got) != len(cases) {
+		t.Fatalf("got %d results, want %d (all ads kept)", len(got), len(cases))
 	}
-	for _, r := range got {
-		if r.Metadata["notice_type"] == "" {
-			t.Errorf("result %q: notice_type not set", r.Title)
+	for i, c := range cases {
+		if got[i].Metadata["notice_type"] != c.wantType {
+			t.Errorf("result %q: notice_type = %q, want %q", c.title, got[i].Metadata["notice_type"], c.wantType)
 		}
 	}
 }
@@ -123,11 +132,10 @@ func TestFilterNonAds_dropsOtherNonAdTypes(t *testing.T) {
 }
 
 func TestFilterNonAds_keepsUnmatchedConservative(t *testing.T) {
-	// Titles that match no blacklist pattern must be kept (better to include
-	// than miss a real ad).
+	// Titles that match no pattern must be kept as generic "ad" (better to
+	// include than miss a real ad).
 	unmatched := []string{
 		"Notification regarding Guest Faculty recruitment",
-		"Employment Notice for Non-Teaching Posts",
 		"Application form for Ph.D. admission",
 		"Something completely novel and unheard of",
 	}
@@ -165,7 +173,7 @@ func TestSearch_appliesNonAdAndRecencyFilters(t *testing.T) {
 	if results[0].Title != "Advertisement for Guest Faculty" {
 		t.Errorf("title: got %q", results[0].Title)
 	}
-	if results[0].Metadata["notice_type"] != "ad" {
-		t.Errorf("notice_type: got %q, want %q", results[0].Metadata["notice_type"], "ad")
+	if results[0].Metadata["notice_type"] != "advertisement" {
+		t.Errorf("notice_type: got %q, want %q", results[0].Metadata["notice_type"], "advertisement")
 	}
 }

@@ -89,7 +89,7 @@ func FilterByRecency(results []Result, jobAgeDays int) []Result {
 	if jobAgeDays <= 0 {
 		return results
 	}
-	cutoff := time.Now().AddDate(0, 0, -jobAgeDays)
+	cutoff := time.Now().UTC().Truncate(24 * time.Hour).AddDate(0, 0, -jobAgeDays)
 	filtered := results[:0]
 	for _, r := range results {
 		normalized := dates.NormalizeDate(r.Date)
