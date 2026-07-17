@@ -95,6 +95,8 @@
     html.dataset.theme = next;
     localStorage.setItem('jobtracker_theme', next);
     isDark = !isDark;
+    var m = document.getElementById('theme-color');
+    if (m) m.content = next === 'dark' ? '#2e3440' : '#f8fafc';
   }
 
   const typeLabels = { job: 'briefcase', artifact: 'file-text' };
