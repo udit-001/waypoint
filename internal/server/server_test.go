@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -122,5 +123,32 @@ func TestPWASentinelAgreement(t *testing.T) {
 	}
 	if !strings.Contains(string(indexData), sentinel) {
 		t.Errorf("index.html missing sentinel meta tag %q", sentinel)
+	}
+}
+
+func TestPWAManifestThemeColor(t *testing.T) {
+	// The manifest theme_color is the splash/install screen color.
+	// It should match the dark theme's page background (#2e3440 = --color-slate-50
+	// in dark mode) so the splash screen doesn't flash a different color.
+	staticFS, err := fs.Sub(web.Files, "dist")
+	if err != nil {
+		t.Fatalf("sub dist: %v", err)
+	}
+
+	data, err := fs.ReadFile(staticFS, "manifest.json")
+	if err != nil {
+		t.Fatalf("read manifest.json: %v", err)
+	}
+
+	var manifest struct {
+		ThemeColor string `json:"theme_color"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("parse manifest.json: %v", err)
+	}
+
+	want := "#2e3440"
+	if manifest.ThemeColor != want {
+		t.Errorf("manifest theme_color = %q, want %q (must match dark --color-slate-50)", manifest.ThemeColor, want)
 	}
 }
