@@ -17,9 +17,9 @@ func killProcess(pid int) error {
 	// and releases the port cleanly. The server handles both SIGINT and
 	// SIGTERM identically (see server.go signal.Notify), but SIGINT is
 	// the convention for "interrupt" (what Ctrl+C sends).
-	if err := proc.Signal(syscall.SIGINT); err != nil {
-		// ESRCH means process already exited — treat as success
-	}
+	// ESRCH (process already exited) and any other signal error are
+	// treated as success — the process is gone either way.
+	_ = proc.Signal(syscall.SIGINT)
 	return nil
 }
 

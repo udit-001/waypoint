@@ -6,7 +6,7 @@ MODULE        = github.com/udit-001/waypoint
 BLUE  = \033[36m
 RESET = \033[0m
 
-.PHONY: all build install dev frontend clean distclean fmt test-frontend check
+.PHONY: all build install dev frontend clean distclean fmt test test-race test-frontend check install-hooks
 
 all: frontend build
 
@@ -60,6 +60,11 @@ test:
 	@echo "$(BLUE)→ Running Go tests...$(RESET)"
 	go test ./...
 
+## Run Go tests with the race detector (CI parity; slower than 'test')
+test-race:
+	@echo "$(BLUE)→ Running Go tests with -race...$(RESET)"
+	go test -race ./...
+
 ## Run frontend tests
 test-frontend:
 	@echo "$(BLUE)→ Running frontend tests...$(RESET)"
@@ -72,3 +77,8 @@ check:
 	go vet ./...
 	go test ./...
 	cd web && pnpm test
+
+## Install git hooks (gofmt check on staged .go files)
+install-hooks:
+	@echo "$(BLUE)→ Configuring .githooks as hooks path...$(RESET)"
+	git config core.hooksPath .githooks
