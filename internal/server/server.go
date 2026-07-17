@@ -26,31 +26,49 @@ type Config struct {
 	Silent bool // suppress terminal output (daemon mode)
 }
 
-// Start runs the HTTP server with the read-only API and embedded web UI.
-func Start(cfg Config) error {
+// newMux creates the HTTP mux with API routes, PWA routes, and static file
+// serving. Extracted from Start for testability — tests can create a mux and
+// make requests against it via httptest without binding to a port.
+func newMux(store db.Store, staticFS fs.FS) http.Handler {
 	mux := http.NewServeMux()
 
 	// Read-only API
-	mux.HandleFunc("GET /api/jobs", handleListJobs(cfg.DB))
-	mux.HandleFunc("GET /api/jobs/{id}", handleGetJob(cfg.DB))
-	mux.HandleFunc("GET /api/jobs/{id}/history", handleGetJobHistory(cfg.DB))
-	mux.HandleFunc("GET /api/stats", handleStats(cfg.DB))
-	mux.HandleFunc("GET /api/history", handleGetAllHistory(cfg.DB))
-	mux.HandleFunc("GET /api/categories", handleCategories(cfg.DB))
-	mux.HandleFunc("GET /api/artifacts", handleListArtifacts(cfg.DB))
-	mux.HandleFunc("GET /api/artifacts/{id}", handleGetArtifact(cfg.DB))
-	mux.HandleFunc("GET /api/search", handleSearch(cfg.DB))
+	mux.HandleFunc("GET /api/jobs", handleListJobs(store))
+	mux.HandleFunc("GET /api/jobs/{id}", handleGetJob(store))
+	mux.HandleFunc("GET /api/jobs/{id}/history", handleGetJobHistory(store))
+	mux.HandleFunc("GET /api/stats", handleStats(store))
+	mux.HandleFunc("GET /api/history", handleGetAllHistory(store))
+	mux.HandleFunc("GET /api/categories", handleCategories(store))
+	mux.HandleFunc("GET /api/artifacts", handleListArtifacts(store))
+	mux.HandleFunc("GET /api/artifacts/{id}", handleGetArtifact(store))
+	mux.HandleFunc("GET /api/search", handleSearch(store))
 
 	// Profile & Settings
-	mux.HandleFunc("GET /api/profile", handleGetProfile(cfg.DB))
-	mux.HandleFunc("GET /api/settings", handleGetSettings(cfg.DB))
+	mux.HandleFunc("GET /api/profile", handleGetProfile(store))
+	mux.HandleFunc("GET /api/settings", handleGetSettings(store))
 
-	// Embedded static UI (Svelte build output)
+	// PWA routes with proper cache headers.
+	// sw.js must always revalidate (no-cache) or updates won't propagate.
+	// Service-Worker-Allowed lets the SW control root scope.
+	mux.HandleFunc("GET /sw.js", servePWAAsset(staticFS, "sw.js", "application/javascript", "no-cache", "/"))
+	// Manifest can be cached for an hour.
+	mux.HandleFunc("GET /manifest.json", servePWAAsset(staticFS, "manifest.json", "application/manifest+json", "public, max-age=3600", ""))
+	// Offline page should always revalidate too.
+	mux.HandleFunc("GET /offline.html", servePWAAsset(staticFS, "offline.html", "text/html; charset=utf-8", "no-cache", ""))
+
+	mux.Handle("GET /", spaHandler(staticFS))
+
+	return mux
+}
+
+// Start runs the HTTP server with the read-only API and embedded web UI.
+func Start(cfg Config) error {
 	staticFS, err := fs.Sub(web.Files, "dist")
 	if err != nil {
 		return fmt.Errorf("static subfs: %w", err)
 	}
-	mux.Handle("GET /", spaHandler(staticFS))
+
+	mux := newMux(cfg.DB, staticFS)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", cfg.Port)
 	server := &http.Server{
@@ -120,6 +138,26 @@ func spaHandler(fsys fs.FS) http.Handler {
 		}
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+// servePWAAsset returns a handler that serves a file from the embedded FS
+// with custom Content-Type, Cache-Control, and optional Service-Worker-Allowed
+// headers. This is used for PWA-critical files (sw.js, manifest, offline page)
+// where the default FileServer headers are insufficient.
+func servePWAAsset(fsys fs.FS, name, contentType, cacheControl, swScope string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, err := fs.ReadFile(fsys, name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Cache-Control", cacheControl)
+		if swScope != "" {
+			w.Header().Set("Service-Worker-Allowed", swScope)
+		}
+		w.Write(data)
+	}
 }
 
 // openBrowser opens the default browser to the given URL.

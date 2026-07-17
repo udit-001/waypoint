@@ -17,10 +17,30 @@
   let results = $state([]);
   let showDropdown = $state(false);
   let debounceTimer = $state(null);
+  let showInstallBtn = $state(false);
+  let deferredPrompt = $state(null);
 
   onMount(() => {
     isDark = document.documentElement.dataset.theme === 'dark';
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstallBtn = true;
+    });
+    window.addEventListener('appinstalled', dismissInstallPrompt);
   });
+
+  function dismissInstallPrompt() {
+    deferredPrompt = null;
+    showInstallBtn = false;
+  }
+
+  function handleInstall() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(dismissInstallPrompt);
+  }
 
   function onSearchInput() {
     clearTimeout(debounceTimer);
@@ -157,6 +177,15 @@
         {#if filter.category || filter.status}
           <span class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-slate-700 rounded-full"></span>
         {/if}
+      </button>
+    {/if}
+    {#if showInstallBtn}
+      <button
+        class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center"
+        onclick={handleInstall}
+        title="Install app"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </button>
     {/if}
     <button
