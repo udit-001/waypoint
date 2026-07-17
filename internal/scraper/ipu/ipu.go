@@ -39,6 +39,8 @@ func (n IPU) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.Res
 
 	results := parseTable(body)
 
+	results = filterNonAds(results)
+	results = scraper.FilterByRecency(results, opts.JobAge)
 	results = scraper.FilterByQuery(results, opts.Query)
 
 	return results, nil
@@ -92,4 +94,64 @@ func parseTable(body string) []scraper.Result {
 	}
 
 	return results
+}
+
+// classifyNotice returns the notice type derived from the title's keywords.
+// The default "ad" covers advertisements, extensions, corrigenda, walk-in
+// interviews, and any title that matches no non-ad pattern (conservative —
+// better to include than miss).
+func classifyNotice(title string) string {
+	l := strings.ToLower(title)
+	if strings.Contains(l, "schedule") {
+		return "schedule"
+	}
+	if strings.Contains(l, "list of selected") ||
+		strings.HasPrefix(l, "result of") ||
+		strings.HasPrefix(l, "result for") {
+		return "result"
+	}
+	if strings.Contains(l, "cancellation") {
+		return "cancellation"
+	}
+	if strings.Contains(l, "postponement") {
+		return "postponement"
+	}
+	if strings.Contains(l, "refund") {
+		return "refund"
+	}
+	if strings.Contains(l, "empanelment") || strings.Contains(l, "empanel ") {
+		return "empanelment"
+	}
+	if strings.Contains(l, "procurement") ||
+		strings.Contains(l, "nit ") ||
+		strings.Contains(l, "gem portal") ||
+		strings.Contains(l, "notice inviting bid") {
+		return "procurement"
+	}
+	if strings.Contains(l, "syllabus for") {
+		return "syllabus"
+	}
+	if strings.Contains(l, "inviting objections") {
+		return "objections"
+	}
+	return "ad"
+}
+
+// filterNonAds classifies each result by notice type, records the type in
+// Metadata["notice_type"] for traceability, and drops non-actionable notices
+// (schedules, results, cancellations, etc.).
+func filterNonAds(results []scraper.Result) []scraper.Result {
+	filtered := results[:0]
+	for _, r := range results {
+		typ := classifyNotice(r.Title)
+		if typ != "ad" {
+			continue
+		}
+		if r.Metadata == nil {
+			r.Metadata = map[string]string{}
+		}
+		r.Metadata["notice_type"] = typ
+		filtered = append(filtered, r)
+	}
+	return filtered
 }
