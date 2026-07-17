@@ -1,6 +1,6 @@
 # Command Reference
 
-All commands: `--db <path>`, `--json`.
+All commands: `--json`.
 
 ## Jobs
 

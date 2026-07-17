@@ -39,13 +39,6 @@ cd waypoint
 make build     # builds frontend + Go binary
 ```
 
-Or step by step:
-
-```bash
-cd web && pnpm install && pnpm build && cd ..
-go build -o waypoint ./cmd/waypoint
-```
-
 ### How it works
 
 The Svelte frontend is pre-built and committed to `web/dist/`, which is embedded
@@ -94,7 +87,7 @@ Full CLI reference at [docs/cli.md](docs/cli.md).
 - **`categories list/add/rename/delete`** — Organize jobs into groups
 - **`init/start/stop`** — System management
 
-All commands accept `--db <path>` and `--json`.
+All commands accept `--json`.
 
 ## AI Integration
 

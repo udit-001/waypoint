@@ -7,16 +7,9 @@ import (
 var skillsCmd = &cobra.Command{
 	Use:   "skills",
 	Short: "Manage agent skills for this project",
-	Long: `Install the waypoint skill into your AI coding agent so it
-knows how to use the CLI to manage job applications.
+	Long: `Manage the waypoint skill for your AI coding agent.
 
-Installs to the Agent Skills Open Standard locations:
-  ~/.agents/skills/  (global, read by opencode, codex, pi.dev)
-  ~/.claude/skills/  (global, read by claude-code)
-
-Use --project to install at the project level instead.
-
-Run 'waypoint skills check' to see all installed copies and their status.`,
+Run 'waypoint skills check' to see installed copies and their status.`,
 }
 
 var skillsInstallCmd = &cobra.Command{
@@ -27,12 +20,6 @@ var skillsInstallCmd = &cobra.Command{
 Installs to the Agent Skills Open Standard location (~/.agents/skills/)
 which is read by opencode, codex, and pi.dev. Also installs to
 ~/.claude/skills/ for claude-code if detected.
-
-Flags:
-  --all          Install all detected families
-  --agents-only  Install only to ~/.agents/skills (opencode, codex, pi.dev)
-  --claude-only  Install only to ~/.claude/skills (claude-code)
-  --project      Install at project level (./.agents/skills) instead of global
 
 Run without flags for interactive mode.`,
 	Args: cobra.NoArgs,

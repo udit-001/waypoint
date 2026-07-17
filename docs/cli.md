@@ -1,6 +1,6 @@
 # CLI Reference
 
-All commands support `--db <path>` and `--json`.
+All commands support `--json`.
 
 ## Jobs
 
@@ -64,5 +64,4 @@ waypoint artifacts add --skill email-generator --title "Follow-up" --variants-fi
 
 Every command accepts:
 
-- `--db <path>` — Specify a custom database path
 - `--json` — Output as JSON (for scripting)
