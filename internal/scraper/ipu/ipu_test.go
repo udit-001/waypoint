@@ -70,6 +70,10 @@ func TestFilterNonAds_keepsAdsAndRecordsType(t *testing.T) {
 		{"Corrigendum - Advertisement for the post of Assistant Professor", "corrigendum"},
 		{"Walk-in interview for the post of JRF", "walk_in"},
 		{"Employment Notice for Non-Teaching Posts", "employment_notice"},
+		{"Revised Employment Notice for the Post of Assistant Professor", "employment_notice"},
+		{"Engagement of Guest Faculties at USAR", "ad"},
+		{"JRF/RA Recruitment in DST Sponsored Project", "ad"},
+		{"Notice Regarding Post of Director", "ad"},
 		{"Notification regarding Guest Faculty recruitment", "ad"},
 	}
 	results := make([]scraper.Result, 0, len(cases))
