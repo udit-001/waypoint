@@ -27,7 +27,7 @@ var startCmd = &cobra.Command{
 
 Opens the Waypoint UI in your browser. The dashboard shows your
 job applications, stats, and filters — all read-only. Use the CLI
-commands to add, upgrade, or delete jobs.
+commands to add, update, or delete jobs.
 
 Examples:
   waypoint start

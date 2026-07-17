@@ -86,7 +86,3 @@ Examples:
 		return nil
 	},
 }
-
-func init() {
-	skillsCmd.AddCommand(skillsCheckCmd)
-}

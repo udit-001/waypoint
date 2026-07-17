@@ -9,9 +9,12 @@ import (
 
 // categories is the parent command.
 var categoriesCmd = &cobra.Command{
-	Use:     "categories",
-	Short:   "Manage job categories",
-	Long:    `Create, list, rename, and delete job categories.\n\nCategories help organize your job applications into groups such as Tech, Finance, Healthcare, etc.`,
+	Use:   "categories",
+	Short: "Manage job categories",
+	Long: `Create, list, rename, and delete job categories.
+
+Categories help organize your job applications into groups such as
+Tech, Finance, Healthcare, etc.`,
 	Aliases: []string{"cat"},
 }
 

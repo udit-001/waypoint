@@ -299,12 +299,13 @@ var scrapeDismissCmd = &cobra.Command{
 	Long: `Mark staged scrape results as dismissed so they don't reappear
 on future scrape runs.
 
+--all dismisses every "new" status result. Entries that are "dismissed"
+or "imported" are skipped.
+
+Examples:
   waypoint scrape dismiss "https://www.ncbs.res.in/jobportal/node/142669"
   waypoint scrape dismiss "url1" "url2" "url3"
-  waypoint scrape dismiss --all
-
---all dismisses every "new" status result. Entries that are "dismissed"
-or "imported" are skipped.`,
+  waypoint scrape dismiss --all`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		legacyStagingHint()
 
@@ -560,12 +561,13 @@ var scrapePromoteCmd = &cobra.Command{
 	Short: "Promote staged results into the tracked jobs table",
 	Long: `Move staged scrape results into the tracked jobs table.
 
-  waypoint scrape promote "https://www.ncbs.res.in/jobportal/node/142669"
-  waypoint scrape promote --all
-
 --all promotes every "new" status result. Entries that are "dismissed"
 or "imported" are skipped. If a URL already exists in the jobs table,
-the result is skipped but still marked "imported" so it won't reappear.`,
+the result is skipped but still marked "imported" so it won't reappear.
+
+Examples:
+  waypoint scrape promote "https://www.ncbs.res.in/jobportal/node/142669"
+  waypoint scrape promote --all`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		legacyStagingHint()

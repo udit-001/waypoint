@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/udit-001/waypoint/internal/db"
 	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/db"
 )
 
 var artifactsCmd = &cobra.Command{
@@ -33,9 +33,9 @@ Examples:
 // --- list ---
 
 var artifactsListFlags struct {
-	skill   string
-	job     int64
-	all     bool
+	skill string
+	job   int64
+	all   bool
 }
 
 var artifactsListCmd = &cobra.Command{
@@ -221,10 +221,7 @@ var artifactsAddCmd = &cobra.Command{
 	Short: "Add a new artifact",
 	Long: `Add a new artifact manually.
 
-Skill IDs: email-generator, cover-letter, resume-optimizer,
-interview-prep, career-summary, statement-of-purpose.
-
-Provide content in one of three ways:
+Provide content in one of four ways:
   1. --variant-content   Inline text for a single variant
   2. --variant-file (-f) Read single-variant content from a file
   3. --variants           JSON array of [{"label":"...","content":"..."}]
