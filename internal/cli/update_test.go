@@ -120,15 +120,15 @@ func TestUpdateClearFields(t *testing.T) {
 			resetUpdateFlags()
 			fake := db.NewFakeStore()
 			fake.Jobs[1] = db.Job{
-				ID:         1,
-				Company:    "TestCo",
-				Position:   "Engineer",
-				Date:       "2026-07-15",
+				ID:          1,
+				Company:     "TestCo",
+				Position:    "Engineer",
+				Date:        "2026-07-15",
 				AppliedDate: "2026-06-01",
-				Status:     "Applied",
-				CategoryID: 2,
-				Notes:      "existing notes",
-				URL:        "https://example.com",
+				Status:      "Applied",
+				CategoryID:  2,
+				Notes:       "existing notes",
+				URL:         "https://example.com",
 			}
 			fake.Categories[2] = db.Category{ID: 2, Name: "Engineering"}
 			store = fake

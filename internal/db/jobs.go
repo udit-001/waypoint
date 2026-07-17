@@ -19,7 +19,12 @@ func scanJob(row interface{ Scan(...any) error }) (Job, error) {
 }
 
 // scanJobs scans job rows.
-func scanJobs(rows interface{ Next() bool; Scan(...any) error; Close() error; Err() error }) ([]Job, error) {
+func scanJobs(rows interface {
+	Next() bool
+	Scan(...any) error
+	Close() error
+	Err() error
+}) ([]Job, error) {
 	var jobs []Job
 	for rows.Next() {
 		j, err := scanJob(rows)

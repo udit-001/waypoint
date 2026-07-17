@@ -199,11 +199,11 @@ func (s *SQLiteStore) SearchArtifacts(query string) ([]Artifact, error) {
 
 // SearchResultItem is a unified search result from any entity.
 type SearchResultItem struct {
-	Type    string `json:"type"`    // "job" or "artifact"
-	ID      int64  `json:"id"`
-	Title   string `json:"title"`
-	Sub     string `json:"sub"`
-	Match   string `json:"match"`  // which field matched
+	Type  string `json:"type"` // "job" or "artifact"
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+	Sub   string `json:"sub"`
+	Match string `json:"match"` // which field matched
 }
 
 // SearchAll performs full-text search across jobs and artifacts, returning unified results.
@@ -230,8 +230,8 @@ func (s *SQLiteStore) SearchAll(query string) ([]SearchResultItem, error) {
 					Type:  "job",
 					ID:    id,
 					Title: company + " — " + position,
-				Sub:   status,
-				Match: catName,
+					Sub:   status,
+					Match: catName,
 				})
 			}
 		}

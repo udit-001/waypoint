@@ -15,9 +15,9 @@ func (s *SQLiteStore) GetCategories() ([]Category, error) {
 
 // CategoryWithCount is a category plus its job count.
 type CategoryWithCount struct {
-	ID      int64  `db:"id" json:"id"`
-	Name    string `db:"name" json:"name"`
-	JobCount int   `db:"job_count" json:"jobCount"`
+	ID       int64  `db:"id" json:"id"`
+	Name     string `db:"name" json:"name"`
+	JobCount int    `db:"job_count" json:"jobCount"`
 }
 
 // GetCategoriesWithCounts returns all categories with job counts in one query.

@@ -14,9 +14,9 @@ type Profile struct {
 	Email         string `db:"email" json:"email"`
 	Phone         string `db:"phone" json:"phone"`
 	Title         string `db:"title" json:"title"`
-	Skills        string `db:"skills" json:"-"`        // raw JSON string from DB; emitted as array via MarshalJSON
-	Experience    string `db:"experience" json:"-"`    // raw JSON string from DB; emitted as array via MarshalJSON
-	Education     string `db:"education" json:"-"`     // raw JSON string from DB; emitted as array via MarshalJSON
+	Skills        string `db:"skills" json:"-"`     // raw JSON string from DB; emitted as array via MarshalJSON
+	Experience    string `db:"experience" json:"-"` // raw JSON string from DB; emitted as array via MarshalJSON
+	Education     string `db:"education" json:"-"`  // raw JSON string from DB; emitted as array via MarshalJSON
 	Industry      string `db:"industry" json:"industry"`
 	GreetingStyle string `db:"greeting_style" json:"greetingStyle"`
 	SignOff       string `db:"sign_off" json:"signOff"`
@@ -51,10 +51,10 @@ func (p Profile) MarshalJSON() ([]byte, error) {
 
 // Settings represents app settings (singleton row).
 type Settings struct {
-	Theme             string `db:"theme" json:"theme"`
-	RemindersEnabled  int    `db:"reminders_enabled" json:"remindersEnabled"`
-	DefaultView       string `db:"default_view" json:"defaultView"`
-	ItemsPerPage      int    `db:"items_per_page" json:"itemsPerPage"`
+	Theme            string `db:"theme" json:"theme"`
+	RemindersEnabled int    `db:"reminders_enabled" json:"remindersEnabled"`
+	DefaultView      string `db:"default_view" json:"defaultView"`
+	ItemsPerPage     int    `db:"items_per_page" json:"itemsPerPage"`
 }
 
 // defaultSettings holds the Go-level defaults returned when no settings row
@@ -140,10 +140,10 @@ func (s *SQLiteStore) UpsertSettings(updates map[string]any) error {
 		return nil
 	}
 	columnMap := map[string]string{
-		"theme":            "theme",
+		"theme":             "theme",
 		"reminders_enabled": "reminders_enabled",
-		"default_view":     "default_view",
-		"items_per_page":   "items_per_page",
+		"default_view":      "default_view",
+		"items_per_page":    "items_per_page",
 	}
 	var setClauses []string
 	var args []any

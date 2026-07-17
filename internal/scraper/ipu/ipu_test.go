@@ -160,7 +160,7 @@ func TestFilterNonAds_keepsUnmatchedConservative(t *testing.T) {
 
 func TestSearch_appliesNonAdAndRecencyFilters(t *testing.T) {
 	recent := time.Now().AddDate(0, 0, -5).Format("02-01-2006") // DD-MM-YYYY, 5 days ago
-	old := time.Now().AddDate(0, 0, -200).Format("02-01-2006") // 200 days ago
+	old := time.Now().AddDate(0, 0, -200).Format("02-01-2006")  // 200 days ago
 
 	html := `<table><tbody>
 <tr><td><a href="/r1.pdf">Advertisement for Guest Faculty</a></td><td>` + recent + `</td></tr>
