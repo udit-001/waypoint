@@ -4,6 +4,9 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/udit-001/waypoint/internal/dates"
 )
 
 // Result is a single job posting returned by a scraper.
@@ -75,6 +78,31 @@ func Truncate(results []Result, limit int) []Result {
 		return results[:limit]
 	}
 	return results
+}
+
+// FilterByRecency keeps only results posted within the last jobAgeDays days.
+// A non-positive jobAgeDays is a no-op (returns all results). Results with
+// unparseable or rolling dates are kept (conservative — better to include
+// than miss). Listing scrapers call this inside Search; API-based scrapers
+// filter server-side and should NOT call this.
+func FilterByRecency(results []Result, jobAgeDays int) []Result {
+	if jobAgeDays <= 0 {
+		return results
+	}
+	cutoff := time.Now().UTC().Truncate(24 * time.Hour).AddDate(0, 0, -jobAgeDays)
+	filtered := results[:0]
+	for _, r := range results {
+		normalized := dates.NormalizeDate(r.Date)
+		t, err := time.Parse("2006-01-02", normalized)
+		if err != nil {
+			filtered = append(filtered, r) // unparseable: keep (conservative)
+			continue
+		}
+		if !t.Before(cutoff) {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered
 }
 
 // ApplyFilters applies query substring filtering and limit to results.

@@ -3,6 +3,7 @@ package ipu
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/udit-001/waypoint/internal/scraper"
 )
@@ -56,5 +57,127 @@ func TestSearch_query(t *testing.T) {
 	results = scraper.ApplyFilters(results, scraper.SearchOpts{Query: "faculty"})
 	if len(results) != 1 {
 		t.Errorf("expected 1, got %d", len(results))
+	}
+}
+
+func TestFilterNonAds_keepsAdsAndRecordsType(t *testing.T) {
+	cases := []struct {
+		title    string
+		wantType string
+	}{
+		{"Advertisement for Guest Faculty for M.Sc. Courses (CEPS)", "advertisement"},
+		{"Extension notice for the post of Assistant Professor (On Contract basis)", "extension"},
+		{"Corrigendum - Advertisement for the post of Assistant Professor", "corrigendum"},
+		{"Walk-in interview for the post of JRF", "walk_in"},
+		{"Employment Notice for Non-Teaching Posts", "employment_notice"},
+		{"Revised Employment Notice for the Post of Assistant Professor", "employment_notice"},
+		{"Engagement of Guest Faculties at USAR", "ad"},
+		{"JRF/RA Recruitment in DST Sponsored Project", "ad"},
+		{"Notice Regarding Post of Director", "ad"},
+		{"Notification regarding Guest Faculty recruitment", "ad"},
+	}
+	results := make([]scraper.Result, 0, len(cases))
+	for _, c := range cases {
+		results = append(results, scraper.Result{Title: c.title})
+	}
+	got := filterNonAds(results)
+	if len(got) != len(cases) {
+		t.Fatalf("got %d results, want %d (all ads kept)", len(got), len(cases))
+	}
+	for i, c := range cases {
+		if got[i].Metadata["notice_type"] != c.wantType {
+			t.Errorf("result %q: notice_type = %q, want %q", c.title, got[i].Metadata["notice_type"], c.wantType)
+		}
+	}
+}
+
+func TestFilterNonAds_dropsScheduleVariants(t *testing.T) {
+	schedules := []string{
+		"Schedule of Interview for the post of Assistant Professor",
+		"Interview schedule of Guest Faculty",
+		"Revised Schedule of Skill Test",
+		"Schedule of Skill Test / Documents Verification",
+		"Documents Verification Schedule",
+		"Reschedule of Interview",
+	}
+	results := make([]scraper.Result, 0, len(schedules))
+	for _, s := range schedules {
+		results = append(results, scraper.Result{Title: s})
+	}
+	got := filterNonAds(results)
+	if len(got) != 0 {
+		t.Errorf("expected 0 (all schedules dropped), got %d: %+v", len(got), got)
+	}
+}
+
+func TestFilterNonAds_dropsOtherNonAdTypes(t *testing.T) {
+	cases := []string{
+		"Result of Interview for the post of Assistant Professor",
+		"List of Selected Candidates for Guest Faculty",
+		"Cancellation of Advertisement for the post of JRF",
+		"Postponement of Interview Schedule",
+		"Refund of Application Fee",
+		"Empanelment of Guest Faculty",
+		"Empanel - List of Faculty Members",
+		"Procurement Notice for Lab Equipment",
+		"NIT for Supply of Computers",
+		"Notice Inviting Bid for CCTV Installation",
+		"Syllabus for M.Sc. Computer Science",
+		"Inviting Objections to the Provisional Answer Key",
+	}
+	results := make([]scraper.Result, 0, len(cases))
+	for _, c := range cases {
+		results = append(results, scraper.Result{Title: c})
+	}
+	got := filterNonAds(results)
+	if len(got) != 0 {
+		t.Errorf("expected 0 (all non-ads dropped), got %d: %+v", len(got), got)
+	}
+}
+
+func TestFilterNonAds_keepsUnmatchedConservative(t *testing.T) {
+	// Titles that match no pattern must be kept as generic "ad" (better to
+	// include than miss a real ad).
+	unmatched := []string{
+		"Notification regarding Guest Faculty recruitment",
+		"Application form for Ph.D. admission",
+		"Something completely novel and unheard of",
+	}
+	results := make([]scraper.Result, 0, len(unmatched))
+	for _, s := range unmatched {
+		results = append(results, scraper.Result{Title: s})
+	}
+	got := filterNonAds(results)
+	if len(got) != len(unmatched) {
+		t.Errorf("expected %d (unmatched kept), got %d", len(unmatched), len(got))
+	}
+	for _, r := range got {
+		if r.Metadata["notice_type"] != "ad" {
+			t.Errorf("result %q: notice_type = %q, want %q", r.Title, r.Metadata["notice_type"], "ad")
+		}
+	}
+}
+
+func TestSearch_appliesNonAdAndRecencyFilters(t *testing.T) {
+	recent := time.Now().AddDate(0, 0, -5).Format("02-01-2006") // DD-MM-YYYY, 5 days ago
+	old := time.Now().AddDate(0, 0, -200).Format("02-01-2006") // 200 days ago
+
+	html := `<table><tbody>
+<tr><td><a href="/r1.pdf">Advertisement for Guest Faculty</a></td><td>` + recent + `</td></tr>
+<tr><td><a href="/r2.pdf">Schedule of Interview for Assistant Professor</a></td><td>` + recent + `</td></tr>
+<tr><td><a href="/r3.pdf">Advertisement for JRF</a></td><td>` + old + `</td></tr>
+<tr><td><a href="/r4.pdf">Result of Interview</a></td><td>` + recent + `</td></tr>
+</tbody></table>`
+
+	n := IPU{Fetcher: &mockFetcher{html: html}}
+	results, _ := n.Search(context.Background(), scraper.SearchOpts{JobAge: 30})
+	if len(results) != 1 {
+		t.Fatalf("expected 1 (recent ad only), got %d: %+v", len(results), results)
+	}
+	if results[0].Title != "Advertisement for Guest Faculty" {
+		t.Errorf("title: got %q", results[0].Title)
+	}
+	if results[0].Metadata["notice_type"] != "advertisement" {
+		t.Errorf("notice_type: got %q, want %q", results[0].Metadata["notice_type"], "advertisement")
 	}
 }

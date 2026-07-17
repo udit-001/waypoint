@@ -639,7 +639,7 @@ func init() {
 	scrapeRunCmd.Flags().StringVarP(&scrapeRunFlags.query, "query", "q", "", "Filter results by keyword")
 	scrapeRunCmd.Flags().StringVarP(&scrapeRunFlags.location, "location", "l", "", "Location to search (e.g. 'Bengaluru, India', 'Remote')")
 	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.limit, "limit", 0, "Max results (0 = all)")
-	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.jobage, "jobage", 0, "Posted within N days (0 = all). LinkedIn/Indeed only.")
+	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.jobage, "jobage", 90, "Posted within N days (0 = all)")
 	scrapeRunCmd.Flags().StringVar(&scrapeRunFlags.remote, "remote", "", "Workplace type: remote|hybrid|onsite (LinkedIn only)")
 	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.page, "page", 1, "Page number, 1-indexed (LinkedIn/Indeed only)")
 
