@@ -12,8 +12,8 @@
   //
   // The old Dashboard's stat cards collapse into a byline carried via
   // setPage() — the TopBar renders "N total · M% response" next to the
-  // page title. Triage strip + velocity chart arrive in WP-97; this
-  // view leaves room for them below the FilterBar slot in App.svelte.
+  // page title. The triage strip (Stale + Upcoming presets) + velocity
+  // sparkline mount below the TopBar, above the list/kanban.
 
   import { onMount } from 'svelte';
   import { fly } from 'svelte/transition';
@@ -28,6 +28,8 @@
   import { formatDateShort } from '../lib/format.js';
   import { iconSvg } from '../lib/icons.js';
   import Skeleton from '../components/Skeleton.svelte';
+  import TriageStrip from '../components/TriageStrip.svelte';
+  import VelocityChart from '../components/VelocityChart.svelte';
 
   const router = getRouter();
   const filter = getFilter();
@@ -38,6 +40,7 @@
   let firstRender = true;
   let copiedCli = $state(false);
   let collapsedGroups = $state(new Set());
+  let chartsOpen = $state(false);
 
   // Status dot colors — single source for both List dot + Kanban column
   // accent. Inline style so we don't need a new CSS variant per status.
@@ -178,6 +181,15 @@
     </div>
   </div>
 {:else if filteredJobs.length === 0 && filter.any}
+  <!-- Triage strip + chart: edge-to-edge, flush with TopBar. Shown in
+       both layouts whenever jobs exist — the strip is a filter surface,
+       the chart is optional (collapsed by default). -->
+  <div class="-mx-6 -mt-6">
+    <TriageStrip jobs={allJobs} {filter} bind:chartsOpen />
+    {#if chartsOpen}
+      <VelocityChart jobs={allJobs} />
+    {/if}
+  </div>
   <!-- Filter-empty: jobs exist, but the current filter excludes them all. -->
   <div class="text-center py-20 text-slate-400 dark:text-slate-500">
     <div class="text-4xl mb-4 flex items-center justify-center">{@html iconSvg('filter', 48)}</div>
@@ -188,6 +200,13 @@
     >Clear all</button>
   </div>
 {:else if layoutStore.current === 'kanban'}
+  <!-- Triage strip + chart (same as list layout). -->
+  <div class="-mx-6 -mt-6">
+    <TriageStrip jobs={allJobs} {filter} bind:chartsOpen />
+    {#if chartsOpen}
+      <VelocityChart jobs={allJobs} />
+    {/if}
+  </div>
   <!-- ── KANBAN LAYOUT ──────────────────────────────── -->
   <div class="flex gap-4 min-h-[calc(100vh-12rem)] pb-4 overflow-x-auto">
     {#each STATUSES as status}
@@ -230,10 +249,20 @@
     {/each}
   </div>
 {:else}
+  <!-- Triage strip + chart (same as other layouts). -->
+  <div class="-mx-6 -mt-6">
+    <TriageStrip jobs={allJobs} {filter} bind:chartsOpen />
+    {#if chartsOpen}
+      <VelocityChart jobs={allJobs} />
+    {/if}
+  </div>
   <!-- ── LIST LAYOUT ────────────────────────────────── -->
   <!-- Break out of the App.svelte p-6 so rows can go edge-to-edge and
-       sticky group headers stick to the very top of the scroll area. -->
-  <div class="-mx-6 -mt-6">
+       sticky group headers stick to the very top of the scroll area.
+       No -mt-6 here: the strip wrapper above already pulled up, and the
+       list follows in normal flow. Sticky headers use -top-6 to stick
+       at the visible top (24px above the scrollport = content box top). -->
+  <div class="-mx-6">
     {#each groups as g, gi (g.status)}
       <div
         class="sticky -top-6 z-20 flex items-center gap-2 px-6 py-1.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 cursor-pointer select-none"
