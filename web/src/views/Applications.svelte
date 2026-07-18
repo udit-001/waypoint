@@ -236,7 +236,7 @@
   <div class="-mx-6 -mt-6">
     {#each groups as g, gi (g.status)}
       <div
-        class="sticky top-0 z-20 flex items-center gap-2 px-6 py-1.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 cursor-pointer select-none"
+        class="sticky -top-6 z-20 flex items-center gap-2 px-6 py-1.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 cursor-pointer select-none"
         onclick={() => toggleGroup(g.status)}
       >
         <svg
