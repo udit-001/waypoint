@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
 @custom-variant dark (&[data-theme="dark"]);
+@custom-variant hover-safe {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
 
 @utility bg-tint-red {
   background-color: var(--color-tint-red);
@@ -41,6 +48,19 @@
   /* Row tint backgrounds — actual red/amber in both themes */
   --color-tint-red:   #fce4e4;
   --color-tint-amber: #fff4e0;
+
+  /* ── Motion tokens ──
+   * Easing curves + durations referenced by all transitions/animations.
+   * --ease-out     — decelerating, for enter/standard
+   * --ease-in-out  — symmetric, for toggles
+   * --ease-drawer  — fast-start/settle, for drawers/sidebars
+   */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
 }
 
 /* ── Dark mode: Polar Night (nord0–3) + Frost (nord7–10) ── */
@@ -64,9 +84,6 @@
   --color-slate-900: #eceff4; /* nord6 — heading / bold text */
   --color-slate-950: #f0f4f8; /* bright text for pressing needs */
 
-  /* Interactive */
-  --color-slate-950: #dfe7ee; /* light tint for hover (on nord1) */
-
   /* Status — Aurora */
   --color-emerald-100: #2e3440;
   --color-emerald-600: #a3be8c;  /* nord14 */
@@ -87,6 +104,17 @@
   /* Row tint backgrounds — warm dark tones with red/amber undertone */
   --color-tint-red:   #433540;
   --color-tint-amber: #433c35;
+}
+
+/* ── Reduced motion ──
+ * Users who request reduced motion get near-instant transitions
+ * instead of full animations. Applies globally to every element.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ── Custom scrollbar ──
