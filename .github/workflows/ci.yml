@@ -50,6 +50,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          install-mode: go
 
       - name: Test
         # modernc.org/sqlite is pure-Go (no CGO) — runs on stock ubuntu-latest.
