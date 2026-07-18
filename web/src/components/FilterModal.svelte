@@ -6,26 +6,23 @@
   //   Deadline (single) Stale (toggle)
   //   Filter by text (col-span-2)
   //
+  // Each filter value shows a count of jobs matching that value (computed
+  // from the full jobs list, not the filtered subset — the count tells you
+  // "how many jobs match this value" so you can decide whether to select it).
+  //
   // "Filter" narrows the current view — distinct from the command palette
   // (WP-94), which jumps to a known thing. Same input shape, different job.
-  //
-  // Pattern note: the ticket said "popover anchored below the Filter button"
-  // but cited lific's FilterModal (a centered modal) as the structural
-  // reference. With 5 sections × 16 controls, a popover doesn't fit; a
-  // modal does. Surfaced via layers-surface + layers-interaction-flow
-  // audits and confirmed with the user.
 
   import { getFilter, DEADLINE_BUCKETS } from '../stores/filter.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { STATUSES } from '../lib/status.js';
+  import { bucketFor, isStale } from '../lib/filter.js';
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import * as api from '../stores/api.svelte.js';
 
   const filter = getFilter();
 
-  // Load categories lazily on mount — the old FilterSidebar used to do
-  // this, but it's gone now. Idempotent if already loaded.
   onMount(() => { void api.categories.ensure(); });
 
   let categories = $derived(api.categories.value || []);
@@ -43,6 +40,31 @@
     'this-month': 'Next 8–30 days',
     'no-date': 'No deadline set',
   };
+
+  // ── Counts ───────────────────────────────────────────
+  //
+  // Computed from the full jobs list (not the filtered subset). The count
+  // tells the user "how many jobs match this value" so they can decide
+  // whether selecting it will narrow meaningfully.
+
+  let counts = $derived.by(() => {
+    const jobs = api.jobs.value || [];
+    const statusCounts = {};
+    const categoryCounts = {};
+    const bucketCounts = { overdue: 0, 'this-week': 0, 'this-month': 0, 'no-date': 0 };
+    let staleCount = 0;
+
+    for (const j of jobs) {
+      statusCounts[j.status] = (statusCounts[j.status] || 0) + 1;
+      const cat = j.category || '';
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+      const bucket = bucketFor(j);
+      if (bucket) bucketCounts[bucket] += 1;
+      if (isStale(j)) staleCount += 1;
+    }
+
+    return { statusCounts, categoryCounts, bucketCounts, staleCount, total: jobs.length };
+  });
 
   function close() {
     filter.open = false;
@@ -64,20 +86,20 @@
   <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
   <div
     transition:fade={{ duration: 120 }}
-    class="fixed inset-0 z-[90] bg-black/25 flex items-start justify-center pt-[10dvh] px-4"
+    class="fixed inset-0 z-[90] bg-black/25 flex items-start justify-center pt-[8dvh] px-4"
     onclick={close}
     role="presentation"
   >
     <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
     <div
-      class="w-full max-w-[600px] max-h-[80dvh] flex flex-col bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.28)] overflow-hidden"
+      class="w-full max-w-[720px] max-h-[88dvh] flex flex-col bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.28)] overflow-hidden"
       onclick={(e) => e.stopPropagation()}
       role="dialog"
       aria-modal="true"
       aria-label="Filter applications"
     >
       <!-- Header -->
-      <div class="flex items-center gap-3 px-5 py-3 border-b border-slate-200 dark:border-slate-600 shrink-0">
+      <div class="flex items-center gap-3 px-5 py-2.5 border-b border-slate-200 dark:border-slate-600 shrink-0">
         <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-200">Filters</h2>
         {#if filter.activeCount > 0}
           <span
@@ -96,7 +118,7 @@
       </div>
 
       <!-- Body: 2-column grid -->
-      <div class="overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+      <div class="overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
 
         <!-- STATUS (multi-select) -->
         <section>
@@ -111,7 +133,8 @@
                 <span class="size-4 flex items-center justify-center shrink-0 text-slate-700 dark:text-slate-300">
                   {#if active}{@html iconSvg('check', 14)}{/if}
                 </span>
-                <span class="text-slate-700 dark:text-slate-300">{st}</span>
+                <span class="flex-1 text-slate-700 dark:text-slate-300">{st}</span>
+                <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums shrink-0">{counts.statusCounts[st] || 0}</span>
               </button>
             {/each}
           </div>
@@ -129,7 +152,8 @@
               <span class="size-4 flex items-center justify-center shrink-0 text-slate-700 dark:text-slate-300">
                 {#if filter.categories.includes('')}{@html iconSvg('check', 14)}{/if}
               </span>
-              <span class="text-slate-700 dark:text-slate-300 italic">Uncategorized</span>
+              <span class="flex-1 text-slate-700 dark:text-slate-300 italic">Uncategorized</span>
+              <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums shrink-0">{counts.categoryCounts[''] || 0}</span>
             </button>
             {#each categories as cat (cat.id)}
               {@const active = filter.categories.includes(cat.name)}
@@ -140,7 +164,8 @@
                 <span class="size-4 flex items-center justify-center shrink-0 text-slate-700 dark:text-slate-300">
                   {#if active}{@html iconSvg('check', 14)}{/if}
                 </span>
-                <span class="text-slate-700 dark:text-slate-300">{cat.name}</span>
+                <span class="flex-1 text-slate-700 dark:text-slate-300">{cat.name}</span>
+                <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums shrink-0">{counts.categoryCounts[cat.name] || 0}</span>
               </button>
             {/each}
             {#if categories.length === 0}
@@ -163,7 +188,10 @@
                   {#if active}{@html iconSvg('check', 14)}{/if}
                 </span>
                 <span class="flex-1 min-w-0">
-                  <span class="block text-slate-700 dark:text-slate-300">{DEADLINE_LABELS[bucket]}</span>
+                  <span class="flex items-center gap-2">
+                    <span class="text-slate-700 dark:text-slate-300">{DEADLINE_LABELS[bucket]}</span>
+                    <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums ml-auto">{counts.bucketCounts[bucket] || 0}</span>
+                  </span>
                   <span class="block text-xs text-slate-400 dark:text-slate-500">{DEADLINE_HINTS[bucket]}</span>
                 </span>
               </button>
@@ -182,7 +210,10 @@
               {#if filter.stale}{@html iconSvg('check', 14)}{/if}
             </span>
             <span class="flex-1 min-w-0">
-              <span class="block text-slate-700 dark:text-slate-300">Applied &gt; 14 days ago</span>
+              <span class="flex items-center gap-2">
+                <span class="text-slate-700 dark:text-slate-300">Applied &gt; 14 days ago</span>
+                <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums ml-auto">{counts.staleCount}</span>
+              </span>
               <span class="block text-xs text-slate-400 dark:text-slate-500">No response yet</span>
             </span>
           </button>
@@ -203,7 +234,7 @@
       </div>
 
       <!-- Footer -->
-      <div class="flex items-center gap-3 px-5 py-2.5 border-t border-slate-200 dark:border-slate-600 text-[11px] text-slate-400 dark:text-slate-500 shrink-0">
+      <div class="flex items-center gap-3 px-5 py-2 border-t border-slate-200 dark:border-slate-600 text-[11px] text-slate-400 dark:text-slate-500 shrink-0">
         <span class="inline-flex items-center gap-1">
           <kbd class="font-mono px-1 py-0.5 rounded border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-700">esc</kbd>
           close
