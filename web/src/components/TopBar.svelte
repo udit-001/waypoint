@@ -5,6 +5,7 @@
   import { getPage } from '../stores/page.svelte.js';
   import { getFilter } from '../stores/filter.svelte.js';
   import { getCommandPalette } from '../stores/commandPalette.svelte.js';
+  import { getLayout } from '../stores/layout.svelte.js';
   import FilterModal from './FilterModal.svelte';
   import { iconSvg } from '../lib/icons.js';
   import { skillLabel } from '../stores/skillMeta.js';
@@ -15,6 +16,7 @@
   const page = getPage();
   const filter = getFilter();
   const palette = getCommandPalette();
+  const layoutStore = getLayout();
 
   let searchQuery = $state('');
   let isDark = $state(false);
@@ -107,7 +109,7 @@
 </script>
 
 <header class="flex items-center justify-between gap-4 min-h-10 px-6 py-1.5 bg-stone-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
-  <div class="flex items-center gap-4 min-w-0">
+  <div class="flex items-center gap-4">
     <button
       class="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center min-w-[40px] min-h-[40px] transition-colors"
       onclick={onToggleSidebar}
@@ -134,10 +136,36 @@
       </nav>
     {:else}
       <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">{page.title}</h2>
+      {#if page.byline}
+        <span class="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap shrink-0">{page.byline}</span>
+      {/if}
     {/if}
   </div>
 
   <div class="flex items-center gap-2">
+    {#if router.current.route === 'applications'}
+      <!-- WP-95: List|Kanban segmented toggle, only on /applications.
+           Matches the WP-93 prototype's inset-track + active-button style. -->
+      <div class="flex items-center gap-0.5 p-0.5 rounded-md bg-slate-100 dark:bg-slate-700 shadow-[inset_0_1px_2px_rgba(0,0,0,0.10)]">
+        <button
+          class="px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors {layoutStore.current === 'list' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
+          onclick={() => layoutStore.set('list')}
+          aria-pressed={layoutStore.current === 'list'}
+        >
+          {@html iconSvg('list', 14)}
+          <span>List</span>
+        </button>
+        <button
+          class="px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors {layoutStore.current === 'kanban' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
+          onclick={() => layoutStore.set('kanban')}
+          aria-pressed={layoutStore.current === 'kanban'}
+        >
+          {@html iconSvg('kanban', 14)}
+          <span>Kanban</span>
+        </button>
+      </div>
+    {/if}
+
     <button
       class="flex items-center gap-2 border border-slate-200 dark:border-slate-600 rounded-md px-3 py-1.5 bg-white dark:bg-slate-700 text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
       onclick={() => palette.summon()}
@@ -184,7 +212,7 @@
       {/if}
     </div>
 
-    {#if router.current.route === 'dashboard' || router.current.route === 'kanban' || router.current.route === 'table'}
+    {#if router.current.route === 'applications'}
       <button
         class="flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer transition-colors"
         onclick={() => filter.toggle()}

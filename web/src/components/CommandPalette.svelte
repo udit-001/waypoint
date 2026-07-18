@@ -22,11 +22,10 @@
 
   // ── Static navigation destinations ───────────────────
   //
-  // Applications routes to /table today; WP-95 will introduce
-  // /applications and the teardown (WP-98) will pick it up.
+  // Applications is the home view (WP-95); everything else hangs off it.
 
   const NAV = [
-    { title: 'Applications', route: '/table', icon: 'list' },
+    { title: 'Applications', route: '/applications', icon: 'list' },
     { title: 'Artifacts', route: '/artifacts', icon: 'file-text' },
     { title: 'Categories', route: '/categories', icon: 'box' },
     { title: 'Profile', route: '/profile', icon: 'user' },

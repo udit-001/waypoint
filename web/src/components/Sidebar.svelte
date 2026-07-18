@@ -9,12 +9,12 @@
 
   function handleLogoClick(e) {
     e.preventDefault();
-    if (router.current.route === 'dashboard') {
-      // Spin feedback on dashboard
+    if (router.current.route === 'applications') {
+      // Spin feedback on Applications home
       spinning = true;
-      setTimeout(() => { spinning = false; }, 500);
+      setTimeout(() => { spinning = false; }, 200);
     } else {
-      handleNav('dashboard');
+      handleNav('applications');
     }
   }
 
@@ -22,9 +22,7 @@
     {
       title: 'Views',
       items: [
-        { view: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { view: 'kanban', label: 'Kanban', icon: 'kanban' },
-        { view: 'table', label: 'Table', icon: 'table' },
+        { view: 'applications', label: 'Applications', icon: 'list' },
       ],
     },
     {
@@ -44,7 +42,7 @@
   ];
 
   function handleNav(view) {
-    router.navigate('/' + (view === 'dashboard' ? '' : view));
+    router.navigate('/' + view);
   }
 
   function isActive(view) {
@@ -53,7 +51,8 @@
 </script>
 
 <aside
-  class="flex flex-col border-r border-slate-200 bg-slate-100 transition-all duration-200 overflow-hidden {sidebarClosed ? 'w-0 min-w-0 border-r-0' : 'w-60 min-w-60'}"
+  class="flex flex-col border-r border-slate-200 bg-slate-100 overflow-hidden h-full"
+  style="width: 15rem; min-width: 15rem;"
 >
   <div class="flex items-center gap-2.5 px-5 py-1.5 border-b border-slate-200">
     <a
@@ -61,7 +60,7 @@
       class="flex items-center gap-2 text-sm font-semibold text-slate-800 hover:text-slate-600 no-underline"
       onclick={handleLogoClick}
     >
-      <svg class="shrink-0 transition-transform duration-500 {spinning ? 'rotate-180' : ''}" viewBox="0 0 100 100" width="28" height="28" aria-hidden="true">
+      <svg class="shrink-0 transition-transform duration-200 ease-[var(--ease-out)] {spinning ? 'rotate-180' : ''}" viewBox="0 0 100 100" width="28" height="28" aria-hidden="true">
         <g fill="none" stroke="currentColor" stroke-linecap="round">
           <circle cx="50" cy="50" r="32" stroke-width="4"/>
           <circle cx="50" cy="50" r="16" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.4"/>
@@ -88,8 +87,8 @@
         {/if}
         {#each section.items as item}
           <a
-            href="/{item.view === 'dashboard' ? '' : item.view}"
-            class="flex items-center gap-2 px-3 py-1.5 rounded text-sm no-underline cursor-pointer {isActive(item.view) ? 'bg-slate-700 text-white font-medium' : 'text-slate-700 hover:bg-slate-200 hover:text-slate-900'}"
+            href="/{item.view}"
+            class="flex items-center gap-2 px-3 py-1.5 rounded text-sm no-underline cursor-pointer transition-colors {isActive(item.view) ? 'bg-slate-700 text-white font-medium' : 'text-slate-700 hover:bg-slate-200 hover:text-slate-900'}"
             onclick={(e) => { e.preventDefault(); handleNav(item.view); }}
           >
             <span class="w-5 text-center flex items-center justify-center">{@html iconSvg(item.icon, 18)}</span>
@@ -102,7 +101,7 @@
     <div class="border-t border-slate-200 mt-auto pt-2">
       <a
         href="/settings"
-        class="flex items-center gap-2 px-3 py-1.5 rounded text-sm no-underline cursor-pointer {isActive('settings') ? 'bg-slate-700 text-white font-medium' : 'text-slate-700 hover:bg-slate-200'}"
+        class="flex items-center gap-2 px-3 py-1.5 rounded text-sm no-underline cursor-pointer transition-colors {isActive('settings') ? 'bg-slate-700 text-white font-medium' : 'text-slate-700 hover:bg-slate-200'}"
         onclick={(e) => { e.preventDefault(); handleNav('settings'); }}
       >
         <span class="w-5 text-center flex items-center justify-center">{@html iconSvg('sliders', 18)}</span>
