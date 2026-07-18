@@ -7,7 +7,9 @@ import { setPage } from '../stores/page.svelte.js';
   import { STATUSES } from '../lib/status.js';
   import { applyFilter } from '../lib/filter.js';
   import Spinner from '../components/Spinner.svelte';
+  import Card from '../components/Card.svelte';
   import { onMount, onDestroy } from 'svelte';
+  import { fly } from 'svelte/transition';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
@@ -30,7 +32,7 @@ import { setPage } from '../stores/page.svelte.js';
 
   let filteredJobs = $derived(applyFilter(jobs, filter));
 
-  let hasActiveFilter = $derived(filter.category || filter.status);
+  let hasActiveFilter = $derived(filter.any);
 
   // Derived state
   let statusCounts = $derived.by(() => {
@@ -119,6 +121,24 @@ import { setPage } from '../stores/page.svelte.js';
     return (allHistory || []).filter(h => h.action === 'Status' && h.from).slice(0, 8);
   });
 
+  // Staggered entry — only on first render, not on filter changes
+  let firstRender = true;
+
+  function stagger(i, opts) {
+    const { y = 6, duration = 280, step = 40, cap = 6 } = opts || {};
+    if (!firstRender) return { duration: 0 };
+    return { y, duration, delay: Math.min(i, cap) * step };
+  }
+
+  // Stat cards config — drives the {#each} loop for staggered entry
+  let statCards = $derived([
+    { label: 'Total Applications', value: filteredJobs.length, valueClass: 'text-slate-800', extra: weekDelta !== 0 ? { text: `${weekDelta > 0 ? '+' : ''}${weekDelta}%`, class: weekDelta > 0 ? 'text-emerald-600' : 'text-red-600' } : null },
+    { label: 'Active Pipeline', value: activePipeline, valueClass: 'text-slate-800', extra: { text: `${notApplied} waiting, ${applied} in review`, class: 'text-slate-400' } },
+    { label: 'Offers', value: offers, valueClass: 'text-slate-600', extra: { text: `${offerRate}% conversion`, class: 'text-slate-400' } },
+    { label: 'Response Rate', value: `${responseRate}%`, valueClass: 'text-slate-800', extra: null },
+    { label: 'This Week', value: actionsThisWeek, valueClass: 'text-slate-800', extra: { text: actionsThisWeek === 1 ? 'action' : 'actions', class: 'text-slate-400' } },
+  ]);
+
   onMount(async () => {
     setPage({ title: 'Dashboard' });
     filter.sync();
@@ -127,6 +147,7 @@ import { setPage } from '../stores/page.svelte.js';
     jobs = api.jobs.value || [];
     allHistory = api.history.value || [];
     loaded = true;
+    firstRender = false;
   });
 
   onDestroy(() => {
@@ -308,64 +329,41 @@ import { setPage } from '../stores/page.svelte.js';
 {:else if filteredJobs.length === 0 && hasActiveFilter}
   <div class="text-center py-20 text-slate-400">
     <div class="text-4xl mb-4">{@html iconSvg("search", 48)}</div>
-    <h3 class="text-lg font-semibold text-slate-600 mb-1">No jobs match &ldquo;{filter.category}&rdquo;</h3>
-    <p class="text-sm">Try selecting a different category filter.</p>
+    <h3 class="text-lg font-semibold text-slate-600 mb-1">No jobs match these filters</h3>
+    <p class="text-sm">Try clearing filters or selecting a different combination.</p>
   </div>
 {:else}
   <div class="space-y-3">
     <!-- Stat cards -->
     <div class="grid grid-cols-5 gap-2.5">
-      <div class="bg-white rounded-lg border border-slate-200 p-3 hover:border-slate-400 transition-colors">
-        <div class="text-xs uppercase tracking-wide text-slate-400 font-medium">Total Applications</div>
-        <div class="flex items-baseline gap-2 mt-1">
-          <span class="text-2xl font-bold text-slate-800 tabular-nums">{filteredJobs.length}</span>
-          {#if weekDelta !== 0}
-            <span class="text-xs font-semibold {weekDelta > 0 ? 'text-emerald-600' : 'text-red-600'}">{weekDelta > 0 ? '+' : ''}{weekDelta}%</span>
-          {/if}
+      {#each statCards as card, i (card.label)}
+        <div in:fly={stagger(i, { y: 6, duration: 280, step: 40, cap: 5 })}>
+          <Card padding="p-3" class="h-full">
+            <div class="text-xs uppercase tracking-wide text-slate-400 font-medium">{card.label}</div>
+            <div class="flex items-baseline gap-2 mt-1">
+              <span class="text-2xl font-bold {card.valueClass} tabular-nums">{card.value}</span>
+              {#if card.extra}
+                <span class="text-xs font-semibold {card.extra.class}">{card.extra.text}</span>
+              {/if}
+            </div>
+          </Card>
         </div>
-      </div>
-      <div class="bg-white rounded-lg border border-slate-200 p-3 hover:border-slate-400 transition-colors">
-        <div class="text-xs uppercase tracking-wide text-slate-400 font-medium">Active Pipeline</div>
-        <div class="flex items-baseline gap-2 mt-1">
-          <span class="text-2xl font-bold text-slate-800 tabular-nums">{activePipeline}</span>
-          <span class="text-xs text-slate-400">{notApplied} waiting, {applied} in review</span>
-        </div>
-      </div>
-      <div class="bg-white rounded-lg border border-slate-200 p-3 hover:border-slate-400 transition-colors">
-        <div class="text-xs uppercase tracking-wide text-slate-400 font-medium">Offers</div>
-        <div class="flex items-baseline gap-2 mt-1">
-          <span class="text-2xl font-bold text-slate-600 tabular-nums">{offers}</span>
-          <span class="text-xs text-slate-400">{offerRate}% conversion</span>
-        </div>
-      </div>
-      <div class="bg-white rounded-lg border border-slate-200 p-3 hover:border-slate-400 transition-colors">
-        <div class="text-xs uppercase tracking-wide text-slate-400 font-medium">Response Rate</div>
-        <div class="flex items-baseline gap-2 mt-1">
-          <span class="text-2xl font-bold text-slate-800 tabular-nums">{responseRate}%</span>
-        </div>
-      </div>
-      <div class="bg-white rounded-lg border border-slate-200 p-3 hover:border-slate-400 transition-colors">
-        <div class="text-xs uppercase tracking-wide text-slate-400 font-medium">This Week</div>
-        <div class="flex items-baseline gap-2 mt-1">
-          <span class="text-2xl font-bold text-slate-800 tabular-nums">{actionsThisWeek}</span>
-          <span class="text-xs text-slate-400">{actionsThisWeek === 1 ? 'action' : 'actions'}</span>
-        </div>
-      </div>
+      {/each}
     </div>
 
     <!-- Charts row -->
     <div class="grid grid-cols-2 gap-3">
       {#if pipelineData.length > 0}
-        <div class="bg-white rounded-lg border border-slate-200 p-3">
+        <Card hover={false} padding="p-3">
           <h4 class="text-xs uppercase tracking-wide text-slate-400 font-medium mb-2">Pipeline</h4>
           <div class="h-48"><canvas id="chart-pipeline"></canvas></div>
-        </div>
+        </Card>
       {/if}
       {#if salaryData.length > 0}
-        <div class="bg-white rounded-lg border border-slate-200 p-3">
+        <Card hover={false} padding="p-3">
           <h4 class="text-xs uppercase tracking-wide text-slate-400 font-medium mb-2">Salary Range <span class="text-slate-300 font-normal">(monthly)</span></h4>
           <div class="h-64"><canvas id="chart-salary"></canvas></div>
-        </div>
+        </Card>
       {/if}
     </div>
 
@@ -375,7 +373,7 @@ import { setPage } from '../stores/page.svelte.js';
       <div class="flex flex-col gap-3">
         <!-- Stale / needs follow-up -->
         {#if staleApps.length > 0}
-          <div class="bg-white rounded-lg border border-amber-200 p-3">
+          <div class="bg-white rounded-xl border border-amber-200 p-3">
             <h4 class="text-xs uppercase tracking-wide text-slate-400 font-medium mb-2">
               Needs Follow-up
               <span class="ml-1.5 bg-amber-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 align-middle">{staleApps.length}</span>
@@ -401,7 +399,7 @@ import { setPage } from '../stores/page.svelte.js';
 
         <!-- Upcoming deadlines -->
         {#if upcoming.length > 0}
-          <div class="bg-white rounded-lg border border-slate-200 p-3">
+          <Card hover={false} padding="p-3">
             <h4 class="text-xs uppercase tracking-wide text-slate-400 font-medium mb-2">Upcoming Deadlines</h4>
             <div class="space-y-1">
               {#each upcoming as job}
@@ -419,14 +417,14 @@ import { setPage } from '../stores/page.svelte.js';
                 </button>
               {/each}
             </div>
-          </div>
+          </Card>
         {/if}
       </div>
 
       <!-- Right column -->
       <div class="flex flex-col gap-3">
         <!-- Category breakdown -->
-        <div class="bg-white rounded-lg border border-slate-200 p-3">
+        <Card hover={false} padding="p-3">
           <h4 class="text-xs uppercase tracking-wide text-slate-400 font-medium mb-2">By Category</h4>
           <div class="overflow-x-auto">
             <table class="w-full text-xs">
@@ -453,10 +451,10 @@ import { setPage } from '../stores/page.svelte.js';
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
 
         <!-- Recent activity -->
-        <div class="bg-white rounded-lg border border-slate-200 p-3">
+        <Card hover={false} padding="p-3">
           <h4 class="text-xs uppercase tracking-wide text-slate-400 font-medium mb-2">Recent Activity</h4>
           {#if recentActivity.length === 0}
             <p class="text-xs text-slate-400">No activity yet.</p>
@@ -479,7 +477,7 @@ import { setPage } from '../stores/page.svelte.js';
               {/each}
             </div>
           {/if}
-        </div>
+        </Card>
       </div>
     </div>
   </div>

@@ -5,6 +5,7 @@
   import { getPage } from '../stores/page.svelte.js';
   import { getFilter } from '../stores/filter.svelte.js';
   import { getCommandPalette } from '../stores/commandPalette.svelte.js';
+  import FilterModal from './FilterModal.svelte';
   import { iconSvg } from '../lib/icons.js';
   import { skillLabel } from '../stores/skillMeta.js';
   import * as api from '../stores/api.svelte.js';
@@ -185,15 +186,21 @@
 
     {#if router.current.route === 'dashboard' || router.current.route === 'kanban' || router.current.route === 'table'}
       <button
-        class="p-2.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer relative inline-flex items-center justify-center min-w-[40px] min-h-[40px] transition-colors"
-        onclick={filter.toggle}
-        title="Toggle Filters"
+        class="flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer transition-colors"
+        onclick={() => filter.toggle()}
+        title="Filter applications"
+        aria-label="Open filter"
+        aria-expanded={filter.open}
       >
-        {@html iconSvg('filter', 18)}
-        {#if filter.category || filter.status}
-          <span class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-slate-700 rounded-full"></span>
+        {@html iconSvg('sliders', 14)}
+        <span>Filter</span>
+        {#if filter.activeCount > 0}
+          <span
+            class="grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full bg-slate-700 dark:bg-slate-900 text-white font-mono text-[10px] leading-none tabular-nums"
+          >{filter.activeCount}</span>
         {/if}
       </button>
+      <FilterModal />
     {/if}
     {#if showInstallBtn}
       <button

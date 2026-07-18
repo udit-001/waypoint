@@ -2,6 +2,7 @@
 import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
   import Spinner from '../components/Spinner.svelte';
+  import Card from '../components/Card.svelte';
   import { getRouter } from '../stores/router.svelte.js';
   const router = getRouter();
   import * as api from '../stores/api.svelte.js';
@@ -39,9 +40,11 @@ import { setPage } from '../stores/page.svelte.js';
     applyFilters();
   });
 
-  // Re-apply filters when the shared filter changes
+  // Re-apply filters when the shared filter changes. The reads of
+  // filter.categories/statuses/deadlineBucket/stale/textQuery inside
+  // applyFilters are what make this $effect reactive.
   $effect(() => {
-    if (filter.category !== undefined && filter.status !== undefined) applyFilters();
+    applyFilters();
   });
 
   function sortBy(field) {
@@ -89,24 +92,26 @@ import { setPage } from '../stores/page.svelte.js';
       type="text"
       bind:value={searchQuery}
       placeholder="Search..."
-      class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-48 focus:border-slate-400 focus:outline-none"
+      class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-48 focus:border-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40"
       oninput={applyFilters}
     />
   </div>
 
   <!-- Table -->
-  <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+  <Card hover={false} padding="p-0" class="overflow-x-auto">
     <table class="w-full text-sm whitespace-nowrap">
       <thead>
         <tr class="border-b border-slate-200">
           {#each columns as col}
             <th
-              class="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-400 cursor-pointer select-none hover:text-slate-600 sticky top-0 bg-white"
+              class="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-400 cursor-pointer select-none hover:text-slate-600 transition-colors"
               onclick={() => sortBy(col.field)}
             >
               {col.label}
               {#if sortField === col.field}
-                <span class="ml-1">{sortDir === 1 ? '▲' : '▼'}</span>
+                <svg class="inline-block ml-1 align-middle" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                  {#if sortDir === 1}<path d="m18 15-6-6-6 6"/>{:else}<path d="m6 9 6 6 6-6"/>{/if}
+                </svg>
               {/if}
             </th>
           {/each}
@@ -115,7 +120,11 @@ import { setPage } from '../stores/page.svelte.js';
       <tbody>
         {#if filteredJobs.length === 0}
           <tr>
-            <td colspan={columns.length} class="text-center py-12 text-slate-400">No jobs found</td>
+            <td colspan={columns.length} class="text-center py-12">
+              <svg class="mx-auto text-slate-300 mb-3" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+              <p class="text-sm text-slate-400 mb-1">No jobs found</p>
+              <p class="text-xs text-slate-400">Run <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono text-[11px]">waypoint jobs add</code> to get started</p>
+            </td>
           </tr>
         {:else}
           {#each filteredJobs as job}
@@ -146,6 +155,6 @@ import { setPage } from '../stores/page.svelte.js';
         {/if}
       </tbody>
     </table>
-  </div>
+  </Card>
 </div>
 {/if}
