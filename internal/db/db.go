@@ -41,7 +41,7 @@ func Open(path string) (Store, error) {
 	// instead of wedging the server, while staying low enough that SQLite
 	// writer contention is rare (WAL + busy_timeout=5000 serializes
 	// writers at the file level anyway).
-	db.DB.SetMaxOpenConns(4)
+	db.SetMaxOpenConns(4)
 
 	// PRAGMAs: WAL + tuning for a local single-user database.
 	// journal_mode=WAL is persistent (stored in DB header).

@@ -88,7 +88,7 @@ Examples:
 			if !waitForServerReady(startFlags.port, 20, 100*time.Millisecond) {
 				c.Process.Kill()
 				_ = os.Remove(config.PidPath())
-				return fmt.Errorf("Server failed to start — port may be in use")
+				return fmt.Errorf("server failed to start — port may be in use")
 			}
 
 			fmt.Println()
