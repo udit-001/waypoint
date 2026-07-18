@@ -1,8 +1,10 @@
 <script>
   import { onMount } from 'svelte';
+  import { fly } from 'svelte/transition';
   import { getRouter } from '../stores/router.svelte.js';
   import { getPage } from '../stores/page.svelte.js';
   import { getFilter } from '../stores/filter.svelte.js';
+  import { getCommandPalette } from '../stores/commandPalette.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { skillLabel } from '../stores/skillMeta.js';
   import * as api from '../stores/api.svelte.js';
@@ -11,6 +13,7 @@
   const router = getRouter();
   const page = getPage();
   const filter = getFilter();
+  const palette = getCommandPalette();
 
   let searchQuery = $state('');
   let isDark = $state(false);
@@ -105,7 +108,7 @@
 <header class="flex items-center justify-between gap-4 min-h-10 px-6 py-1.5 bg-stone-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
   <div class="flex items-center gap-4 min-w-0">
     <button
-      class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center"
+      class="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center min-w-[40px] min-h-[40px] transition-colors"
       onclick={onToggleSidebar}
       title="Toggle Sidebar"
     >
@@ -116,7 +119,7 @@
       <nav class="flex items-center gap-1.5 text-sm min-w-0">
         {#each page.breadcrumbs as crumb, i}
           {#if i > 0}
-            <span class="text-slate-300 dark:text-slate-500 mx-0.5 shrink-0">/</span>
+            <svg class="text-slate-300 dark:text-slate-500 shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
           {/if}
           {#if i < page.breadcrumbs.length - 1}
             <button
@@ -134,6 +137,17 @@
   </div>
 
   <div class="flex items-center gap-2">
+    <button
+      class="flex items-center gap-2 border border-slate-200 dark:border-slate-600 rounded-md px-3 py-1.5 bg-white dark:bg-slate-700 text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+      onclick={() => palette.summon()}
+      title="Open command palette (⌘K)"
+      aria-label="Open command palette"
+    >
+      {@html iconSvg('search', 14)}
+      <span>Search…</span>
+      <kbd class="text-[10px] px-1.5 py-px rounded border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 font-sans">⌘K</kbd>
+    </button>
+
     <div class="relative">
       <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg px-2">
         <input
@@ -141,7 +155,7 @@
           bind:value={searchQuery}
           oninput={onSearchInput}
           placeholder="Search jobs & artifacts... (/)"
-          class="bg-transparent border-none outline-none w-56 py-1.5 px-2 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:w-72 transition-all"
+          class="bg-transparent border-none outline-none w-56 py-1.5 px-2 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40 rounded-lg"
           onkeydown={handleKeydown}
           onblur={() => setTimeout(() => { showDropdown = false; }, 200)}
         />
@@ -154,7 +168,7 @@
       </div>
 
       {#if showDropdown && results.length > 0}
-        <div class="absolute top-full right-0 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-50 max-h-72 overflow-y-auto">
+        <div in:fly={{y: -4, duration: 140}} class="absolute top-full right-0 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg z-50 max-h-72 overflow-y-auto" style="transform-origin: top right">
           {#each results as r}
             <button
               class="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer bg-transparent border-none flex items-center gap-2 transition-colors"
@@ -171,7 +185,7 @@
 
     {#if router.current.route === 'dashboard' || router.current.route === 'kanban' || router.current.route === 'table'}
       <button
-        class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer relative inline-flex items-center justify-center"
+        class="p-2.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer relative inline-flex items-center justify-center min-w-[40px] min-h-[40px] transition-colors"
         onclick={filter.toggle}
         title="Toggle Filters"
       >
@@ -183,7 +197,7 @@
     {/if}
     {#if showInstallBtn}
       <button
-        class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center"
+        class="p-2.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center min-w-[40px] min-h-[40px] transition-colors"
         onclick={handleInstall}
         title="Install app"
       >
@@ -191,7 +205,7 @@
       </button>
     {/if}
     <button
-      class="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center"
+      class="p-2.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center min-w-[40px] min-h-[40px] transition-colors"
       onclick={toggleTheme}
       title="Toggle Theme"
     >

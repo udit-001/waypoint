@@ -1,6 +1,7 @@
 <script>
   import Sidebar from './components/Sidebar.svelte';
   import TopBar from './components/TopBar.svelte';
+  import CommandPalette from './components/CommandPalette.svelte';
   import Dashboard from './views/Dashboard.svelte';
   import Kanban from './views/Kanban.svelte';
   import TableView from './views/TableView.svelte';
@@ -41,9 +42,11 @@
   }
 </script>
 
-<div id="app" class="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
-  <Sidebar {sidebarClosed} onToggle={toggleSidebar} />
-  <main class="flex flex-col flex-1 overflow-hidden">
+<div id="app" class="grid h-screen overflow-hidden bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 transition-[grid-template-columns] duration-200 ease-[var(--ease-drawer)] will-change-[grid-template-columns] {sidebarClosed ? 'grid-cols-[0_1fr]' : 'grid-cols-[15rem_1fr]'}">
+  <div class="overflow-hidden h-full">
+    <Sidebar {sidebarClosed} onToggle={toggleSidebar} />
+  </div>
+  <main class="flex flex-col overflow-hidden">
     <TopBar {sidebarClosed} onToggleSidebar={toggleSidebar} />
     <FilterBar />
     <div class="flex-1 p-6 overflow-y-auto">
@@ -73,4 +76,5 @@
     </div>
   </main>
   <FilterSidebar />
+  <CommandPalette />
 </div>
