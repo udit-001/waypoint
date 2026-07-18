@@ -47,10 +47,12 @@ jobs:
         run: go vet ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          install-mode: go
+        # Install from source via `go install` so the linter is built with the
+        # same Go toolchain (1.25.10) as the code — prebuilt binaries (v1.64.8,
+        # built with Go 1.24) can't analyze Go 1.25 targets.
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          golangci-lint run ./...
 
       - name: Test
         # modernc.org/sqlite is pure-Go (no CGO) — runs on stock ubuntu-latest.
