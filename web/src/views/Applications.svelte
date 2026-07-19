@@ -210,7 +210,7 @@
        with an inline count, and cards below. Tight gutters, flat, dense.
        Container has fixed height + overflow-y-hidden so only the card
        list scrolls within each column — headers stay pinned. -->
-  <div class="-mx-6 px-6 flex gap-3 h-[calc(100vh-7rem)] pb-4 pt-6 overflow-x-auto overflow-y-hidden">
+  <div class="-mx-6 px-6 -mb-6 flex gap-3 h-[calc(100vh-3.5rem)] pb-4 pt-6 overflow-x-auto overflow-y-hidden">
     {#each STATUSES as status}
       {@const colJobs = jobsByStatus(status)}
       <div class="flex flex-col flex-1 min-w-[260px] max-w-[300px] h-full overflow-hidden">
