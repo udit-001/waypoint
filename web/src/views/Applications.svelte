@@ -23,7 +23,7 @@
   import { getLayout } from '../stores/layout.svelte.js';
   import { getChartsOpen } from '../stores/chartsOpen.svelte.js';
   import * as api from '../stores/api.svelte.js';
-  import { STATUSES } from '../lib/status.js';
+  import { STATUSES, STATUS_META } from '../lib/status.js';
   import { applyFilter } from '../lib/filter.js';
   import { urgencyFor } from '../lib/urgency.js';
   import { formatDateShort } from '../lib/format.js';
@@ -42,17 +42,9 @@
   let copiedCli = $state(false);
   let collapsedGroups = $state(new Set());
 
-  // Status dot colors — single source for both List dot + Kanban column
-  // accent. Inline style so we don't need a new CSS variant per status.
-  // (STATUS_STYLES in lib/status.js uses bg-/text- combinations aimed at
-  // pill badges — fine for badges elsewhere, wrong shape for a 10px dot.)
-  const STATUS_DOT_COLORS = {
-    'Not Applied': '#94a3b8',
-    'Applied':     '#5e81ac',
-    'Offer':       '#a3be8c',
-    'Rejected':    '#bf616a',
-    'Withdrawn':   '#4c566a',
-  };
+  // Status identity (icon + color) is the canonical visual marker.
+  // Sourced from lib/status.js STATUS_META — single source of truth.
+  // Kanban header color + list row icon both read from here.
 
   const URGENCY_TONE_CLASS = {
     red:   'text-red-600 dark:text-red-400',
@@ -215,9 +207,9 @@
     {#each STATUSES as status}
       {@const colJobs = jobsByStatus(status)}
       <div class="flex flex-col flex-1 min-w-[260px] max-w-[300px] h-full overflow-hidden">
-        <div class="flex items-center gap-2 px-1 pb-2 shrink-0">
-          <span class="w-2 h-2 rounded-full shrink-0" style="background: {STATUS_DOT_COLORS[status]}"></span>
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{status}</span>
+        <div class="flex items-center gap-2 px-1 pb-2 shrink-0" style="color: {STATUS_META[status].color}">
+          <span class="shrink-0">{@html iconSvg(STATUS_META[status].icon, 12, { duotone: false })}</span>
+          <span class="text-[11px] font-semibold uppercase tracking-wide" style="color: {STATUS_META[status].color}">{status}</span>
           <span class="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{colJobs.length}</span>
         </div>
         <div class="flex flex-col gap-1.5 flex-1 min-h-[60px] overflow-y-auto pt-1">
@@ -288,10 +280,10 @@
               onclick={() => showJob(job.id)}
             >
               <span
-                class="w-2.5 h-2.5 rounded-full shrink-0"
-                style="background: {STATUS_DOT_COLORS[job.status]}"
+                class="shrink-0"
+                style="color: {STATUS_META[job.status].color}"
                 aria-hidden="true"
-              ></span>
+              >{@html iconSvg(STATUS_META[job.status].icon, 12, { duotone: false })}</span>
               <span class="flex-1 min-w-0 text-sm truncate {isClosed ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-100'}">
                 {job.position}
                 <span class="text-slate-400 dark:text-slate-500 mx-1">·</span>
