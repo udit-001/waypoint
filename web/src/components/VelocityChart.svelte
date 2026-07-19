@@ -64,24 +64,25 @@
       </span>
     </div>
     <svg viewBox="0 0 {VB_W} {VB_H}" width="100%" style="overflow: visible; max-width: 640px; display: block;" role="img" aria-label="Applications per week over {numWeeks} weeks">
-      <!-- Range frame: y-axis only spans the data's actual range -->
-      <line x1={PAD_L} y1={PLOT_TOP} x2={PAD_L} y2={PLOT_BOTTOM} stroke="#94a3b8" stroke-width="0.5"/>
-      <text x={PAD_L - 5} y={PLOT_TOP + 4} text-anchor="end" font-family="ui-monospace, monospace" font-size="10" fill="#94a3b8">{realMax}</text>
-      <text x={PAD_L - 5} y={PLOT_BOTTOM + 4} text-anchor="end" font-family="ui-monospace, monospace" font-size="10" fill="#94a3b8">0</text>
+      <!-- Range frame: y-axis only spans the data's actual range.
+           Colors use CSS vars so they adapt to dark mode automatically. -->
+      <line x1={PAD_L} y1={PLOT_TOP} x2={PAD_L} y2={PLOT_BOTTOM} style="stroke: var(--color-slate-400)" stroke-width="0.5"/>
+      <text x={PAD_L - 5} y={PLOT_TOP + 4} text-anchor="end" font-family="ui-monospace, monospace" font-size="10" style="fill: var(--color-slate-400)">{realMax}</text>
+      <text x={PAD_L - 5} y={PLOT_BOTTOM + 4} text-anchor="end" font-family="ui-monospace, monospace" font-size="10" style="fill: var(--color-slate-400)">0</text>
 
       <!-- Faint 0-baseline only (no gridlines at every unit) -->
-      <line x1={PAD_L} y1={PLOT_BOTTOM} x2={PLOT_RIGHT} y2={PLOT_BOTTOM} stroke="#e5e9f0" stroke-width="0.5"/>
+      <line x1={PAD_L} y1={PLOT_BOTTOM} x2={PLOT_RIGHT} y2={PLOT_BOTTOM} style="stroke: var(--color-slate-200)" stroke-width="0.5"/>
 
-      <!-- The line: 1.5px, slate-700 -->
-      <polyline fill="none" stroke="#334155" stroke-width="1.5" points={polylinePts}/>
+      <!-- The line: 1.5px, theme-aware via --color-slate-700 -->
+      <polyline fill="none" style="stroke: var(--color-slate-700)" stroke-width="1.5" points={polylinePts}/>
 
       <!-- First point: muted, small (historical anchor) -->
-      <circle cx={points[0].x} cy={points[0].y} r="2" fill="#94a3b8"/>
-      <text x={points[0].x} y={VB_H - 7} text-anchor="middle" font-family="ui-monospace, monospace" font-size="9" fill="#94a3b8">{points[0].label}</text>
+      <circle cx={points[0].x} cy={points[0].y} r="2" style="fill: var(--color-slate-400)"/>
+      <text x={points[0].x} y={VB_H - 7} text-anchor="middle" font-family="ui-monospace, monospace" font-size="9" style="fill: var(--color-slate-400)">{points[0].label}</text>
 
       <!-- Intermediate week labels (muted, no markers) -->
       {#each points.slice(1, -1) as p}
-        <text x={p.x} y={VB_H - 7} text-anchor="middle" font-family="ui-monospace, monospace" font-size="9" fill="#94a3b8">{p.label}</text>
+        <text x={p.x} y={VB_H - 7} text-anchor="middle" font-family="ui-monospace, monospace" font-size="9" style="fill: var(--color-slate-400)">{p.label}</text>
       {/each}
 
       <!-- Most recent point: focal accent (red, larger, labeled) -->
