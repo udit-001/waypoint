@@ -138,14 +138,15 @@
 {#if !loaded}
   <!-- Loading: skeletons prevent layout shift when data lands. -->
   {#if layoutStore.current === 'kanban'}
-    <div class="flex gap-4 pb-4 overflow-x-auto">
-      {#each Array(3) as _}
-        <div class="flex flex-col flex-1 min-w-[280px] max-w-[320px] bg-slate-50/50 dark:bg-slate-800/40 rounded-2xl border-t-2 border-slate-200 dark:border-slate-700 p-3">
-          <div class="flex items-center justify-between px-2 pb-3">
-            <Skeleton class="h-3 w-20" />
-            <Skeleton variant="circle" class="size-5" />
+    <div class="-mx-6 px-6 flex gap-3 pt-6 overflow-x-auto">
+      {#each Array(5) as _}
+        <div class="flex flex-col flex-1 min-w-[260px] max-w-[300px]">
+          <div class="flex items-center gap-2 px-1 pb-2">
+            <Skeleton variant="circle" class="size-2" />
+            <Skeleton class="h-3 w-16" />
+            <Skeleton class="h-3 w-3" />
           </div>
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-1.5">
             {#each Array(3) as _}
               <Skeleton variant="block" class="h-16 w-full" />
             {/each}
