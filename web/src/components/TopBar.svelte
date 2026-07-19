@@ -89,7 +89,7 @@
           onclick={() => layoutStore.set('list')}
           aria-pressed={layoutStore.current === 'list'}
         >
-          {@html iconSvg('list', 14)}
+          {@html iconSvg('list', 14, { duotone: false })}
           <span>List</span>
         </button>
         <button

@@ -57,7 +57,7 @@ const ICON_PATHS = {
  * Use with {@html} in Svelte markup.
  */
 export function iconSvg(name, size = 20, opts = {}) {
-  const { duotone = true } = opts;
+  const { duotone = size >= 48 } = opts;
   const p = ICON_PATHS[name];
   if (!p) return '';
   const sw = size <= 16 ? 1.5 : 2;
