@@ -17,7 +17,7 @@ export const STATUS_META = {
   'Applied':     { color: '#5e81ac', icon: 'send',           bg: 'bg-blue-100 text-blue-700',            border: 'border-blue-300' },
   'Offer':       { color: '#a3be8c', icon: 'award',          bg: 'bg-emerald-100 text-emerald-700',       border: 'border-emerald-300' },
   'Rejected':    { color: '#bf616a', icon: 'circle-x',      bg: 'bg-red-100 text-red-700',              border: 'border-red-300' },
-  'Withdrawn':   { color: '#4c566a', icon: 'circle-arrow-left', bg: 'bg-slate-200 text-slate-500',       border: 'border-slate-400' },
+  'Withdrawn':   { color: '#7b8794', icon: 'circle-arrow-left', bg: 'bg-slate-200 text-slate-500',       border: 'border-slate-400' },
 };
 
 // Backward-compat alias (existing callers use STATUS_STYLES[name].bg)
