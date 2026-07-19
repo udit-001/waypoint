@@ -3,8 +3,6 @@ package db
 import (
 	"embed"
 	"fmt"
-	"io"
-	"os"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/pressly/goose/v3"
@@ -12,32 +10,6 @@ import (
 
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
-
-// backupDB copies the database file to <path>.bak. Best-effort — errors
-// are silently ignored since the backup is a safety net, not a requirement.
-// A WAL checkpoint is run first so the copy captures all committed data.
-//
-// TEMPORARY: This protects against the V2 NO TRANSACTION migration's
-// failure window. Once all users have V2 applied, this code never fires
-// (gated on version < 2) and can be removed.
-func backupDB(db *sqlx.DB, dbPath string) {
-	// Checkpoint WAL into main DB file so the copy is consistent
-	_, _ = db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
-
-	src, err := os.Open(dbPath)
-	if err != nil {
-		return
-	}
-	defer src.Close()
-
-	dst, err := os.Create(dbPath + ".bak")
-	if err != nil {
-		return
-	}
-	defer dst.Close()
-
-	_, _ = io.Copy(dst, src)
-}
 
 // baselinedb marks V1 as applied in a single transaction so a crash
 // mid-baseling rolls back cleanly — no half-created goose_db_version.
@@ -109,19 +81,6 @@ func (s *SQLiteStore) RunMigrations(dbPath string) error {
 			}
 		}
 		// Fresh DB: goose.Up will create goose_db_version and run V1 + V2.
-	}
-
-	// Backup before migration if V2 hasn't been applied yet.
-	// TEMPORARY — remove this block once all users are on V2.
-	needsBackup := true
-	if gooseTableExists {
-		var version int
-		if err := s.Get(&version, "SELECT max(version_id) FROM goose_db_version WHERE is_applied = 1"); err == nil && version >= 2 {
-			needsBackup = false
-		}
-	}
-	if needsBackup {
-		backupDB(s.DB, dbPath)
 	}
 
 	// Run pending migrations (skips already-applied ones).
