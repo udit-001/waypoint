@@ -207,8 +207,8 @@
     {#each STATUSES as status}
       {@const colJobs = jobsByStatus(status)}
       <div class="flex flex-col flex-1 min-w-[260px] max-w-[300px] h-full overflow-hidden">
-        <div class="flex items-center gap-2 px-1 pb-2 shrink-0" style="color: {STATUS_META[status].color}">
-          <span class="shrink-0">{@html iconSvg(STATUS_META[status].icon, 12, { duotone: false })}</span>
+        <div class="flex items-center gap-1.5 px-1 pb-2 shrink-0">
+          <span class="shrink-0 inline-flex items-center" style="color: {STATUS_META[status].color}">{@html iconSvg(STATUS_META[status].icon, 12, { duotone: false })}</span>
           <span class="text-[11px] font-semibold uppercase tracking-wide" style="color: {STATUS_META[status].color}">{status}</span>
           <span class="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{colJobs.length}</span>
         </div>
