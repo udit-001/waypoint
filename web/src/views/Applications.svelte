@@ -207,11 +207,13 @@
   <!-- ── KANBAN LAYOUT ──────────────────────────────── -->
   <!-- Lific-style: columns are invisible structural containers, cards are
        the visual unit. No column bg/border/radius — just a header label
-       with an inline count, and cards below. Tight gutters, flat, dense. -->
-  <div class="-mx-6 px-6 flex gap-3 min-h-[calc(100vh-10rem)] pb-4 pt-6 overflow-x-auto">
+       with an inline count, and cards below. Tight gutters, flat, dense.
+       Container has fixed height + overflow-y-hidden so only the card
+       list scrolls within each column — headers stay pinned. -->
+  <div class="-mx-6 px-6 flex gap-3 h-[calc(100vh-12rem)] pb-4 pt-6 overflow-x-auto overflow-y-hidden">
     {#each STATUSES as status}
       {@const colJobs = jobsByStatus(status)}
-      <div class="flex flex-col flex-1 min-w-[260px] max-w-[300px] max-h-[calc(100vh-12rem)] overflow-hidden">
+      <div class="flex flex-col flex-1 min-w-[260px] max-w-[300px] h-full overflow-hidden">
         <div class="flex items-center gap-2 px-1 pb-2 shrink-0">
           <span class="w-2 h-2 rounded-full shrink-0" style="background: {STATUS_DOT_COLORS[status]}"></span>
           <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{status}</span>
