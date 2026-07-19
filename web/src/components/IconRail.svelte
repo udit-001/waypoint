@@ -47,13 +47,29 @@
   <!-- Logo (navigates home) -->
   <a
     href="/"
-    class="flex items-center justify-center border-b border-slate-200 dark:border-slate-600 py-3 no-underline"
+    class="flex items-center justify-center border-b border-slate-200 dark:border-slate-600 py-2 text-slate-800 dark:text-slate-200 hover:text-slate-600 dark:hover:text-slate-300 no-underline"
     onclick={handleLogoClick}
     aria-label="Waypoint home"
   >
-    <div
-      class="w-9 h-9 rounded-lg bg-slate-800 dark:bg-slate-600 text-white flex items-center justify-center font-bold text-sm shrink-0 transition-transform duration-200 ease-[var(--ease-out)] {spinning ? 'rotate-180' : ''}"
-    >W</div>
+    <svg
+      class="shrink-0 transition-transform duration-200 ease-[var(--ease-out)] {spinning ? 'rotate-180' : ''}"
+      viewBox="0 0 100 100"
+      width="28"
+      height="28"
+      aria-hidden="true"
+    >
+      <g fill="none" stroke="currentColor" stroke-linecap="round">
+        <circle cx="50" cy="50" r="32" stroke-width="4" />
+        <circle cx="50" cy="50" r="16" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.4" />
+        <circle cx="50" cy="18" r="4" fill="currentColor" stroke="none" />
+        <circle cx="82" cy="50" r="4" fill="currentColor" stroke="none" />
+        <circle cx="50" cy="82" r="4" fill="currentColor" stroke="none" />
+        <circle cx="18" cy="50" r="4" fill="currentColor" stroke="none" />
+        <polygon points="50,40 60,50 50,60 40,50" fill="currentColor" stroke="none" />
+        <path d="M 50 18 A 32 32 0 0 1 82 50" stroke-width="2.5" opacity="0.5" />
+        <circle cx="50" cy="50" r="2" fill="currentColor" stroke="none" />
+      </g>
+    </svg>
   </a>
 
   <!-- Nav -->
@@ -68,7 +84,7 @@
         aria-label={item.label}
         aria-current={isActive(item.view) ? 'page' : undefined}
       >
-        <span class="flex items-center justify-center">{@html iconSvg(item.icon, 20)}</span>
+        <span class="flex items-center justify-center">{@html iconSvg(item.icon, 20, { duotone: false })}</span>
         <span class="tooltip">{item.label}</span>
       </a>
     {/each}
@@ -86,7 +102,7 @@
           aria-label={item.label}
           aria-current={isActive(item.view) ? 'page' : undefined}
         >
-          <span class="flex items-center justify-center">{@html iconSvg(item.icon, 20)}</span>
+          <span class="flex items-center justify-center">{@html iconSvg(item.icon, 20, { duotone: false })}</span>
           <span class="tooltip">{item.label}</span>
         </a>
       {/each}
