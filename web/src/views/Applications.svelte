@@ -205,20 +205,24 @@
     {/if}
   </div>
   <!-- ── KANBAN LAYOUT ──────────────────────────────── -->
-  <div class="-mx-6 px-6 flex gap-4 h-[calc(100vh-10rem)] pb-4 pt-6 overflow-x-auto">
+  <!-- Lific-style: columns are invisible structural containers, cards are
+       the visual unit. No column bg/border/radius — just a header label
+       with an inline count, and cards below. Tight gutters, flat, dense. -->
+  <div class="-mx-6 px-6 flex gap-3 h-[calc(100vh-10rem)] pb-4 pt-6 overflow-x-auto">
     {#each STATUSES as status}
       {@const colJobs = jobsByStatus(status)}
-      <div class="flex flex-col flex-1 min-w-[280px] max-w-[320px] bg-slate-50/50 dark:bg-slate-800/40 rounded-2xl border-t-2 p-3 overflow-hidden" style="border-top-color: {STATUS_DOT_COLORS[status]}">
-        <div class="flex items-center justify-between px-2 pb-3 shrink-0">
-          <span class="text-xs font-semibold uppercase tracking-wide" style="color: {STATUS_DOT_COLORS[status]}">{status}</span>
-          <span class="rounded-full px-2 py-0.5 text-xs font-medium tabular-nums" style="background: {STATUS_DOT_COLORS[status]}20; color: {STATUS_DOT_COLORS[status]}">{colJobs.length}</span>
+      <div class="flex flex-col flex-1 min-w-[260px] max-w-[300px] overflow-hidden">
+        <div class="flex items-center gap-2 px-1 pb-2 shrink-0">
+          <span class="w-2 h-2 rounded-full shrink-0" style="background: {STATUS_DOT_COLORS[status]}"></span>
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{status}</span>
+          <span class="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{colJobs.length}</span>
         </div>
-        <div class="flex flex-col gap-2 flex-1 min-h-[60px] overflow-y-auto">
+        <div class="flex flex-col gap-1.5 flex-1 min-h-[60px] overflow-y-auto">
           {#each colJobs as job, i (job.id)}
             {@const u = urgencyFor(job)}
             <div in:fly={stagger(i, { y: 4, duration: 220, step: 30, cap: 6 })}>
               <button
-                class="w-full text-left bg-white dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 p-2.5 cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 hover-safe:-translate-y-0.5 transition-transform"
+                class="w-full text-left bg-white dark:bg-slate-700/60 rounded-lg border border-slate-200 dark:border-slate-600 p-2.5 cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 hover-safe:-translate-y-0.5 transition-transform"
                 onclick={() => showJob(job.id)}
               >
                 <div class="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-0.5">{job.position}</div>
