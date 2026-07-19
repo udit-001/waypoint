@@ -41,7 +41,7 @@
 </script>
 
 <aside
-  class="flex flex-col border-r border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 h-full relative z-30"
+  class="flex flex-col border-r border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 h-full relative z-30"
   style="width: 60px; min-width: 60px;"
 >
   <!-- Logo (navigates home) -->
