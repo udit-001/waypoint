@@ -209,6 +209,7 @@ type SearchResultItem struct {
 // SearchAll performs full-text search across jobs and artifacts, returning unified results.
 func (s *SQLiteStore) SearchAll(query string) ([]SearchResultItem, error) {
 	var results []SearchResultItem
+	ftsQuery := buildFTSQuery(query)
 
 	// Search jobs. COALESCE(c.name, '') so jobs without a category (NULL
 	// from the LEFT JOIN) don't fail the Scan into a Go string — that
@@ -221,7 +222,7 @@ func (s *SQLiteStore) SearchAll(query string) ([]SearchResultItem, error) {
 		 WHERE jobs_fts MATCH ?
 		 ORDER BY rank
 		 LIMIT 20`,
-		query,
+		ftsQuery,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("search jobs: %w", err)
@@ -250,7 +251,7 @@ func (s *SQLiteStore) SearchAll(query string) ([]SearchResultItem, error) {
 		 WHERE artifacts_fts MATCH ?
 		 ORDER BY rank
 		 LIMIT 20`,
-		query,
+		ftsQuery,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("search artifacts: %w", err)
