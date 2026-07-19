@@ -1,5 +1,5 @@
 <script>
-  import Sidebar from './components/Sidebar.svelte';
+  import IconRail from './components/IconRail.svelte';
   import TopBar from './components/TopBar.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
   import Applications from './views/Applications.svelte';
@@ -23,27 +23,15 @@
     job: 'Job Detail', artifact: 'Artifact',
   };
   setPage({ title: routeTitles[router.current.route] || 'Applications' });
-
-  // Sidebar state persisted in localStorage
-  let sidebarClosed = $state(
-    typeof localStorage !== 'undefined'
-      ? localStorage.getItem('jobtracker_sidebar_closed') === 'true'
-      : false
-  );
-
-  function toggleSidebar() {
-    sidebarClosed = !sidebarClosed;
-    localStorage.setItem('jobtracker_sidebar_closed', sidebarClosed ? 'true' : 'false');
-  }
 </script>
 
-<div id="app" class="grid h-screen overflow-hidden bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 transition-[grid-template-columns] duration-200 ease-[var(--ease-drawer)] will-change-[grid-template-columns] {sidebarClosed ? 'grid-cols-[0_1fr]' : 'grid-cols-[15rem_1fr]'}">
-  <div class="overflow-hidden h-full">
-    <Sidebar {sidebarClosed} onToggle={toggleSidebar} />
-  </div>
+<div id="app" class="grid h-screen overflow-hidden bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 grid-cols-[60px_1fr]">
+  <IconRail />
   <main class="flex flex-col overflow-hidden">
-    <TopBar {sidebarClosed} onToggleSidebar={toggleSidebar} />
-    <FilterBar />
+    <TopBar />
+    {#if router.current.route === 'applications'}
+      <FilterBar />
+    {/if}
     <div class="flex-1 p-6 overflow-y-auto">
       {#if router.current.route === 'applications'}
         <Applications />
