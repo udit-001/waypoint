@@ -219,7 +219,7 @@
           <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{status}</span>
           <span class="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{colJobs.length}</span>
         </div>
-        <div class="flex flex-col gap-1.5 flex-1 min-h-[60px] overflow-y-auto">
+        <div class="flex flex-col gap-1.5 flex-1 min-h-[60px] overflow-y-auto pt-1">
           {#each colJobs as job, i (job.id)}
             {@const u = urgencyFor(job)}
             <div in:fly={stagger(i, { y: 4, duration: 220, step: 30, cap: 6 })}>
