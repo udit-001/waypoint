@@ -19,6 +19,3 @@ export const STATUS_META = {
   'Rejected':    { color: '#bf616a', icon: 'circle-x',      bg: 'bg-red-100 text-red-700',              border: 'border-red-300' },
   'Withdrawn':   { color: '#7b8794', icon: 'circle-arrow-left', bg: 'bg-slate-200 text-slate-500',       border: 'border-slate-400' },
 };
-
-// Backward-compat alias (existing callers use STATUS_STYLES[name].bg)
-export const STATUS_STYLES = STATUS_META;
