@@ -205,7 +205,7 @@
     {/if}
   </div>
   <!-- ── KANBAN LAYOUT ──────────────────────────────── -->
-  <div class="flex gap-4 min-h-[calc(100vh-12rem)] pb-4 pt-6 overflow-x-auto">
+  <div class="-mx-6 px-6 flex gap-4 min-h-[calc(100vh-12rem)] pb-4 pt-6 overflow-x-auto">
     {#each STATUSES as status}
       {@const colJobs = jobsByStatus(status)}
       <div class="flex flex-col flex-1 min-w-[280px] max-w-[320px] bg-slate-50/50 dark:bg-slate-800/40 rounded-2xl border-t-2 p-3" style="border-top-color: {STATUS_DOT_COLORS[status]}">
