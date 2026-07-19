@@ -2,6 +2,7 @@
   import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
   import * as api from '../stores/api.svelte.js';
+  import Card from '../components/Card.svelte';
 
   onMount(() => { setPage({ title: 'AI Integration' }); });
 
@@ -39,7 +40,7 @@
   </p>
 
   <!-- Install section -->
-  <div class="bg-white rounded-xl border border-slate-200 p-5">
+  <Card hover={false}>
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-1">{@html iconSvg('bot', 18)} Install the Waypoint skill</h3>
     <p class="text-sm text-slate-400 mb-3">Run this in your project directory. The skill teaches your agent how to use <code class="bg-slate-100 px-1 rounded text-xs">waypoint</code>.</p>
     <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 font-mono text-sm mb-3">
@@ -58,12 +59,12 @@
       {/each}
       <span class="text-xs text-slate-400 ml-1">→ installs to <code class="bg-slate-100 px-1 rounded">{agents.find(a => a.id === selectedAgent)?.dir}/</code></span>
     </div>
-  </div>
+  </Card>
 
   <!-- Skills list -->
   <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800">{@html iconSvg('zap', 18)} Available skills</h3>
   {#each skills as skill}
-    <div class="bg-white rounded-xl border border-slate-200 p-5 hover:border-slate-400 hover:shadow-sm transition-all">
+    <Card>
       <h3 class="text-base font-semibold text-slate-800 mb-1">{@html iconSvg(skill.iconName, 18)} {skill.name}</h3>
       <p class="text-sm text-slate-500 mb-3">{skill.desc}</p>
       <div class="flex flex-wrap gap-1.5">
@@ -71,6 +72,6 @@
           <span class="bg-slate-100 border border-slate-200 text-slate-500 rounded-full px-2.5 py-0.5 text-[11px]">{tag}</span>
         {/each}
       </div>
-    </div>
+    </Card>
   {/each}
 </div>

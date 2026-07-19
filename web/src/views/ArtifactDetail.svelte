@@ -6,6 +6,7 @@
   import { setPage } from '../stores/page.svelte.js';
   import { skillLabel } from '../stores/skillMeta.js';
   import Spinner from '../components/Spinner.svelte';
+  import Card from '../components/Card.svelte';
   import { formatDateFull } from '../lib/format.js';
 
   let { id } = $props();
@@ -15,6 +16,8 @@
   let activeVariant = $state(0);
   let loading = $state(true);
   let copied = $state(false);
+  let cliPre = $state(null);
+  let copiedCli = $state(false);
 
   onMount(async () => {
     loading = true;
@@ -46,6 +49,13 @@
     await navigator.clipboard.writeText(art.variants[activeVariant].content || '');
     copied = true;
     setTimeout(() => copied = false, 1500);
+  }
+
+  async function copyCli() {
+    if (!cliPre) return;
+    await navigator.clipboard.writeText(cliPre.textContent);
+    copiedCli = true;
+    setTimeout(() => copiedCli = false, 1500);
   }
 </script>
 
@@ -91,17 +101,23 @@
 
     <!-- Variant content -->
     {#if art.variants?.[activeVariant]}
-      <div class="bg-white rounded-xl border border-slate-200 p-6 mt-2 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">
+      <Card hover={false} padding="p-6" class="mt-2 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">
         {art.variants[activeVariant].content || ''}
-      </div>
+      </Card>
     {/if}
 
     <!-- CLI -->
     <div class="mt-6">
       <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2 mb-3">CLI</h4>
-      <pre class="bg-slate-50 p-4 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint artifacts get {art.id}
+      <div class="relative">
+        <button
+          class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedCli ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
+          onclick={copyCli}
+        >{copiedCli ? '✓ Copied' : 'Copy'}</button>
+        <pre bind:this={cliPre} class="bg-slate-50 p-4 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint artifacts get {art.id}
 waypoint artifacts archive {art.id}
 waypoint artifacts delete {art.id}</pre>
+      </div>
     </div>
   </div>
 {/if}
