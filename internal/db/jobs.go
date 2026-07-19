@@ -141,7 +141,7 @@ func (s *SQLiteStore) SearchJobs(query string, status, category string) ([]Job, 
 	var args []any
 
 	conditions = append(conditions, "jobs_fts MATCH ?")
-	args = append(args, query)
+	args = append(args, buildFTSQuery(query))
 
 	if status != "" {
 		conditions = append(conditions, "j.status = ?")
