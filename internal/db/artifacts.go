@@ -210,9 +210,11 @@ type SearchResultItem struct {
 func (s *SQLiteStore) SearchAll(query string) ([]SearchResultItem, error) {
 	var results []SearchResultItem
 
-	// Search jobs
+	// Search jobs. COALESCE(c.name, '') so jobs without a category (NULL
+	// from the LEFT JOIN) don't fail the Scan into a Go string — that
+	// was silently dropping every uncategorised job from search results.
 	jobRows, err := s.Query(
-		`SELECT j.id, j.company, j.position, j.status, c.name
+		`SELECT j.id, j.company, j.position, j.status, COALESCE(c.name, '')
 		 FROM jobs j
 		 LEFT JOIN categories c ON j.category_id = c.id
 		 JOIN jobs_fts f ON j.id = f.rowid
@@ -221,22 +223,25 @@ func (s *SQLiteStore) SearchAll(query string) ([]SearchResultItem, error) {
 		 LIMIT 20`,
 		query,
 	)
-	if err == nil {
-		for jobRows.Next() {
-			var id int64
-			var company, position, status, catName string
-			if err := jobRows.Scan(&id, &company, &position, &status, &catName); err == nil {
-				results = append(results, SearchResultItem{
-					Type:  "job",
-					ID:    id,
-					Title: company + " — " + position,
-					Sub:   status,
-					Match: catName,
-				})
-			}
-		}
-		jobRows.Close()
+	if err != nil {
+		return nil, fmt.Errorf("search jobs: %w", err)
 	}
+	for jobRows.Next() {
+		var id int64
+		var company, position, status, catName string
+		if err := jobRows.Scan(&id, &company, &position, &status, &catName); err != nil {
+			jobRows.Close()
+			return nil, fmt.Errorf("scan job row: %w", err)
+		}
+		results = append(results, SearchResultItem{
+			Type:  "job",
+			ID:    id,
+			Title: company + " — " + position,
+			Sub:   status,
+			Match: catName,
+		})
+	}
+	jobRows.Close()
 
 	// Search artifacts
 	artRows, err := s.Query(
@@ -247,22 +252,25 @@ func (s *SQLiteStore) SearchAll(query string) ([]SearchResultItem, error) {
 		 LIMIT 20`,
 		query,
 	)
-	if err == nil {
-		for artRows.Next() {
-			var id int64
-			var title, skillID string
-			if err := artRows.Scan(&id, &title, &skillID); err == nil {
-				results = append(results, SearchResultItem{
-					Type:  "artifact",
-					ID:    id,
-					Title: title,
-					Sub:   skillID,
-					Match: "artifact",
-				})
-			}
-		}
-		artRows.Close()
+	if err != nil {
+		return nil, fmt.Errorf("search artifacts: %w", err)
 	}
+	for artRows.Next() {
+		var id int64
+		var title, skillID string
+		if err := artRows.Scan(&id, &title, &skillID); err != nil {
+			artRows.Close()
+			return nil, fmt.Errorf("scan artifact row: %w", err)
+		}
+		results = append(results, SearchResultItem{
+			Type:  "artifact",
+			ID:    id,
+			Title: title,
+			Sub:   skillID,
+			Match: "artifact",
+		})
+	}
+	artRows.Close()
 
 	return results, nil
 }
