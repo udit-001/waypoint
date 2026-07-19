@@ -7,7 +7,10 @@
   import { skillLabel } from '../stores/skillMeta.js';
   import { marked } from 'marked';
   import Spinner from '../components/Spinner.svelte';
+  import Card from '../components/Card.svelte';
   import { formatDate, formatDateTime } from '../lib/format.js';
+  import { STATUS_META } from '../lib/status.js';
+  import { iconSvg } from '../lib/icons.js';
 
   function renderMarkdown(text) {
     if (!text) return '';
@@ -20,12 +23,21 @@
     }
   }
 
+  async function copyCli() {
+    if (!cliPre) return;
+    await navigator.clipboard.writeText(cliPre.textContent);
+    copiedCli = true;
+    setTimeout(() => copiedCli = false, 1500);
+  }
+
   let { id } = $props();
 
   let job = $state(null);
   let history = $state([]);
   let linkedArtifacts = $state([]);
   let loading = $state(true);
+  let cliPre = $state(null);
+  let copiedCli = $state(false);
 
   onMount(async () => {
     loading = true;
@@ -40,7 +52,7 @@
     setPage({
       title: `${job.company} — ${job.position}`,
       breadcrumbs: [
-        { label: 'Jobs', action: () => router.navigate('/table') },
+        { label: 'Jobs', action: () => router.navigate('/applications') },
         { label: `${job.company} — ${job.position}` },
       ],
     });
@@ -58,12 +70,15 @@
         <h2 class="text-xl font-bold text-slate-800">{job.company}</h2>
         <p class="text-sm text-slate-500 mt-0.5">{job.position}</p>
       </div>
-      <span class="bg-blue-100 text-blue-700 rounded px-2.5 py-1 text-xs font-medium">{job.status}</span>
+      <span class="inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium {STATUS_META[job.status]?.bg || 'bg-slate-100 text-slate-600'}">
+        <span style="color: {STATUS_META[job.status]?.color}">{@html iconSvg(STATUS_META[job.status]?.icon || 'circle', 13, { duotone: false })}</span>
+        {job.status}
+      </span>
     </div>
 
     <!-- Grid -->
     <div class="grid grid-cols-2 gap-x-8 gap-y-3 mb-6">
-      <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Category</span><button class="text-sm text-slate-600 hover:text-slate-700 cursor-pointer bg-transparent border-none p-0" onclick={() => router.navigate('/table?category=' + encodeURIComponent(job.category || 'Uncategorized'))}>{job.category || 'Uncategorized'}</button></div>
+      <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Category</span><button class="text-sm text-slate-600 hover:text-slate-700 cursor-pointer bg-transparent border-none p-0" onclick={() => router.navigate('/applications?category=' + encodeURIComponent(job.category || 'Uncategorized'))}>{job.category || 'Uncategorized'}</button></div>
       <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Salary</span><span class="text-sm text-slate-700">{job.salary || '-'}</span></div>
       <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Location</span><span class="text-sm text-slate-700">{job.location || '-'}</span></div>
       <div><span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">Contact</span><span class="text-sm text-slate-700">{job.contact || '-'}</span></div>
@@ -90,15 +105,16 @@
         <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2 mb-3">Linked Artifacts</h4>
         <div class="space-y-2">
           {#each linkedArtifacts as a}
-            <button
-              class="w-full text-left bg-white rounded-lg border border-slate-200 p-3 cursor-pointer hover:border-slate-400 transition-all"
+            <Card
               onclick={() => router.navigate('/artifact/' + a.id)}
+              padding="p-3"
+              class="w-full text-left"
             >
               <div class="flex items-center gap-2 text-sm">
                 <span class="font-medium text-slate-800">{a.title || 'Untitled'}</span>
                 <span class="bg-slate-600 text-white rounded-full px-2 py-0.5 text-[10px]">{skillLabel(a.skillId)}</span>
               </div>
-            </button>
+            </Card>
           {/each}
         </div>
       </div>
@@ -116,7 +132,13 @@
               <span class="text-slate-400 shrink-0 tabular-nums">{formatDateTime(h.timestamp) || '-'}</span>
               <span class="text-slate-600">
                 {#if h.action === 'Created'}Job created
-                {:else if h.action === 'Status'}{h.from} → <span class="font-medium">{h.to}</span>
+                {:else if h.action === 'Status'}
+                  <span style="color: {STATUS_META[h.from]?.color}">{@html iconSvg(STATUS_META[h.from]?.icon || 'circle', 11, { duotone: false })}</span>
+                  {h.from} →
+                  <span class="font-medium inline-flex items-center gap-1">
+                    <span style="color: {STATUS_META[h.to]?.color}">{@html iconSvg(STATUS_META[h.to]?.icon || 'circle', 11, { duotone: false })}</span>
+                    {h.to}
+                  </span>
                 {:else}{h.action}
                 {/if}
               </span>
@@ -129,9 +151,15 @@
     <!-- CLI -->
     <div class="mb-6">
       <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2 mb-3">CLI Quick Actions</h4>
-      <pre class="bg-slate-50 p-4 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">  waypoint jobs update {job.id} --status "Offer" --notes "New status"
-  waypoint jobs update {job.id} --notes "Add a note here"
-  waypoint jobs delete {job.id}</pre>
+      <div class="relative">
+        <button
+          class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedCli ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
+          onclick={copyCli}
+        >{copiedCli ? '✓ Copied' : 'Copy'}</button>
+        <pre bind:this={cliPre} class="bg-slate-50 p-4 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint jobs update {job.id} --status "Offer" --notes "New status"
+waypoint jobs update {job.id} --notes "Add a note here"
+waypoint jobs delete {job.id}</pre>
+      </div>
     </div>
   </div>
 {/if}

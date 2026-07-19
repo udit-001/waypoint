@@ -3,6 +3,7 @@ import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
   import Spinner from '../components/Spinner.svelte';
+  import Card from '../components/Card.svelte';
   import * as api from '../stores/api.svelte.js';
 
   let profileData = $state(null);
@@ -29,7 +30,7 @@ import { setPage } from '../stores/page.svelte.js';
 
   {#if profileData}
     <!-- Personal Info -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <Card hover={false}>
       <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-4">
         {@html iconSvg("user", 18)} Personal Info
       </h3>
@@ -59,10 +60,10 @@ import { setPage } from '../stores/page.svelte.js';
           <div class="text-sm text-slate-700 capitalize">{profileData.greetingStyle || 'formal'}</div>
         </div>
       </div>
-    </div>
+    </Card>
 
     <!-- Skills -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <Card hover={false}>
       <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">
         <span>{@html iconSvg('zap', 18)}</span> Skills
       </h3>
@@ -75,10 +76,10 @@ import { setPage } from '../stores/page.svelte.js';
       {:else}
         <p class="text-sm text-slate-400">No skills set yet.</p>
       {/if}
-    </div>
+    </Card>
 
     <!-- Education -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <Card hover={false}>
       <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">
         {@html iconSvg('grad', 18)} Education
       </h3>
@@ -91,10 +92,10 @@ import { setPage } from '../stores/page.svelte.js';
       {:else}
         <p class="text-sm text-slate-400">No education set yet.</p>
       {/if}
-    </div>
+    </Card>
 
     <!-- Experience -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <Card hover={false}>
       <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">
         {@html iconSvg('briefcase', 18)} Experience
       </h3>
@@ -107,10 +108,10 @@ import { setPage } from '../stores/page.svelte.js';
       {:else}
         <p class="text-sm text-slate-400">No experience set yet.</p>
       {/if}
-    </div>
+    </Card>
 
     <!-- Email Preferences -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <Card hover={false}>
       <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-4">
         {@html iconSvg('mail', 18)} Email Preferences
       </h3>
@@ -118,7 +119,7 @@ import { setPage } from '../stores/page.svelte.js';
         <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Sign-Off</label>
         <div class="text-sm text-slate-700">{profileData.signOff || 'Best regards'}</div>
       </div>
-    </div>
+    </Card>
   {:else if api.profile.loading}
     <Spinner text="Loading profile..." />
   {:else}
