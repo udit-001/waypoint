@@ -14,6 +14,8 @@
   import { getFilter } from '../stores/filter.svelte.js';
   import * as api from '../stores/api.svelte.js';
   import { applyFilter } from '../lib/filter.js';
+  import { STATUS_META } from '../lib/status.js';
+  import { iconSvg } from '../lib/icons.js';
 
   const filter = getFilter();
 
@@ -32,7 +34,14 @@
   let chips = $derived.by(() => {
     const list = [];
     for (const s of filter.statuses) {
-      list.push({ key: 'status-' + s, label: s, remove: () => filter.toggleStatus(s) });
+      const meta = STATUS_META[s];
+      list.push({
+        key: 'status-' + s,
+        label: s,
+        icon: meta?.icon,
+        color: meta?.color,
+        remove: () => filter.toggleStatus(s),
+      });
     }
     for (const c of filter.categories) {
       list.push({ key: 'cat-' + c, label: c || 'Uncategorized', remove: () => filter.toggleCategory(c) });
@@ -61,6 +70,9 @@
 
     {#each chips as chip (chip.key)}
       <span class="inline-flex items-center gap-1 bg-slate-700 text-white rounded-full px-2.5 py-0.5 text-[11px] font-medium">
+        {#if chip.icon}
+          <span style="color: {chip.color}">{@html iconSvg(chip.icon, 10, { duotone: false })}</span>
+        {/if}
         {chip.label}
         <button
           class="text-white/60 hover:text-white cursor-pointer bg-transparent border-none p-0 text-xs leading-none inline-flex items-center justify-center"

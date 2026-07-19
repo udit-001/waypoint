@@ -15,7 +15,7 @@
 
   import { getFilter, DEADLINE_BUCKETS } from '../stores/filter.svelte.js';
   import { iconSvg } from '../lib/icons.js';
-  import { STATUSES } from '../lib/status.js';
+  import { STATUSES, STATUS_META } from '../lib/status.js';
   import { bucketFor, isStale } from '../lib/filter.js';
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
@@ -131,8 +131,9 @@
                 onclick={() => filter.toggleStatus(st)}
               >
                 <span class="size-4 flex items-center justify-center shrink-0 text-slate-700 dark:text-slate-300">
-                  {#if active}{@html iconSvg('check', 14)}{/if}
+                  {#if active}{@html iconSvg('check', 14, { duotone: false })}{/if}
                 </span>
+                <span class="shrink-0" style="color: {STATUS_META[st].color}">{@html iconSvg(STATUS_META[st].icon, 14, { duotone: false })}</span>
                 <span class="flex-1 text-slate-700 dark:text-slate-300">{st}</span>
                 <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums shrink-0">{counts.statusCounts[st] || 0}</span>
               </button>

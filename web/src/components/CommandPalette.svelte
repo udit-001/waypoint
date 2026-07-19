@@ -16,6 +16,7 @@
   import { iconSvg } from '../lib/icons.js';
   import * as api from '../stores/api.svelte.js';
   import { skillLabel } from '../stores/skillMeta.js';
+  import { STATUS_META } from '../lib/status.js';
 
   const router = getRouter();
   const palette = getCommandPalette();
@@ -259,7 +260,10 @@
                   <span class="w-full text-sm text-slate-800 dark:text-slate-200 truncate">
                     {r.title || 'Untitled'}
                   </span>
-                  <span class="w-full text-xs text-slate-400 dark:text-slate-500 truncate">
+                  <span class="w-full text-xs text-slate-400 dark:text-slate-500 truncate inline-flex items-center gap-1">
+                    {#if r.type === 'job' && STATUS_META[r.sub]}
+                      <span style="color: {STATUS_META[r.sub].color}">{@html iconSvg(STATUS_META[r.sub].icon, 11, { duotone: false })}</span>
+                    {/if}
                     {resultSub(r)}
                   </span>
                 </span>

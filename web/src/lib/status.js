@@ -4,10 +4,21 @@
 
 export const STATUSES = ['Not Applied', 'Applied', 'Offer', 'Rejected', 'Withdrawn'];
 
-export const STATUS_STYLES = {
-  'Not Applied': { bg: 'bg-slate-100 text-slate-600', border: 'border-slate-300' },
-  'Applied':     { bg: 'bg-blue-100 text-blue-700',   border: 'border-blue-300' },
-  'Offer':       { bg: 'bg-emerald-100 text-emerald-700', border: 'border-emerald-300' },
-  'Rejected':    { bg: 'bg-red-100 text-red-700',     border: 'border-red-300' },
-  'Withdrawn':   { bg: 'bg-slate-200 text-slate-500', border: 'border-slate-400' },
+// STATUS_META is the canonical source for status visual identity.
+// - color: hex used for inline-style icon strokes + dot backgrounds
+// - icon:  lucide icon name (resolves via iconSvg in lib/icons.js)
+// - bg:    Tailwind classes for pill badges (JobDetail)
+// - border: Tailwind border class for pill badges
+//
+// The icon is the canonical visual marker. The color is the canonical
+// hue. Together they encode status identity across every surface.
+export const STATUS_META = {
+  'Not Applied': { color: '#94a3b8', icon: 'circle-dashed',  bg: 'bg-slate-100 text-slate-600',           border: 'border-slate-300' },
+  'Applied':     { color: '#5e81ac', icon: 'send',           bg: 'bg-blue-100 text-blue-700',            border: 'border-blue-300' },
+  'Offer':       { color: '#a3be8c', icon: 'award',          bg: 'bg-emerald-100 text-emerald-700',       border: 'border-emerald-300' },
+  'Rejected':    { color: '#bf616a', icon: 'circle-x',      bg: 'bg-red-100 text-red-700',              border: 'border-red-300' },
+  'Withdrawn':   { color: '#4c566a', icon: 'circle-arrow-left', bg: 'bg-slate-200 text-slate-500',       border: 'border-slate-400' },
 };
+
+// Backward-compat alias (existing callers use STATUS_STYLES[name].bg)
+export const STATUS_STYLES = STATUS_META;

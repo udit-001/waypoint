@@ -10,6 +10,7 @@
   import Card from '../components/Card.svelte';
   import { formatDate, formatDateTime } from '../lib/format.js';
   import { STATUS_STYLES } from '../lib/status.js';
+  import { iconSvg } from '../lib/icons.js';
 
   function renderMarkdown(text) {
     if (!text) return '';
@@ -69,7 +70,10 @@
         <h2 class="text-xl font-bold text-slate-800">{job.company}</h2>
         <p class="text-sm text-slate-500 mt-0.5">{job.position}</p>
       </div>
-      <span class="inline-block rounded px-2.5 py-1 text-xs font-medium {STATUS_STYLES[job.status]?.bg || 'bg-slate-100 text-slate-600'}">{job.status}</span>
+      <span class="inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium {STATUS_STYLES[job.status]?.bg || 'bg-slate-100 text-slate-600'}">
+        <span style="color: {STATUS_STYLES[job.status]?.color}">{@html iconSvg(STATUS_STYLES[job.status]?.icon || 'circle', 13, { duotone: false })}</span>
+        {job.status}
+      </span>
     </div>
 
     <!-- Grid -->
@@ -128,7 +132,13 @@
               <span class="text-slate-400 shrink-0 tabular-nums">{formatDateTime(h.timestamp) || '-'}</span>
               <span class="text-slate-600">
                 {#if h.action === 'Created'}Job created
-                {:else if h.action === 'Status'}{h.from} → <span class="font-medium">{h.to}</span>
+                {:else if h.action === 'Status'}
+                  <span style="color: {STATUS_STYLES[h.from]?.color}">{@html iconSvg(STATUS_STYLES[h.from]?.icon || 'circle', 11, { duotone: false })}</span>
+                  {h.from} →
+                  <span class="font-medium inline-flex items-center gap-1">
+                    <span style="color: {STATUS_STYLES[h.to]?.color}">{@html iconSvg(STATUS_STYLES[h.to]?.icon || 'circle', 11, { duotone: false })}</span>
+                    {h.to}
+                  </span>
                 {:else}{h.action}
                 {/if}
               </span>
