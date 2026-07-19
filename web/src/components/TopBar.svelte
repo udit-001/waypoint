@@ -116,6 +116,25 @@
         </svg>
         <span>Chart</span>
       </button>
+
+      {#if router.current.route === 'applications'}
+        <button
+          class="flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer transition-colors"
+          onclick={() => filter.toggle()}
+          title="Filter applications"
+          aria-label="Open filter"
+          aria-expanded={filter.open}
+        >
+          {@html iconSvg('sliders', 14, { duotone: false })}
+          <span>Filter</span>
+          {#if filter.activeCount > 0}
+            <span
+              class="grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full bg-slate-700 dark:bg-slate-900 text-white font-mono text-[10px] leading-none tabular-nums"
+            >{filter.activeCount}</span>
+          {/if}
+        </button>
+        <FilterModal />
+      {/if}
     {/if}
 
     <button
@@ -124,29 +143,11 @@
       title="Open command palette (⌘K)"
       aria-label="Open command palette"
     >
-      {@html iconSvg('search', 14)}
+      {@html iconSvg('search', 14, { duotone: false })}
       <span>Search…</span>
       <kbd class="text-[10px] px-1.5 py-px rounded border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 font-sans">⌘K</kbd>
     </button>
 
-    {#if router.current.route === 'applications'}
-      <button
-        class="flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer transition-colors"
-        onclick={() => filter.toggle()}
-        title="Filter applications"
-        aria-label="Open filter"
-        aria-expanded={filter.open}
-      >
-        {@html iconSvg('sliders', 14)}
-        <span>Filter</span>
-        {#if filter.activeCount > 0}
-          <span
-            class="grid place-items-center min-w-[18px] h-[18px] px-1 rounded-full bg-slate-700 dark:bg-slate-900 text-white font-mono text-[10px] leading-none tabular-nums"
-          >{filter.activeCount}</span>
-        {/if}
-      </button>
-      <FilterModal />
-    {/if}
     {#if showInstallBtn}
       <button
         class="p-2.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer inline-flex items-center justify-center min-w-[40px] min-h-[40px] transition-colors"
