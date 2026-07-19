@@ -25,7 +25,7 @@
   }
 
   const PRIMARY = [
-    { view: 'applications', label: 'Applications', icon: 'list' },
+    { view: 'applications', label: 'Applications', icon: 'briefcase' },
     { view: 'artifacts', label: 'Artifacts', icon: 'file-text' },
   ];
   const SECONDARY = [
