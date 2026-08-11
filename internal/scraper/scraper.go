@@ -34,9 +34,10 @@ type SearchOpts struct {
 	Query    string
 	Location string
 	Limit    int
-	JobAge   int    // days (0 = all). Supported by scrapers whose portal offers a recency filter.
-	Remote   string // "remote" | "hybrid" | "onsite" ("" = any). Supported by scrapers whose portal offers a workplace-type filter.
-	Page     int    // 1-indexed page number (0 = page 1). Supported by scrapers whose portal offers pagination.
+	JobAge   int       // days (0 = all). Supported by scrapers whose portal offers a recency filter.
+	Remote   string    // "remote" | "hybrid" | "onsite" ("" = any). Supported by scrapers whose portal offers a workplace-type filter.
+	Page     int       // 1-indexed page number (0 = page 1). Supported by scrapers whose portal offers pagination.
+	Today    time.Time // reference date for recency filtering (zero = use the machine clock). Lets an agent anchor "now" so it stops adding outdated postings.
 }
 
 // Scraper fetches job postings from a specific portal.
@@ -85,11 +86,18 @@ func Truncate(results []Result, limit int) []Result {
 // unparseable or rolling dates are kept (conservative — better to include
 // than miss). Listing scrapers call this inside Search; API-based scrapers
 // filter server-side and should NOT call this.
-func FilterByRecency(results []Result, jobAgeDays int) []Result {
+//
+// today is the reference date used to compute the cutoff. A zero value means
+// "use the machine clock" (time.Now). Passing an explicit today lets an agent
+// anchor "now" so outdated postings are filtered against a known date.
+func FilterByRecency(results []Result, jobAgeDays int, today time.Time) []Result {
 	if jobAgeDays <= 0 {
 		return results
 	}
-	cutoff := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -jobAgeDays)
+	if today.IsZero() {
+		today = time.Now()
+	}
+	cutoff := today.UTC().Truncate(24*time.Hour).AddDate(0, 0, -jobAgeDays)
 	filtered := results[:0]
 	for _, r := range results {
 		normalized := dates.NormalizeDate(r.Date)

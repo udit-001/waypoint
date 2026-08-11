@@ -40,7 +40,7 @@ func (n IPU) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.Res
 	results := parseTable(body)
 
 	results = filterNonAds(results)
-	results = scraper.FilterByRecency(results, opts.JobAge)
+	results = scraper.FilterByRecency(results, opts.JobAge, opts.Today)
 	results = scraper.FilterByQuery(results, opts.Query)
 
 	return results, nil
