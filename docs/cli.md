@@ -29,7 +29,8 @@ Alias: `waypoint cat`
 | Command | Description |
 |---------|-------------|
 | `waypoint profile show` | Display your profile (`--json` for machine output) |
-| `waypoint profile set` | Update profile fields. Flags: `--name`, `--email`, `--phone`, `--title`, `--skills` (JSON array), `--experience`, `--education`, `--industry`, `--greeting-style`, `--sign-off` |
+| `waypoint scrape run <name>` | Run a job scraper. Flags: `--query`, `--location`, `--limit`, `--jobage`, `--remote`, `--page`, `--today <YYYY-MM-DD>` (reference date for recency) |
+| `waypoint profile set` | Update profile fields. Flags: `--name`, `--email`, `--phone`, `--title`, `--skills`, `--experience`, `--education`, `--industry`, `--greeting-style`, `--sign-off`. List fields (`--skills`, `--experience`, `--education`) take a comma-separated list or a JSON array |
 
 ## Artifacts
 
