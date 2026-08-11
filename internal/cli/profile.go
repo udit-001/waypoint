@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -84,16 +85,17 @@ var profileSetCmd = &cobra.Command{
 	Short: "Update profile fields",
 	Long: `Update one or more profile fields. Only the flags you provide are changed.
 
-Skills, experience, and education are JSON arrays:
-  --skills '["Go","React","Python"]'
-  --education '["BS Computer Science - MIT"]'
-  --experience '["5 years backend development"]'
+Skills, experience, and education take a comma-separated list (shell-safe)
+or a JSON array:
+  --skills "Go,React,Python"
+  --education "BS Computer Science - MIT"
+  --experience "5 years backend development"
 
 Greeting style options: formal, casual, creative
 
 Examples:
   waypoint profile set --name "Jane Doe" --title "Senior Engineer"
-  waypoint profile set --skills '["Go","React","AWS"]'
+  waypoint profile set --skills "Go,React,AWS"
   waypoint profile set --email "jane@example.com" --phone "+1-555-0123"
   waypoint profile set --greeting-style casual --sign-off "Cheers"`,
 	Args: cobra.NoArgs,
@@ -112,23 +114,20 @@ Examples:
 		if profileSetFlags.title != "" {
 			updates["title"] = profileSetFlags.title
 		}
-		if profileSetFlags.skills != "" {
-			if !isValidJSONArray(profileSetFlags.skills) {
-				return fmt.Errorf("skills must be a JSON array, e.g. '[\"Go\",\"React\"]'")
+		// List fields share one input format: comma-separated or a JSON array.
+		for _, f := range []struct{ flag, key string }{
+			{profileSetFlags.skills, "skills"},
+			{profileSetFlags.experience, "experience"},
+			{profileSetFlags.education, "education"},
+		} {
+			if f.flag == "" {
+				continue
 			}
-			updates["skills"] = profileSetFlags.skills
-		}
-		if profileSetFlags.experience != "" {
-			if !isValidJSONArray(profileSetFlags.experience) {
-				return fmt.Errorf("experience must be a JSON array, e.g. '[\"5 years backend\"]'")
+			normalized, err := parseListInput(f.flag)
+			if err != nil {
+				return fmt.Errorf("%s: %w", f.key, err)
 			}
-			updates["experience"] = profileSetFlags.experience
-		}
-		if profileSetFlags.education != "" {
-			if !isValidJSONArray(profileSetFlags.education) {
-				return fmt.Errorf("education must be a JSON array, e.g. '[\"BS CS - MIT\"]'")
-			}
-			updates["education"] = profileSetFlags.education
+			updates[f.key] = normalized
 		}
 		if profileSetFlags.industry != "" {
 			updates["industry"] = profileSetFlags.industry
@@ -233,8 +232,40 @@ func displayJSONList(s string) string {
 	return result
 }
 
-// isValidJSONArray checks if a string is a valid JSON array.
-func isValidJSONArray(s string) bool {
-	var v any
-	return json.Unmarshal([]byte(s), &v) == nil
+// parseListInput normalizes a list value for profile array fields.
+// It accepts either a JSON array ("[\"Go\",\"React\"]") or a plain
+// comma-separated list ("Go,React"), returning the JSON array form
+// that the profile stores. The comma form is shell-friendly — no
+// nested quotes — so it works in PowerShell as well as bash.
+func parseListInput(s string) (string, error) {
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return "", fmt.Errorf("value cannot be empty")
+	}
+	if strings.HasPrefix(trimmed, "[") {
+		var v any
+		if err := json.Unmarshal([]byte(trimmed), &v); err != nil {
+			return "", fmt.Errorf("not a valid JSON array, e.g. [\"Go\",\"React\"] or a comma list: Go,React")
+		}
+		if _, ok := v.([]any); !ok {
+			return "", fmt.Errorf("value must be a JSON array, e.g. [\"Go\",\"React\"] or a comma list: Go,React")
+		}
+		return trimmed, nil
+	}
+	parts := strings.Split(trimmed, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return "", fmt.Errorf("value cannot be empty")
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
