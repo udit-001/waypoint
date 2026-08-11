@@ -14,7 +14,7 @@ waypoint profile show --json
 Match the user's `industry` against each scraper's `categories`.
 
 - **Zero relevant scrapers** → stop. Fall back to Exa — `read` [data/exa-search](references/data/exa-search.md) and search manually.
-- **Relevant scrapers exist** → proceed to Flow below. If every relevant scraper returns 0 results at Step 2, fall back to Exa the same way.
+- **Relevant scrapers exist** → proceed to Flow below. Fall back to Exa if any of these hold: every relevant scraper returns 0 results at Step 2, or the results they return don't match the user's curation brief (wrong level, poor quality, too sparse). Exa fills the gaps the scrapers can't.
 
 **Done when**: entry gate passed (relevant scrapers found) or fallback decision made.
 
@@ -49,6 +49,19 @@ Optional flags (supported by portals that offer them; ignored by the rest):
 | `--jobage <days>` | Posted within N days (default: 90; 0 = all) | All |
 | `--remote <mode>` | `remote` / `hybrid` / `onsite` | LinkedIn |
 | `--page <n>` | Page number, 1-indexed | LinkedIn, Indeed |
+| `--today <YYYY-MM-DD>` | Reference date for recency (`meta.today`); filters client-side on listing scrapers, echoed on all | ipu + listing scrapers (client-side); echoed on LinkedIn/Indeed/Google |
+
+**Anchor "today" explicitly.** The CLI can't see your clock context, so pass `--today` (use the real current date, not a placeholder). It's echoed back as **`meta.today`** in `--json` output — the reference date results were judged against. How it applies differs by scraper type:
+
+- **Listing scrapers** (e.g. ipu, ncbs): `--today` filters `--jobage` recency client-side.
+- **API scrapers** (LinkedIn, Indeed, Google Jobs): the portal's server-side filter governs what comes back — `--today` doesn't change it, but `meta.today` still tells you the reference date to reason about how fresh a result is when promoting.
+
+Example — listing scraper with an explicit anchor:
+```bash
+waypoint scrape run ipu -q "engineer" --today <YYYY-MM-DD> --jobage 30 --json
+```
+
+Read **`meta.today`** from the response, then drop any result whose `date` is older than the brief's recency window relative to it.
 
 Results are already filtered by query — no need to filter again.
 
@@ -86,15 +99,13 @@ adding. The result's URL type decides the extraction method:
 | Anything else | **Web page** | `read` [data/job-extract](references/data/job-extract.md) — fetch the page, parse structured fields |
 
 Use the extracted data — not the generic scraper result fields — to
-populate `jobs add`:
+populate `jobs add`. Write it as a single line — bash's `\` line-continuation
+is bash-only and breaks under Windows PowerShell. Keep the note **shell-safe**
+(short, no `$`/quotes/backticks); a long or shell-unsafe extracted description
+goes via `--notes-file` instead (see the shell-safe rule in SKILL.md Notes):
 
-```bash
-waypoint jobs add "<company>" "<position>" \
-  --url "<url>" \
-  --location "<location>" \
-  --date "<date>" \
-  --salary "<salary>" \
-  --notes "<extracted description or key details>"
+```
+waypoint jobs add "<company>" "<position>" --url "<url>" --location "<location>" --date "<date>" --salary "<salary>" --notes "<short extracted description>"
 ```
 
 Field mapping from result and extraction to `jobs add`:
@@ -132,7 +143,7 @@ reappear until pruned.
 | Command | What it does |
 |---------|-------------|
 | `scrape list [--json]` | List registered scrapers with categories |
-| `scrape run <name> [flags]` | Fetch, stage, print new results (see Step 2 for flags) |
+| `scrape run <name> [flags]` | Fetch, stage, print new results (see Step 2; add `--today <YYYY-MM-DD>` to anchor recency) |
 | `scrape staged [--status new\|dismissed] [--json]` | Review staged backlog |
 | `scrape dismiss <url>` | Mark a staged result as dismissed |
 | `scrape detail <name> <id> [--json]` | Fetch full description + metadata for a staged result (LinkedIn only) |
