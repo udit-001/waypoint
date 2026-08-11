@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/udit-001/waypoint/internal/scraper"
@@ -134,6 +135,7 @@ var scrapeRunFlags struct {
 	jobage   int
 	remote   string
 	page     int
+	today    string
 }
 
 var scrapeRunCmd = &cobra.Command{
@@ -145,7 +147,8 @@ and print only new results (deduplicated against staging and the jobs table).
 Examples:
   waypoint scrape run ncbs -q "research"
   waypoint scrape run ncbs --json
-  waypoint scrape run ncbs -q "officer" --limit 5`,
+  waypoint scrape run ncbs -q "officer" --limit 5
+  waypoint scrape run linkedin --today 2026-08-12 --jobage 30`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		legacyStagingHint()
@@ -156,6 +159,14 @@ Examples:
 			return fmt.Errorf("unknown scraper %q — run 'waypoint scrape list' to see available", name)
 		}
 
+		// Resolve the reference date for recency filtering. --today lets an
+		// agent anchor "now" (e.g. the CLI running under PowerShell where the
+		// agent has no clock context); otherwise fall back to the machine clock.
+		today, err := parseToday(scrapeRunFlags.today)
+		if err != nil {
+			return formatError("invalid --today", err)
+		}
+
 		results, err := s.Search(context.Background(), scraper.SearchOpts{
 			Query:    scrapeRunFlags.query,
 			Location: scrapeRunFlags.location,
@@ -163,6 +174,7 @@ Examples:
 			JobAge:   scrapeRunFlags.jobage,
 			Remote:   scrapeRunFlags.remote,
 			Page:     scrapeRunFlags.page,
+			Today:    today,
 		})
 		if err != nil {
 			return formatError("scrape failed", err)
@@ -198,7 +210,10 @@ Examples:
 		}
 
 		if jsonOut {
-			meta := map[string]any{"count": len(newResults)}
+			meta := map[string]any{
+				"count": len(newResults),
+				"today": effectiveDate(today).Format("2006-01-02"),
+			}
 			printJSON(map[string]any{
 				"meta":    meta,
 				"results": newResults,
@@ -458,6 +473,29 @@ func sortedKeys(m map[string]string) []string {
 	return keys
 }
 
+// parseToday parses a --today date (YYYY-MM-DD). An empty value returns the
+// zero time, which callers treat as "no explicit anchor" (use the machine
+// clock).
+func parseToday(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("want YYYY-MM-DD, got %q", s)
+	}
+	return t, nil
+}
+
+// effectiveDate returns the reference date used for recency filtering: the
+// explicit --today anchor when set, otherwise the machine clock.
+func effectiveDate(today time.Time) time.Time {
+	if today.IsZero() {
+		return time.Now()
+	}
+	return today
+}
+
 // --- scrape prune ---
 
 var scrapePruneFlags struct {
@@ -644,6 +682,7 @@ func init() {
 	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.jobage, "jobage", 90, "Posted within N days (0 = all)")
 	scrapeRunCmd.Flags().StringVar(&scrapeRunFlags.remote, "remote", "", "Workplace type: remote|hybrid|onsite (LinkedIn only)")
 	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.page, "page", 1, "Page number, 1-indexed (LinkedIn/Indeed only)")
+	scrapeRunCmd.Flags().StringVar(&scrapeRunFlags.today, "today", "", "Reference date YYYY-MM-DD for recency filtering (default: machine clock)")
 
 	scrapeStagedCmd.Flags().StringVar(&scrapeStagedFlags.status, "status", "", "Filter by status (new|dismissed|imported)")
 
