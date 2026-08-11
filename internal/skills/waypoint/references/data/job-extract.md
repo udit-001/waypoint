@@ -12,9 +12,9 @@ input → extract text → parse fields → jobs add → optionally enrich via e
 ```
 exa_web_fetch_exa { urls: ["<url>"], maxCharacters: 5000 }
 ```
-No exa:
-```bash
-curl -sL "<url>" | sed 's/<[^>]*>//g' | sed '/^$/d' | head -300 > /tmp/job-page.txt
+No exa — Unix pipe targets `<temp-dir>` (`/tmp`; use `$TEMP` on Windows). If the shell lacks these tools, fetch with your file tool instead:
+```
+curl -sL "<url>" | sed 's/<[^>]*>//g' | sed '/^$/d' | head -300 > <temp-dir>/job-page.txt
 ```
 
 **PDF** → `read` [pdf-extract](pdf-extract.md), then parse extracted text.

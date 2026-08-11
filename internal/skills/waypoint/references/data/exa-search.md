@@ -1,6 +1,18 @@
 # Exa Search Patterns
 
-If `exa` MCP connected. Enrich jobs with company/people intel.
+If `exa` MCP connected. Two jobs: **discovery** (find jobs when scrapers fall short) and **research/enrichment** (company/people intel on tracked jobs).
+
+## Discovery
+
+Eligibility is decided by the **Entry condition** in [../scraping](../scraping.md) — run this only when it falls back to Exa. Search the open web for the roles from the **curation brief** — `read` [../grilling](../grilling.md) for what the brief holds. Describe the posting pages you want, not the fact:
+
+```
+exa_web_search_exa { query: "<role> job opening at <company> careers page", numResults: 10 }
+exa_web_search_exa { query: "remote <role> senior job posting hiring", numResults: 10 }
+exa_web_search_advanced_exa { query: "<role> <location> jobs hiring", numResults: 10 }
+```
+
+Run results through the same promote / dismiss decisions as scrape results — `read` [../scraping](../scraping.md) — and deduplicate against the jobs table by URL.
 
 ## Query tips
 
