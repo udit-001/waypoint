@@ -479,27 +479,71 @@ func (f *FakeStore) GetProfile() (Profile, error) {
 	return f.Profile, nil
 }
 
+func (f *FakeStore) GetBrief() (Brief, error) {
+	return getBrief(f.Profile), nil
+}
+
 func (f *FakeStore) UpsertProfile(updates map[string]any) error {
+	p := &f.Profile
 	if v, ok := updates["name"]; ok {
-		f.Profile.Name = fmt.Sprint(v)
+		p.Name = fmt.Sprint(v)
 	}
 	if v, ok := updates["email"]; ok {
-		f.Profile.Email = fmt.Sprint(v)
+		p.Email = fmt.Sprint(v)
 	}
 	if v, ok := updates["phone"]; ok {
-		f.Profile.Phone = fmt.Sprint(v)
+		p.Phone = fmt.Sprint(v)
 	}
 	if v, ok := updates["title"]; ok {
-		f.Profile.Title = fmt.Sprint(v)
+		p.Title = fmt.Sprint(v)
+	}
+	if v, ok := updates["skills"]; ok {
+		p.Skills = fmt.Sprint(v)
+	}
+	if v, ok := updates["experience"]; ok {
+		p.Experience = fmt.Sprint(v)
+	}
+	if v, ok := updates["education"]; ok {
+		p.Education = fmt.Sprint(v)
 	}
 	if v, ok := updates["industry"]; ok {
-		f.Profile.Industry = fmt.Sprint(v)
+		p.Industry = fmt.Sprint(v)
 	}
 	if v, ok := updates["greeting_style"]; ok {
-		f.Profile.GreetingStyle = fmt.Sprint(v)
+		p.GreetingStyle = fmt.Sprint(v)
 	}
 	if v, ok := updates["sign_off"]; ok {
-		f.Profile.SignOff = fmt.Sprint(v)
+		p.SignOff = fmt.Sprint(v)
+	}
+	if v, ok := updates["current_location"]; ok {
+		p.CurrentLocation = fmt.Sprint(v)
+	}
+	if v, ok := updates["seniority"]; ok {
+		p.Seniority = fmt.Sprint(v)
+	}
+	if v, ok := updates["visa_sponsorship"]; ok {
+		p.VisaSponsorship = fmt.Sprint(v)
+	}
+	if v, ok := updates["salary_floor"]; ok {
+		p.SalaryFloor = fmt.Sprint(v)
+	}
+	if v, ok := updates["remote"]; ok {
+		p.Remote = fmt.Sprint(v)
+	}
+	if v, ok := updates["location_preference"]; ok {
+		p.LocationPref = fmt.Sprint(v)
+	}
+	if v, ok := updates["companies"]; ok {
+		p.Companies = fmt.Sprint(v)
+	}
+	if v, ok := updates["avoid_companies"]; ok {
+		p.AvoidCompanies = fmt.Sprint(v)
+	}
+	if v, ok := updates["keywords"]; ok {
+		p.Keywords = fmt.Sprint(v)
+	}
+	if v, ok := updates["dealbreakers"]; ok {
+		p.Dealbreakers = fmt.Sprint(v)
 	}
 	return nil
 }

@@ -20,10 +20,28 @@ type Profile struct {
 	Industry      string `db:"industry" json:"industry"`
 	GreetingStyle string `db:"greeting_style" json:"greetingStyle"`
 	SignOff       string `db:"sign_off" json:"signOff"`
+
+	// Curation brief — facts.
+	CurrentLocation string `db:"current_location" json:"currentLocation"`
+	Seniority       string `db:"seniority" json:"seniority"`
+
+	// Curation brief — constraints.
+	VisaSponsorship string `db:"visa_sponsorship" json:"visaSponsorship"`
+	SalaryFloor     string `db:"salary_floor" json:"salaryFloor"`
+
+	// Curation brief — preferences (the brief). Array-valued ones store a
+	// JSON array string and are emitted as arrays via MarshalJSON.
+	Remote         string `db:"remote" json:"remote"`
+	LocationPref   string `db:"location_preference" json:"-"`
+	Companies      string `db:"companies" json:"-"`
+	AvoidCompanies string `db:"avoid_companies" json:"-"`
+	Keywords       string `db:"keywords" json:"-"`
+	Dealbreakers   string `db:"dealbreakers" json:"-"`
 }
 
-// MarshalJSON ensures Skills, Experience, and Education are returned as
-// proper JSON arrays instead of escaped strings.
+// MarshalJSON ensures Skills, Experience, Education, and the brief's
+// array-valued preferences are returned as proper JSON arrays instead of
+// escaped strings.
 func (p Profile) MarshalJSON() ([]byte, error) {
 	type Alias Profile
 	parseArray := func(s string) []string {
@@ -38,14 +56,24 @@ func (p Profile) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(&struct {
 		*Alias
-		Skills     []string `json:"skills"`
-		Experience []string `json:"experience"`
-		Education  []string `json:"education"`
+		Skills         []string `json:"skills"`
+		Experience     []string `json:"experience"`
+		Education      []string `json:"education"`
+		LocationPref   []string `json:"locationPreference"`
+		Companies      []string `json:"companies"`
+		AvoidCompanies []string `json:"avoidCompanies"`
+		Keywords       []string `json:"keywords"`
+		Dealbreakers   []string `json:"dealbreakers"`
 	}{
-		Alias:      (*Alias)(&p),
-		Skills:     parseArray(p.Skills),
-		Experience: parseArray(p.Experience),
-		Education:  parseArray(p.Education),
+		Alias:          (*Alias)(&p),
+		Skills:         parseArray(p.Skills),
+		Experience:     parseArray(p.Experience),
+		Education:      parseArray(p.Education),
+		LocationPref:   parseArray(p.LocationPref),
+		Companies:      parseArray(p.Companies),
+		AvoidCompanies: parseArray(p.AvoidCompanies),
+		Keywords:       parseArray(p.Keywords),
+		Dealbreakers:   parseArray(p.Dealbreakers),
 	})
 }
 
@@ -71,7 +99,7 @@ var defaultSettings = Settings{
 // by checking p.Name == "".
 func (s *SQLiteStore) GetProfile() (Profile, error) {
 	var p Profile
-	err := s.Get(&p, `SELECT name, email, phone, title, skills, experience, education, industry, greeting_style, sign_off FROM profile WHERE id = 1`)
+	err := s.Get(&p, `SELECT name, email, phone, title, skills, experience, education, industry, greeting_style, sign_off, current_location, seniority, visa_sponsorship, salary_floor, remote, location_preference, companies, avoid_companies, keywords, dealbreakers FROM profile WHERE id = 1`)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Profile{}, nil
@@ -88,16 +116,26 @@ func (s *SQLiteStore) UpsertProfile(updates map[string]any) error {
 		return nil
 	}
 	columnMap := map[string]string{
-		"name":           "name",
-		"email":          "email",
-		"phone":          "phone",
-		"title":          "title",
-		"skills":         "skills",
-		"experience":     "experience",
-		"education":      "education",
-		"industry":       "industry",
-		"greeting_style": "greeting_style",
-		"sign_off":       "sign_off",
+		"name":                "name",
+		"email":               "email",
+		"phone":               "phone",
+		"title":               "title",
+		"skills":              "skills",
+		"experience":          "experience",
+		"education":           "education",
+		"industry":            "industry",
+		"greeting_style":      "greeting_style",
+		"sign_off":            "sign_off",
+		"current_location":    "current_location",
+		"seniority":           "seniority",
+		"visa_sponsorship":    "visa_sponsorship",
+		"salary_floor":        "salary_floor",
+		"remote":              "remote",
+		"location_preference": "location_preference",
+		"companies":           "companies",
+		"avoid_companies":     "avoid_companies",
+		"keywords":            "keywords",
+		"dealbreakers":        "dealbreakers",
 	}
 	var setClauses []string
 	var args []any
