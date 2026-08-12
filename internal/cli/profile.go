@@ -65,6 +65,70 @@ Examples:
 	},
 }
 
+// --- brief ---
+
+var profileBriefCmd = &cobra.Command{
+	Use:   "brief",
+	Short: "Show the job-search curation brief",
+	Long: `Display the curation brief the agent uses to search for jobs:
+what is settled (facts, constraints) and what is still open (preferences).
+
+The agent reads the frontier from --json: 'open' lists the preferences still
+to answer and 'complete' is true when they are all set. Facts never gate
+completion — a missing fact means a seed (resume / public profile) has not
+arrived, not that the user must be interviewed.
+
+Examples:
+  waypoint profile brief
+  waypoint profile brief --json`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		b, err := store.GetBrief()
+		if err != nil {
+			return formatError("failed to get brief", err)
+		}
+
+		if jsonOut {
+			printJSON(b)
+			return nil
+		}
+
+		fmt.Println()
+		fmt.Printf("  Facts:\n")
+		fmt.Printf("    Title:           %s\n", displayVal(b.Facts.Title))
+		fmt.Printf("    Seniority:       %s\n", displayVal(b.Facts.Seniority))
+		fmt.Printf("    Current location: %s\n", displayVal(b.Facts.CurrentLocation))
+		fmt.Printf("    Skills:          %s\n", joinList(b.Facts.Skills))
+		fmt.Printf("  Constraints:\n")
+		fmt.Printf("    Visa sponsorship:%s\n", displayVal(b.Constraints.VisaSponsorship))
+		fmt.Printf("    Salary floor:    %s\n", displayVal(b.Constraints.SalaryFloor))
+		fmt.Printf("  Preferences:\n")
+		fmt.Printf("    Remote:          %s\n", displayVal(b.Preferences.Remote))
+		fmt.Printf("    Location:        %s\n", joinList(b.Preferences.LocationPref))
+		fmt.Printf("    Companies:       %s\n", joinList(b.Preferences.Companies))
+		fmt.Printf("    Avoid:           %s\n", joinList(b.Preferences.AvoidCompanies))
+		fmt.Printf("    Keywords:        %s\n", joinList(b.Preferences.Keywords))
+		fmt.Printf("    Dealbreakers:    %s\n", joinList(b.Preferences.Dealbreakers))
+		fmt.Printf("\n")
+		fmt.Printf("  Open: %s\n", joinList(b.Open))
+		if b.Complete {
+			fmt.Printf("  Status: complete — brief is ready to search on.\n")
+		} else {
+			fmt.Printf("  Status: incomplete — %d preference(s) still open.\n", len(b.Open))
+		}
+		fmt.Println()
+		return nil
+	},
+}
+
+// joinList renders a string slice comma-separated, or a dash if empty.
+func joinList(items []string) string {
+	if len(items) == 0 {
+		return "-"
+	}
+	return strings.Join(items, ", ")
+}
+
 // --- set ---
 
 var profileSetFlags struct {
@@ -191,6 +255,7 @@ Examples:
 func init() {
 	rootCmd.AddCommand(profileCmd)
 	profileCmd.AddCommand(profileShowCmd)
+	profileCmd.AddCommand(profileBriefCmd)
 	profileCmd.AddCommand(profileSetCmd)
 
 	profileSetCmd.Flags().StringVar(&profileSetFlags.name, "name", "", "Full name")

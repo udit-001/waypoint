@@ -49,6 +49,7 @@ type Store interface {
 	// Profile & Settings
 	GetProfile() (Profile, error)
 	UpsertProfile(updates map[string]any) error
+	GetBrief() (Brief, error)
 	GetSettings() (Settings, error)
 	UpsertSettings(updates map[string]any) error
 
