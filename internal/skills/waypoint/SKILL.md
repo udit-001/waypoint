@@ -24,7 +24,7 @@ waypoint jobs stats --json && waypoint profile show --json
 ```
 
 - `total: 0` + empty `name` → fresh install. Ask conversationally, run commands yourself:
-  1. "Name and roles you're targeting?" → `profile set --name "..." --title "..." --skills '["..."]'`
+  1. "Name and roles you're targeting?" → `profile set --name "..." --title "..." --skills "Go,React"`
   2. "Jobs already tracking?" → `jobs add "..." "..." --status "..."` per job
   3. "See dashboard?" → `start`
 - `total: 0` + has name → no jobs yet, ask if they want to add
@@ -44,7 +44,7 @@ Found → use ID. Multiple → ask user. None → `read` [data/job-extract](refe
 
 Profile `name`, `title`, `skills` must be non-empty. Missing → ask before generating.
 ```bash
-waypoint profile set --name "Jane Doe" --title "Senior Engineer" --skills '["Go","React","AWS"]'
+waypoint profile set --name "Jane Doe" --title "Senior Engineer" --skills "Go,React,AWS"
 ```
 
 **Done when**: job ID resolved, profile complete.

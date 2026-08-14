@@ -72,7 +72,7 @@ Persist every answered decision as you settle it: `profile set --<flag> "<value>
 The web profile is the human fallback; the brief readout is the agent's single
 source of truth.
 
-## After setup — don't re-grill
+## After setup — one confirmation line
 
 Interview only the open items, once, at first setup. On later sessions the
 brief is already stored: read it with `profile brief --json`, skip the
