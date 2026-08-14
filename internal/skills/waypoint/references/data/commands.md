@@ -28,12 +28,11 @@ All commands: `--json`.
 | Cmd | Flags |
 |-----|-------|
 | `categories list\|add\|rename\|delete` | |
-| `profile show\|set` | `--name` `--email` `--phone` `--title` `--skills` `--experience` `--education` `--industry` `--experience-file` `--education-file` `--current-location` `--seniority` `--visa-sponsorship` `--salary-floor` `--remote` `--location-preference` `--companies` `--avoid-companies` `--keywords` `--dealbreakers` |
+| `profile show\|set\|schema\|brief` | `show --json` · `set --file <doc>` (`-` = stdin; patch semantics; unknown keys rejected) · `schema --json` (empty writable template) · `brief --json` |
 
-Shell-safety rule: JSON object arrays (experience/education) are shell-unsafe
-in bash, PowerShell, and cmd — use `--experience-file`/`--education-file`
-(write the file with your file tool, never a shell heredoc), not the inline
-flags. List fields (`--skills`, `--companies`, `--keywords`, …) take a
-shell-safe comma-separated list; the JSON-array form is for programmatic use.
+Shell-safety rule: the whole profile is one JSON document, passed via
+`set --file` — write it with your file tool (never a shell heredoc); the file
+is read directly, so nothing is shell-interpreted. See
+[data/profile](profile.md) for the document rules.
 | `start` | `--port` (8080) |
 | `init` | `--force` |

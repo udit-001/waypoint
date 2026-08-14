@@ -68,9 +68,9 @@ education, industry) from it or from the user's tracked jobs, and don't ask.
 fact is asked for only when it is empty **and** unseeded (no resume / public
 LinkedIn via Exa), and then once.
 
-Persist every answered decision as you settle it: `profile set --<flag> "<value>"`.
-The web profile is the human fallback; the brief readout is the agent's single
-source of truth.
+Persist every answered decision as you settle it — `read` [data/profile](data/profile.md) and
+apply a profile document via `profile set --file`. The web profile is the human fallback;
+the brief readout is the agent's single source of truth.
 
 ## After setup — one confirmation line
 
