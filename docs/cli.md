@@ -28,9 +28,16 @@ Alias: `waypoint cat`
 
 | Command | Description |
 |---------|-------------|
-| `waypoint profile show` | Display your profile (`--json` for machine output) |
+| `waypoint profile show` | Display your profile (`--json` for machine output — the document `set` accepts) |
+| `waypoint profile schema` | Print the profile document schema as an empty template — the writable surface for `set` |
+| `waypoint profile set --file <doc.json>` | Update profile fields from a JSON document (patch semantics: only keys present change; `-` reads stdin). Doc keys match `show --json` output; unknown keys are rejected. Structured entries: `experience` `{title, company, start, end, description}`, `education` `{institution, degree, start, end, description}`; dates `YYYY-MM` or `YYYY`, empty `end` = present, `description` optional free text. `salaryFloor` is `[{region, amount}]` |
+| `waypoint profile brief` | Show the job-search curation brief (`--json` for machine output — the frontier the agent reads) |
+
+## Scrapers
+
+| Command | Description |
+|---------|-------------|
 | `waypoint scrape run <name>` | Run a job scraper. Flags: `--query`, `--location`, `--limit`, `--jobage`, `--remote`, `--page`, `--today <YYYY-MM-DD>` (reference date for recency) |
-| `waypoint profile set` | Update profile fields. Flags: `--name`, `--email`, `--phone`, `--title`, `--skills`, `--experience`, `--education`, `--industry`. `--skills` takes a comma-separated list or a JSON array; `--experience`/`--education` take a JSON array of objects (`experience`: `{title, company, start, end}`, `education`: `{institution, degree, start, end}`, dates are `YYYY-MM` or `YYYY`, empty `end` = present). The object JSON is shell-unsafe — use `--experience-file`/`--education-file` for cross-shell safety (bash/PowerShell/cmd), writing the file with your file tool |
 
 ## Artifacts
 

@@ -3,7 +3,9 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -21,8 +23,8 @@ by the AI generation skills to personalize content.
 
 Examples:
   waypoint profile show
-  waypoint profile set --name "Jane Doe" --title "Senior Engineer"
-  waypoint profile set --skills '["Go","React","Python"]'
+  waypoint profile set --file profile.json
+  waypoint profile schema
   waypoint profile show --json`,
 }
 
@@ -149,182 +151,46 @@ func salaryFloorDisplay(entries []db.SalaryFloorEntry) string {
 // --- set ---
 
 var profileSetFlags struct {
-	name           string
-	email          string
-	phone          string
-	title          string
-	skills         string
-	experience     string
-	experienceFile string
-	education      string
-	educationFile  string
-	industry       string
-
-	// Curation brief.
-	currentLocation string
-	seniority       string
-	visaSponsorship string
-	salaryFloor     string
-	remote          string
-	locationPref    string
-	companies       string
-	avoidCompanies  string
-	keywords        string
-	dealbreakers    string
+	file string
 }
 
 var profileSetCmd = &cobra.Command{
 	Use:   "set",
-	Short: "Update profile fields",
-	Long: `Update one or more profile fields. Only the flags you provide are changed.
+	Short: "Update profile fields from a document",
+	Long: `Update profile fields from a JSON document with patch semantics: only
+keys present in the document are changed; every other field stays untouched.
 
-Skills take a comma-separated list (shell-safe) or a JSON array:
-  --skills "Go,React,Python"
-
-Experience and education are structured — a JSON array of objects, dates as
-YYYY-MM (or YYYY), empty end means present. The JSON is shell-unsafe (quotes,
-braces), so pass it via a file for cross-shell safety (bash, PowerShell, cmd):
-  --experience-file path/to/experience.json   # [{"title":"Senior SWE","company":"Acme",...}]
-  --education-file  path/to/education.json    # [{"institution":"MIT","degree":"BS CS",...}]
-The inline flags accept the same JSON when the value is simple enough.
+The document is the same shape 'profile show --json' emits — run
+'waypoint profile schema' for the empty template. Unknown keys are rejected,
+so a typo never silently drops an edit. The file is read directly, so the
+shell never interprets its contents — the cross-shell-safe way to write
+structured data (experience/education entries, salary floors, lists).
 
 Examples:
-  waypoint profile set --name "Jane Doe" --title "Senior Engineer"
-  waypoint profile set --skills "Go,React,AWS"
-  waypoint profile set --email "jane@example.com" --phone "+1-555-0123"`,
+  waypoint profile set --file profile.json
+  waypoint profile schema                          # see the writable shape
+  waypoint profile show --json | waypoint profile set --file -   # stdin`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		updates := make(map[string]any)
-
-		if profileSetFlags.name != "" {
-			updates["name"] = profileSetFlags.name
+		raw, err := readDocInput(profileSetFlags.file)
+		if err != nil {
+			return formatError("failed to read profile document", err)
 		}
-		if profileSetFlags.email != "" {
-			updates["email"] = profileSetFlags.email
-		}
-		if profileSetFlags.phone != "" {
-			updates["phone"] = profileSetFlags.phone
-		}
-		if profileSetFlags.title != "" {
-			updates["title"] = profileSetFlags.title
-		}
-		// Skills keep the shared list input: comma-separated or a JSON array.
-		if profileSetFlags.skills != "" {
-			normalized, err := parseListInput(profileSetFlags.skills)
-			if err != nil {
-				return fmt.Errorf("skills: %w", err)
-			}
-			updates["skills"] = normalized
-		}
-		// Experience / education are structured: a JSON array of objects. The
-		// JSON is shell-unsafe (quotes, braces), so it prefers a file; the
-		// inline flag is accepted when the value is simple enough. Both go
-		// through the db serialize seam, which owns the entry rule.
-		if raw, err := readStructuredFlag(profileSetFlags.experience, profileSetFlags.experienceFile); raw != "" {
-			if err != nil {
-				return formatError("failed to read experience", err)
-			}
-			serialized, err := db.SerializeExperience([]byte(raw))
-			if err != nil {
-				return fmt.Errorf("experience: %w", err)
-			}
-			updates["experience"] = serialized
-		}
-		if raw, err := readStructuredFlag(profileSetFlags.education, profileSetFlags.educationFile); raw != "" {
-			if err != nil {
-				return formatError("failed to read education", err)
-			}
-			serialized, err := db.SerializeEducation([]byte(raw))
-			if err != nil {
-				return fmt.Errorf("education: %w", err)
-			}
-			updates["education"] = serialized
-		}
-		if profileSetFlags.industry != "" {
-			updates["industry"] = profileSetFlags.industry
+		var doc map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			return formatError("invalid profile document — must be a JSON object", err)
 		}
 
-		// Curation brief. Each flag uses cmd.Flags().Changed so an explicit
-		// empty value clears the field (set → open) rather than being ignored.
-		// Flag names equal the profile key verbatim (WP-103).
-		setScalar := func(flagName, key, val string) {
-			if cmd.Flags().Changed(flagName) {
-				updates[key] = val
-			}
+		// Current experience gates manual seniority (placeholder until a
+		// resume seed arrives). Validation lives behind the db seam, so the
+		// CLI and the web route can never drift apart.
+		exp, err := store.GetProfile()
+		if err != nil {
+			return formatError("failed to get profile", err)
 		}
-		setList := func(flagName, key, val string) error {
-			if !cmd.Flags().Changed(flagName) {
-				return nil
-			}
-			if val == "" {
-				updates[key] = "[]"
-				return nil
-			}
-			normalized, err := parseListInput(val)
-			if err != nil {
-				return fmt.Errorf("%s: %w", key, err)
-			}
-			updates[key] = normalized
-			return nil
-		}
-
-		setScalar("current-location", "current_location", profileSetFlags.currentLocation)
-
-		// Seniority is a derived fact: once experience carries a year signal,
-		// the level is derived, not manually assignable. Manual set is a
-		// placeholder for when experience has not arrived yet (no resume seed).
-		if cmd.Flags().Changed("seniority") {
-			exp, _ := store.GetProfile()
-			if derived := db.DeriveSeniority(exp.Experience); derived != "" {
-				return fmt.Errorf("seniority derives from experience as %q — correct experience instead, or clear it first", derived)
-			}
-			updates["seniority"] = profileSetFlags.seniority
-		}
-		setScalar("visa-sponsorship", "visa_sponsorship", profileSetFlags.visaSponsorship)
-		setScalar("remote", "remote", profileSetFlags.remote)
-
-		if cmd.Flags().Changed("salary-floor") {
-			if profileSetFlags.salaryFloor == "" {
-				updates["salary_floor"] = "[]"
-			} else {
-				// Amount-only entries default their region to the effective
-				// current location: the --current-location flag if set this
-				// run, otherwise the profile's stored value. Region is the
-				// user's decision; currency is derived from it (never asked).
-				defaultRegion := ""
-				if cmd.Flags().Changed("current-location") {
-					defaultRegion = profileSetFlags.currentLocation
-				} else {
-					if p, err := store.GetProfile(); err == nil {
-						defaultRegion = p.CurrentLocation
-					}
-				}
-				floors, err := db.ParseSalaryFloor(profileSetFlags.salaryFloor, defaultRegion)
-				if err != nil {
-					return formatError("invalid salary floor", err)
-				}
-				serialized, err := db.SalaryFloorToJSON(floors)
-				if err != nil {
-					return formatError("failed to encode salary floor", err)
-				}
-				updates["salary_floor"] = serialized
-			}
-		}
-
-		for _, f := range []struct{ flag, key, val string }{
-			{"location-preference", "location_preference", profileSetFlags.locationPref},
-			{"companies", "companies", profileSetFlags.companies},
-			{"avoid-companies", "avoid_companies", profileSetFlags.avoidCompanies},
-			{"keywords", "keywords", profileSetFlags.keywords},
-			{"dealbreakers", "dealbreakers", profileSetFlags.dealbreakers},
-		} {
-			if err := setList(f.flag, f.key, f.val); err != nil {
-				return err
-			}
-		}
-
-		if len(updates) == 0 {
-			return fmt.Errorf("no fields to update — use --flags to specify changes")
+		updates, err := db.NormalizeProfileDocument(doc, exp.Experience)
+		if err != nil {
+			return err
 		}
 
 		if err := store.UpsertProfile(updates); err != nil {
@@ -332,54 +198,93 @@ Examples:
 		}
 
 		if jsonOut {
-			p, _ := store.GetProfile()
+			p, err := store.GetProfile()
+			if err != nil {
+				return formatError("failed to get profile", err)
+			}
 			printJSON(p)
 			return nil
 		}
 
+		keys := make([]string, 0, len(updates))
+		for k := range updates {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
 		fmt.Println()
 		fmt.Printf("  ✓ Profile updated\n")
-		for key := range updates {
-			switch key {
-			case "name":
-				fmt.Println("    Name:           updated")
-			case "email":
-				fmt.Println("    Email:          updated")
-			case "phone":
-				fmt.Println("    Phone:          updated")
-			case "title":
-				fmt.Println("    Title:          updated")
-			case "skills":
-				fmt.Println("    Skills:         updated")
-			case "experience":
-				fmt.Println("    Experience:     updated")
-			case "education":
-				fmt.Println("    Education:      updated")
-			case "industry":
-				fmt.Println("    Industry:       updated")
-			case "current_location":
-				fmt.Println("    Current Location: updated")
-			case "seniority":
-				fmt.Println("    Seniority:      updated")
-			case "visa_sponsorship":
-				fmt.Println("    Visa Sponsorship: updated")
-			case "salary_floor":
-				fmt.Println("    Salary Floor:   updated")
-			case "remote":
-				fmt.Println("    Remote:         updated")
-			case "location_preference":
-				fmt.Println("    Location:       updated")
-			case "companies":
-				fmt.Println("    Companies:      updated")
-			case "avoid_companies":
-				fmt.Println("    Avoid:          updated")
-			case "keywords":
-				fmt.Println("    Keywords:       updated")
-			case "dealbreakers":
-				fmt.Println("    Dealbreakers:   updated")
-			}
+		for _, k := range keys {
+			fmt.Printf("    %s: updated\n", profileKeyLabel(k))
 		}
 		fmt.Println()
+		return nil
+	},
+}
+
+// profileKeyLabel renders a store key (the updates map) as a human label for
+// `set` output.
+func profileKeyLabel(key string) string {
+	labels := map[string]string{
+		"name":                "Name",
+		"email":               "Email",
+		"phone":               "Phone",
+		"title":               "Title",
+		"skills":              "Skills",
+		"experience":          "Experience",
+		"education":           "Education",
+		"industry":            "Industry",
+		"current_location":    "Current Location",
+		"seniority":           "Seniority",
+		"visa_sponsorship":    "Visa Sponsorship",
+		"salary_floor":        "Salary Floor",
+		"remote":              "Remote",
+		"location_preference": "Location",
+		"companies":           "Companies",
+		"avoid_companies":     "Avoid",
+		"keywords":            "Keywords",
+		"dealbreakers":        "Dealbreakers",
+	}
+	if l, ok := labels[key]; ok {
+		return l
+	}
+	words := strings.Split(strings.ReplaceAll(key, "_", " "), " ")
+	for i, w := range words {
+		if w != "" {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+// readDocInput reads the patch document: a file path, or stdin when the value
+// is "-". The file is read directly — no shell interpretation of its contents.
+func readDocInput(path string) ([]byte, error) {
+	if path == "-" {
+		return io.ReadAll(os.Stdin)
+	}
+	return os.ReadFile(path)
+}
+
+// --- schema ---
+
+var profileSchemaCmd = &cobra.Command{
+	Use:   "schema",
+	Short: "Show the profile document schema (empty template)",
+	Long: `Print the profile document schema as an empty template — the writable
+surface for 'waypoint profile set --file'. Fill in values and pass the file
+back; keys absent from your document stay unchanged. The template is a valid
+empty document — every value is what 'set' accepts unchanged.
+
+Entry shapes: experience is [{"title","company","start","end","description"}],
+education [{"institution","degree","start","end","description"}]; dates are
+YYYY-MM (or YYYY), empty end means present, title/institution required.
+salaryFloor is [{region, amount}] — region required, amount a positive number.
+
+Example:
+  waypoint profile schema`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Println(db.ProfileSchemaTemplate())
 		return nil
 	},
 }
@@ -389,29 +294,9 @@ func init() {
 	profileCmd.AddCommand(profileShowCmd)
 	profileCmd.AddCommand(profileBriefCmd)
 	profileCmd.AddCommand(profileSetCmd)
+	profileCmd.AddCommand(profileSchemaCmd)
 
-	profileSetCmd.Flags().StringVar(&profileSetFlags.name, "name", "", "Full name")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.email, "email", "", "Email address")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.phone, "phone", "", "Phone number")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.title, "title", "", "Professional title")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.skills, "skills", "", "Skills as JSON array")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.experience, "experience", "", "Experience as JSON array of {title, company, start, end} objects (inline; prefer --experience-file)")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.experienceFile, "experience-file", "", "Read experience JSON object array from a file (overrides --experience; cross-shell safe)")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.education, "education", "", "Education as JSON array of {institution, degree, start, end} objects (inline; prefer --education-file)")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.educationFile, "education-file", "", "Read education JSON object array from a file (overrides --education; cross-shell safe)")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.industry, "industry", "", "Target industry")
-
-	// Curation brief.
-	profileSetCmd.Flags().StringVar(&profileSetFlags.currentLocation, "current-location", "", "Where you live now (seeds salary/remote defaults)")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.seniority, "seniority", "", "Seniority level (junior|mid|senior); derived from experience when unset")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.visaSponsorship, "visa-sponsorship", "", "Visa sponsorship required (yes|no)")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.salaryFloor, "salary-floor", "", "Salary floor as region:amount, e.g. \"IN:100000,GB:30000\"")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.remote, "remote", "", "Workplace type (remote|hybrid|onsite)")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.locationPref, "location-preference", "", "Location preference as comma list or JSON array")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.companies, "companies", "", "Target companies as comma list or JSON array")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.avoidCompanies, "avoid-companies", "", "Companies to avoid as comma list or JSON array")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.keywords, "keywords", "", "Must-have keywords as comma list or JSON array")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.dealbreakers, "dealbreakers", "", "Must-not-have terms as comma list or JSON array")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.file, "file", "", "Profile document path (JSON object; '-' reads stdin)")
 }
 
 // displayVal returns the value or a dash if empty.
@@ -439,58 +324,6 @@ func displayJSONList(s string) string {
 		result += item
 	}
 	return result
-}
-
-// parseListInput normalizes a list value for profile array fields.
-// It accepts either a JSON array ("[\"Go\",\"React\"]") or a plain
-// comma-separated list ("Go,React"), returning the JSON array form
-// that the profile stores. The comma form is shell-friendly — no
-// nested quotes — so it works in PowerShell as well as bash.
-func parseListInput(s string) (string, error) {
-	trimmed := strings.TrimSpace(s)
-	if trimmed == "" {
-		return "", fmt.Errorf("value cannot be empty")
-	}
-	if strings.HasPrefix(trimmed, "[") {
-		var v any
-		if err := json.Unmarshal([]byte(trimmed), &v); err != nil {
-			return "", fmt.Errorf("not a valid JSON array, e.g. [\"Go\",\"React\"] or a comma list: Go,React")
-		}
-		if _, ok := v.([]any); !ok {
-			return "", fmt.Errorf("value must be a JSON array, e.g. [\"Go\",\"React\"] or a comma list: Go,React")
-		}
-		return trimmed, nil
-	}
-	parts := strings.Split(trimmed, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	if len(out) == 0 {
-		return "", fmt.Errorf("value cannot be empty")
-	}
-	b, err := json.Marshal(out)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-// readStructuredFlag returns the raw JSON text for a structured field: the
-// file flag wins when set (the JSON is shell-unsafe, so a file is the
-// cross-shell path), otherwise the inline flag. Empty means the flag is unset.
-func readStructuredFlag(inline, file string) (string, error) {
-	if file != "" {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			return "", fmt.Errorf("reading %s: %w", file, err)
-		}
-		return string(content), nil
-	}
-	return inline, nil
 }
 
 // displayExperience renders structured experience entries for `profile show`.
