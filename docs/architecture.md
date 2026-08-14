@@ -62,7 +62,9 @@ make frontend
 
 ## API
 
-Read-only REST API at `/api/`. All endpoints return JSON.
+REST API at `/api/`. All endpoints return JSON. Reads are free; the only
+write route is the profile brief (`PATCH /api/profile`), which crosses the
+same `db.Store` seam as the CLI — the web UI is read-only for everything else.
 
 | Endpoint | Returns |
 |----------|---------|
@@ -75,5 +77,7 @@ Read-only REST API at `/api/`. All endpoints return JSON.
 | `GET /api/artifacts` | All artifacts (filterable: `?skill=`, `?job=`, `?search=`) |
 | `GET /api/artifacts/{id}` | Single artifact with all variants |
 | `GET /api/profile` | User profile |
+| `GET /api/brief` | Curation brief (facts/constraints/preferences + open frontier) |
+| `PATCH /api/profile` | Write brief fields (verbatim keys from `profile brief --json`); returns the updated brief |
 | `GET /api/settings` | App settings |
 | `GET /api/search?q=` | Unified search across jobs and artifacts |

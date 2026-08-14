@@ -5,6 +5,26 @@ async function api(path) {
   return res.json();
 }
 
+/** Base mutation helper — sends a JSON body and surfaces server errors. */
+async function apiMutate(method, path, body) {
+  const res = await fetch('/api' + path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    // non-JSON error response
+  }
+  if (!res.ok) {
+    const msg = (data && data.error) || `API ${res.status}: ${res.statusText}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
 /**
  * Create a read-only store that fetches from the API.
  * - Auto-fetches on first subscription (lazy init)
@@ -97,6 +117,22 @@ export const profile = createStore(async () => {
   // API now returns arrays directly (WAYP-18 shipped)
   return p;
 });
+
+// ─── Brief (job-search curation) ───────────────────────
+
+export const brief = createStore(async () => {
+  const b = await api('/brief');
+  return b || null;
+});
+
+/**
+ * Write brief fields — the same verbatim keys the agent reads via
+ * `profile brief --json`. Returns the updated brief (grouped into
+ * facts/constraints/preferences) so the view can render the result.
+ */
+export async function updateBrief(fields) {
+  return apiMutate('PATCH', '/profile', fields);
+}
 
 // ─── Settings ───────────────────────────────────────────
 
