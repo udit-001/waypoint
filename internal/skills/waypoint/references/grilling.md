@@ -42,8 +42,8 @@ belongs to a **later** round.
 ## The curation decision tree
 
 Seed the first round from the frontier — the items below not already answered
-by `profile show --json` or by the user's stated intent. Each item names the
-waypoint mechanism it feeds.
+by `profile brief --json` (the curation-brief readout) or by the user's stated
+intent. Each item names the waypoint mechanism it feeds.
 
 | Decision | What it controls in waypoint |
 |----------|------------------------------|
@@ -60,12 +60,28 @@ waypoint mechanism it feeds.
 
 ## Grounding
 
-Finding **facts** is your job, never the user's. When a frontier question needs
-a fact already stored in waypoint — title, skills, experience, education,
-industry — pull it with `profile show --json` or from the user's tracked jobs,
-and don't ask for it. **Decisions** are the user's: put each genuinely open one
-to them and wait. If a decision is already settled by the profile, it's not in
-this round's frontier at all.
+Finding **facts** is your job, never the user's. `profile brief --json` groups
+what's already stored — facts, constraints, preferences — and lists the still
+open frontier; pull a stored fact (title, skills, structured experience,
+education, industry) from it or from the user's tracked jobs, and don't ask.
+**Decisions** are the user's: put each genuinely open one to them and wait. A
+fact is asked for only when it is empty **and** unseeded (no resume / public
+LinkedIn via Exa), and then once.
+
+Persist every answered decision as you settle it: `profile set --<flag> "<value>"`.
+The web profile is the human fallback; the brief readout is the agent's single
+source of truth.
+
+## After setup — don't re-grill
+
+Interview only the open items, once, at first setup. On later sessions the
+brief is already stored: read it with `profile brief --json`, skip the
+interview, and show a single preference-only confirmation line inviting a
+correction in the web profile, e.g.:
+
+```
+Searching: hybrid, Bengaluru/Delhi, targets Gojek & Flipkart. Change in the web profile if wrong.
+```
 
 ## Done when
 

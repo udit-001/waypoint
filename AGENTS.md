@@ -1,8 +1,24 @@
 # AGENTS.md
 
-Waypoint — a job-application tracker. Go backend (cobra CLI + REST server, pure-Go SQLite via `modernc.org/sqlite`, **no CGO**) + Svelte 5/Vite 8 frontend **embedded** into the binary via `//go:embed web/dist`. Most mutations happen in the CLI; the web UI is read-only except the profile brief — `PATCH /api/profile` writes the brief through the same `db.Store` seam as the CLI (see `internal/server/profile.go`). `web/dist/` is committed, so `go build` alone produces a working binary — Node/pnpm are only needed when frontend source changes.
+## Orientation
 
-This file is for **contributors** (you, the agent working on the codebase). The product-usage skill at `.opencode/skills/waypoint/SKILL.md` is for end-users driving the job-search pipeline — different audience, don't conflate.
+Waypoint is a job-application tracker: Go backend (cobra CLI + REST server,
+pure-Go SQLite via `modernc.org/sqlite`, **no CGO**) with a Svelte 5/Vite 8
+frontend **embedded** via `//go:embed web/dist`. `web/dist/` is committed, so
+`go build` alone produces a working binary — Node/pnpm only matter when
+frontend source changes.
+
+The load-bearing **seam** is `db.Store` (`internal/db/store.go`): the CLI, the
+HTTP server, and the tests all cross it. `PATCH /api/profile` — the web's only
+write route — goes through the same `db.Store` methods as the CLI (see
+`internal/server/profile.go`). Shared profile logic (normalization, derived
+seniority, structured experience/education parsing, date math) lives **behind
+the seam** in `internal/db/`, never in the adapters. The profile format lives
+in `docs/architecture.md`; don't restate it here.
+
+This file is for **contributors**. The end-user skill at
+`internal/skills/waypoint/SKILL.md` drives the job-search pipeline — different
+audience, don't conflate.
 
 ## Essential commands
 
@@ -57,7 +73,7 @@ Pattern (see `internal/cli/stats.go` for a canonical read command, `internal/cli
 
 ## Where to find the rest
 
-- `docs/architecture.md` — DB schema (7 tables), full tech stack, project layout, REST API endpoints.
+- `docs/architecture.md` — DB schema, tech stack, project layout, REST API, and the canonical profile/experience/education format.
 - `docs/cli.md` — complete CLI command reference.
 - `workflows/release.md` — the release ritual (migrate to goreleaser + cosign + nfpm, mirroring `../learn-tool`).
 - `internal/scraper/scraper.go` — the `Scraper`/`Detailer` interfaces, `Register`, and filter helpers.

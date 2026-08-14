@@ -509,12 +509,6 @@ func (f *FakeStore) UpsertProfile(updates map[string]any) error {
 	if v, ok := updates["industry"]; ok {
 		p.Industry = fmt.Sprint(v)
 	}
-	if v, ok := updates["greeting_style"]; ok {
-		p.GreetingStyle = fmt.Sprint(v)
-	}
-	if v, ok := updates["sign_off"]; ok {
-		p.SignOff = fmt.Sprint(v)
-	}
 	if v, ok := updates["current_location"]; ok {
 		p.CurrentLocation = fmt.Sprint(v)
 	}

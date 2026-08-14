@@ -11,18 +11,23 @@ import (
 	"github.com/udit-001/waypoint/internal/db"
 )
 
-// briefScalarKeys are brief fields stored as a single string.
-var briefScalarKeys = map[string]bool{
+// profileScalarKeys are profile fields stored as a single string.
+var profileScalarKeys = map[string]bool{
+	"name":             true,
+	"email":            true,
+	"phone":            true,
 	"title":            true,
+	"industry":         true,
 	"seniority":        true,
 	"current_location": true,
 	"visa_sponsorship": true,
 	"remote":           true,
 }
 
-// briefListKeys are brief fields stored as a JSON-array string. The Store
-// seam normalizes them to the match form (case-fold, trim, dedupe).
-var briefListKeys = map[string]bool{
+// profileListKeys are profile fields stored as a JSON-array string. The Store
+// seam normalizes the preference lists to the match form (case-fold, trim,
+// dedupe); skills is stored as-typed.
+var profileListKeys = map[string]bool{
 	"skills":              true,
 	"location_preference": true,
 	"companies":           true,
@@ -44,14 +49,15 @@ func handleGetBrief(store db.Store) http.HandlerFunc {
 	}
 }
 
-// handleUpdateProfile is the web's first write route. It accepts the brief
-// field keys verbatim (the same keys `profile brief --json` returns), crosses
-// the same Store seam as the CLI, and returns the updated brief.
+// handleUpdateProfile is the web's write route. It accepts profile field keys
+// verbatim (the same keys the CLI writes and `profile brief --json` returns),
+// crosses the same Store seam as the CLI, and returns the updated brief.
 //
 // List-valued fields arrive as JSON arrays and are serialized before the seam
-// normalizes them. salary_floor arrives as [{region, amount}] — currency is
-// never accepted from the client, it is derived from region on read. Unknown
-// fields are rejected so a typo never silently drops an edit.
+// processes them. salary_floor arrives as [{region, amount}] and experience /
+// education as structured entry arrays — currency and seniority are derived on
+// read, never accepted from the client. Unknown fields are rejected so a typo
+// never silently drops an edit.
 func handleUpdateProfile(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]json.RawMessage
@@ -71,7 +77,8 @@ func handleUpdateProfile(store db.Store) http.HandlerFunc {
 
 		updates := make(map[string]any)
 		for key, raw := range body {
-			if !briefScalarKeys[key] && !briefListKeys[key] && key != "salary_floor" {
+			if !profileScalarKeys[key] && !profileListKeys[key] &&
+				key != "salary_floor" && key != "experience" && key != "education" {
 				jsonError(w, fmt.Sprintf("unknown profile field %q", key), http.StatusBadRequest)
 				return
 			}
@@ -86,6 +93,38 @@ func handleUpdateProfile(store db.Store) http.HandlerFunc {
 				serialized, err := db.SalaryFloorToJSON(floors)
 				if err != nil {
 					jsonError(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				updates[key] = serialized
+			case "experience":
+				serialized, err := structuredFromJSON(raw,
+					func(e db.ExperienceEntry) error {
+						if strings.TrimSpace(e.Title) == "" {
+							return fmt.Errorf("title is required")
+						}
+						if err := db.ValidatePartialDate(e.Start); err != nil {
+							return err
+						}
+						return db.ValidatePartialDate(e.End)
+					}, db.ExperienceToJSON)
+				if err != nil {
+					jsonError(w, "experience: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+				updates[key] = serialized
+			case "education":
+				serialized, err := structuredFromJSON(raw,
+					func(e db.EducationEntry) error {
+						if strings.TrimSpace(e.Institution) == "" {
+							return fmt.Errorf("institution is required")
+						}
+						if err := db.ValidatePartialDate(e.Start); err != nil {
+							return err
+						}
+						return db.ValidatePartialDate(e.End)
+					}, db.EducationToJSON)
+				if err != nil {
+					jsonError(w, "education: "+err.Error(), http.StatusBadRequest)
 					return
 				}
 				updates[key] = serialized
@@ -129,11 +168,11 @@ func handleUpdateProfile(store db.Store) http.HandlerFunc {
 	}
 }
 
-// briefValueFromJSON validates a scalar/list brief field and returns the value
+// briefValueFromJSON validates a scalar/list field and returns the value
 // ready for the Store seam: scalars stay strings, lists are serialized to the
 // JSON-array string the profile columns store.
 func briefValueFromJSON(key string, raw json.RawMessage) (string, error) {
-	if briefScalarKeys[key] {
+	if profileScalarKeys[key] {
 		var s string
 		if err := json.Unmarshal(raw, &s); err != nil {
 			return "", fmt.Errorf("expected a string")
@@ -149,6 +188,22 @@ func briefValueFromJSON(key string, raw json.RawMessage) (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// structuredFromJSON parses a client-provided array of structured entries
+// (experience/education), validates each via validate, and serializes to the
+// stored JSON-array string.
+func structuredFromJSON[T any](raw json.RawMessage, validate func(T) error, toJSON func([]T) (string, error)) (string, error) {
+	var entries []T
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return "", fmt.Errorf("expected an array of objects")
+	}
+	for i, e := range entries {
+		if err := validate(e); err != nil {
+			return "", fmt.Errorf("entry %d: %w", i+1, err)
+		}
+	}
+	return toJSON(entries)
 }
 
 // salaryFloorFromJSON parses a client-provided [{region, amount}] list.

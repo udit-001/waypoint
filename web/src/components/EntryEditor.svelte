@@ -1,0 +1,142 @@
+<script>
+  import { iconSvg } from '../lib/icons.js';
+
+  // Structured list editor for experience/education. Entries are objects with
+  // primary/secondary text fields plus partial ISO start/end dates (YYYY-MM);
+  // an empty end means "present" (the Current checkbox).
+  let {
+    entries = [],
+    primaryKey,
+    primaryLabel,
+    primaryPlaceholder,
+    secondaryKey,
+    secondaryLabel,
+    secondaryPlaceholder,
+    onchange,
+  } = $props();
+
+  let rows = $state([]);
+
+  function sync() {
+    rows = (entries ?? []).map((e) => ({
+      primary: e[primaryKey] || '',
+      secondary: e[secondaryKey] || '',
+      start: e.start || '',
+      end: e.end || '',
+      current: (e.end || '') === '',
+    }));
+  }
+  sync();
+  $effect(sync);
+
+  function toEntries() {
+    return rows
+      .map((r) => ({
+        [primaryKey]: r.primary.trim(),
+        [secondaryKey]: r.secondary.trim(),
+        start: r.start,
+        end: r.current ? '' : r.end,
+      }))
+      .filter(
+        (e) =>
+          e[primaryKey] !== '' ||
+          e[secondaryKey] !== '' ||
+          e.start !== '' ||
+          e.end !== '',
+      );
+  }
+
+  function commit() {
+    onchange?.(toEntries());
+  }
+
+  function addRow() {
+    rows = [...rows, { primary: '', secondary: '', start: '', end: '', current: false }];
+  }
+
+  function removeRow(i) {
+    rows = rows.filter((_, idx) => idx !== i);
+    commit();
+  }
+
+  function toggleCurrent(i) {
+    rows[i].current = !rows[i].current;
+    if (rows[i].current) {
+      rows[i].end = '';
+    } else if (rows[i].end === '') {
+      // Unchecking "Current" without an end date defaults to the current month.
+      const now = new Date();
+      rows[i].end = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+    commit();
+  }
+</script>
+
+<div class="space-y-3">
+  {#each rows as row, i}
+    <div class="rounded-lg border border-slate-200 dark:border-slate-600 p-3 space-y-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <label class="wp-label">{primaryLabel}</label>
+          <input
+            class="wp-input w-full"
+            placeholder={primaryPlaceholder}
+            bind:value={rows[i].primary}
+            onblur={commit}
+          />
+        </div>
+        <div>
+          <label class="wp-label">{secondaryLabel}</label>
+          <input
+            class="wp-input w-full"
+            placeholder={secondaryPlaceholder}
+            bind:value={rows[i].secondary}
+            onblur={commit}
+          />
+        </div>
+      </div>
+      <div class="flex items-end gap-2">
+        <div class="flex-1">
+          <label class="wp-label">Start</label>
+          <input
+            class="wp-input w-full"
+            type="month"
+            value={row.start}
+            onchange={(e) => {
+              rows[i].start = e.currentTarget.value;
+              commit();
+            }}
+          />
+        </div>
+        <div class="flex-1">
+          <label class="wp-label">End</label>
+          <input
+            class="wp-input w-full"
+            type="month"
+            value={row.end}
+            disabled={row.current}
+            onchange={(e) => {
+              rows[i].end = e.currentTarget.value;
+              commit();
+            }}
+          />
+        </div>
+        <label class="flex items-center gap-1.5 pb-2.5 text-xs text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+          <input type="checkbox" checked={row.current} onchange={() => toggleCurrent(i)} class="accent-slate-700 dark:accent-slate-400 size-3.5" />
+          Current
+        </label>
+        <button
+          type="button"
+          class="size-7 grid place-items-center rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer bg-transparent border-none shrink-0"
+          aria-label="Remove entry"
+          onclick={() => removeRow(i)}
+        >{@html iconSvg('close', 15)}</button>
+      </div>
+    </div>
+  {/each}
+  <button
+    type="button"
+    class="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer bg-transparent border-none p-0"
+    onclick={addRow}
+  >{@html iconSvg('plus', 14)} Add entry</button>
+</div>

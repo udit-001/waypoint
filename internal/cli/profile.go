@@ -53,13 +53,11 @@ Examples:
 		fmt.Printf("  Phone:          %s\n", displayVal(p.Phone))
 		fmt.Printf("  Title:          %s\n", displayVal(p.Title))
 		fmt.Printf("  Industry:       %s\n", displayVal(p.Industry))
-		fmt.Printf("  Greeting Style: %s\n", displayVal(p.GreetingStyle))
-		fmt.Printf("  Sign-Off:       %s\n", displayVal(p.SignOff))
 
 		// Parse JSON array fields for display
 		fmt.Printf("  Skills:         %s\n", displayJSONList(p.Skills))
-		fmt.Printf("  Education:      %s\n", displayJSONList(p.Education))
-		fmt.Printf("  Experience:     %s\n", displayJSONList(p.Experience))
+		fmt.Printf("  Education:      %s\n", displayEducation(p.Education))
+		fmt.Printf("  Experience:     %s\n", displayExperience(p.Experience))
 
 		fmt.Println()
 		return nil
@@ -150,16 +148,14 @@ func salaryFloorDisplay(entries []db.SalaryFloorEntry) string {
 // --- set ---
 
 var profileSetFlags struct {
-	name          string
-	email         string
-	phone         string
-	title         string
-	skills        string
-	experience    string
-	education     string
-	industry      string
-	greetingStyle string
-	signOff       string
+	name       string
+	email      string
+	phone      string
+	title      string
+	skills     string
+	experience string
+	education  string
+	industry   string
 
 	// Curation brief.
 	currentLocation string
@@ -179,19 +175,18 @@ var profileSetCmd = &cobra.Command{
 	Short: "Update profile fields",
 	Long: `Update one or more profile fields. Only the flags you provide are changed.
 
-Skills, experience, and education take a comma-separated list (shell-safe)
-or a JSON array:
+Skills take a comma-separated list (shell-safe) or a JSON array:
   --skills "Go,React,Python"
-  --education "BS Computer Science - MIT"
-  --experience "5 years backend development"
 
-Greeting style options: formal, casual, creative
+Experience and education are structured — a JSON array of objects, dates as
+YYYY-MM (or YYYY), empty end means present:
+  --experience '[{"title":"Senior SWE","company":"Acme","start":"2021-03","end":"2023-06"}]'
+  --education '[{"institution":"MIT","degree":"BS CS","start":"2015","end":"2019"}]'
 
 Examples:
   waypoint profile set --name "Jane Doe" --title "Senior Engineer"
   waypoint profile set --skills "Go,React,AWS"
-  waypoint profile set --email "jane@example.com" --phone "+1-555-0123"
-  waypoint profile set --greeting-style casual --sign-off "Cheers"`,
+  waypoint profile set --email "jane@example.com" --phone "+1-555-0123"`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		updates := make(map[string]any)
@@ -208,33 +203,47 @@ Examples:
 		if profileSetFlags.title != "" {
 			updates["title"] = profileSetFlags.title
 		}
-		// List fields share one input format: comma-separated or a JSON array.
-		for _, f := range []struct{ flag, key string }{
-			{profileSetFlags.skills, "skills"},
-			{profileSetFlags.experience, "experience"},
-			{profileSetFlags.education, "education"},
-		} {
-			if f.flag == "" {
-				continue
-			}
-			normalized, err := parseListInput(f.flag)
+		// Skills keep the shared list input: comma-separated or a JSON array.
+		if profileSetFlags.skills != "" {
+			normalized, err := parseListInput(profileSetFlags.skills)
 			if err != nil {
-				return fmt.Errorf("%s: %w", f.key, err)
+				return fmt.Errorf("skills: %w", err)
 			}
-			updates[f.key] = normalized
+			updates["skills"] = normalized
+		}
+		// Experience / education are structured: a JSON array of objects only.
+		if profileSetFlags.experience != "" {
+			serialized, err := parseStructuredInput(profileSetFlags.experience, db.ExperienceToJSON, func(e db.ExperienceEntry) error {
+				if strings.TrimSpace(e.Title) == "" {
+					return fmt.Errorf("title is required")
+				}
+				if err := db.ValidatePartialDate(e.Start); err != nil {
+					return err
+				}
+				return db.ValidatePartialDate(e.End)
+			})
+			if err != nil {
+				return fmt.Errorf("experience: %w", err)
+			}
+			updates["experience"] = serialized
+		}
+		if profileSetFlags.education != "" {
+			serialized, err := parseStructuredInput(profileSetFlags.education, db.EducationToJSON, func(e db.EducationEntry) error {
+				if strings.TrimSpace(e.Institution) == "" {
+					return fmt.Errorf("institution is required")
+				}
+				if err := db.ValidatePartialDate(e.Start); err != nil {
+					return err
+				}
+				return db.ValidatePartialDate(e.End)
+			})
+			if err != nil {
+				return fmt.Errorf("education: %w", err)
+			}
+			updates["education"] = serialized
 		}
 		if profileSetFlags.industry != "" {
 			updates["industry"] = profileSetFlags.industry
-		}
-		if profileSetFlags.greetingStyle != "" {
-			valid := map[string]bool{"formal": true, "casual": true, "creative": true}
-			if !valid[profileSetFlags.greetingStyle] {
-				return fmt.Errorf("greeting-style must be one of: formal, casual, creative")
-			}
-			updates["greeting_style"] = profileSetFlags.greetingStyle
-		}
-		if profileSetFlags.signOff != "" {
-			updates["sign_off"] = profileSetFlags.signOff
 		}
 
 		// Curation brief. Each flag uses cmd.Flags().Changed so an explicit
@@ -350,10 +359,6 @@ Examples:
 				fmt.Println("    Education:      updated")
 			case "industry":
 				fmt.Println("    Industry:       updated")
-			case "greeting_style":
-				fmt.Println("    Greeting Style: updated")
-			case "sign_off":
-				fmt.Println("    Sign-Off:       updated")
 			case "current_location":
 				fmt.Println("    Current Location: updated")
 			case "seniority":
@@ -392,11 +397,9 @@ func init() {
 	profileSetCmd.Flags().StringVar(&profileSetFlags.phone, "phone", "", "Phone number")
 	profileSetCmd.Flags().StringVar(&profileSetFlags.title, "title", "", "Professional title")
 	profileSetCmd.Flags().StringVar(&profileSetFlags.skills, "skills", "", "Skills as JSON array")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.experience, "experience", "", "Experience as JSON array")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.education, "education", "", "Education as JSON array")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.experience, "experience", "", "Experience as JSON array of {title, company, start, end} objects")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.education, "education", "", "Education as JSON array of {institution, degree, start, end} objects")
 	profileSetCmd.Flags().StringVar(&profileSetFlags.industry, "industry", "", "Target industry")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.greetingStyle, "greeting-style", "", "Greeting style (formal, casual, creative)")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.signOff, "sign-off", "", "Email sign-off")
 
 	// Curation brief.
 	profileSetCmd.Flags().StringVar(&profileSetFlags.currentLocation, "current-location", "", "Where you live now (seeds salary/remote defaults)")
@@ -474,4 +477,94 @@ func parseListInput(s string) (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// parseStructuredInput parses a JSON array of structured entries for the
+// experience/education flags, validates each via validate, and serializes to
+// the stored JSON-array string.
+func parseStructuredInput[T any](raw string, toJSON func([]T) (string, error), validate func(T) error) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", fmt.Errorf("value cannot be empty")
+	}
+	var entries []T
+	if err := json.Unmarshal([]byte(trimmed), &entries); err != nil {
+		return "", fmt.Errorf("must be a JSON array of objects, e.g. '[{\"title\":\"SWE\",\"start\":\"2021-03\"}]'")
+	}
+	for i, e := range entries {
+		if err := validate(e); err != nil {
+			return "", fmt.Errorf("entry %d: %w", i+1, err)
+		}
+	}
+	return toJSON(entries)
+}
+
+// displayExperience renders structured experience entries for `profile show`.
+func displayExperience(s string) string {
+	entries := db.ParseExperienceEntries(s)
+	if len(entries) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(entries))
+	for _, e := range entries {
+		at := strings.TrimSpace(e.Company)
+		name := strings.TrimSpace(e.Title)
+		if name == "" {
+			name = at
+			at = ""
+		}
+		dates := strings.TrimSpace(e.Start)
+		if dates != "" {
+			if e.End != "" {
+				dates += " – " + e.End
+			} else {
+				dates += " – present"
+			}
+		}
+		var sb strings.Builder
+		sb.WriteString(name)
+		if at != "" {
+			sb.WriteString(" @ " + at)
+		}
+		if dates != "" {
+			sb.WriteString(" (" + dates + ")")
+		}
+		parts = append(parts, sb.String())
+	}
+	return strings.Join(parts, "; ")
+}
+
+// displayEducation renders structured education entries for `profile show`.
+func displayEducation(s string) string {
+	entries := db.ParseEducationEntries(s)
+	if len(entries) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(entries))
+	for _, e := range entries {
+		deg := strings.TrimSpace(e.Degree)
+		inst := strings.TrimSpace(e.Institution)
+		if deg == "" {
+			deg = inst
+			inst = ""
+		}
+		dates := strings.TrimSpace(e.Start)
+		if dates != "" {
+			if e.End != "" {
+				dates += " – " + e.End
+			} else {
+				dates += " – present"
+			}
+		}
+		var sb strings.Builder
+		sb.WriteString(deg)
+		if inst != "" {
+			sb.WriteString(", " + inst)
+		}
+		if dates != "" {
+			sb.WriteString(" (" + dates + ")")
+		}
+		parts = append(parts, sb.String())
+	}
+	return strings.Join(parts, "; ")
 }

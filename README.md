@@ -5,8 +5,9 @@
 # Waypoint — Job Tracker
 
 A job application tracker with a Go backend and Svelte frontend.
-Data mutations happen through the CLI; the web UI is read-only except the
-job-search brief, which you can edit in the browser (Profile → Job Search Preferences).
+Data mutations happen through the CLI; the web UI is read-only except your
+profile, which you can edit in the browser (Profile — personal info, skills,
+structured experience/education, and the job-search brief).
 The entire web UI is compiled into a single self-contained binary.
 
 ## Install
@@ -69,8 +70,8 @@ Opens at `http://localhost:8080`. Use `--port` to change the port.
 ## Usage
 
 Waypoint is CLI-first. Add, update, and delete jobs from the terminal.
-The web UI is a read-only dashboard for what you've tracked — the job-search
-brief (Profile → Job Search Preferences) is the one thing you can edit there.
+The web UI is a read-only dashboard for what you've tracked — your profile
+(Profile page) is the one thing you can edit there.
 
 ```bash
 waypoint jobs add "Google" "Senior SWE" --status Applied
