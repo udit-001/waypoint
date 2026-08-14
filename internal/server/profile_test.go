@@ -101,6 +101,70 @@ func TestUpdateProfileRejectsUnknownField(t *testing.T) {
 	}
 }
 
+func TestUpdateProfileWritesProfileFields(t *testing.T) {
+	store := db.NewFakeStore()
+	mux := muxFor(t, store)
+
+	body := `{"name":"Jane Doe","email":"jane@example.com","phone":"+1-555-0123","industry":"biotech"}`
+	rec, _ := patchProfile(t, mux, body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	p, _ := store.GetProfile()
+	if p.Name != "Jane Doe" || p.Email != "jane@example.com" || p.Phone != "+1-555-0123" || p.Industry != "biotech" {
+		t.Errorf("profile fields not written: %+v", p)
+	}
+}
+
+func TestUpdateProfileWritesStructuredExperience(t *testing.T) {
+	store := db.NewFakeStore()
+	mux := muxFor(t, store)
+
+	body := `{"experience":[{"title":"Senior SWE","company":"Acme","start":"2019-01","end":"2023-06"}],"education":[{"institution":"MIT","degree":"BS CS","start":"2015","end":"2019"}]}`
+	rec, _ := patchProfile(t, mux, body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	p, _ := store.GetProfile()
+	if p.Experience != `[{"title":"Senior SWE","company":"Acme","start":"2019-01","end":"2023-06"}]` {
+		t.Errorf("Experience = %q", p.Experience)
+	}
+	if p.Education != `[{"institution":"MIT","degree":"BS CS","start":"2015","end":"2019"}]` {
+		t.Errorf("Education = %q", p.Education)
+	}
+	// Derived seniority now comes from the date range, not regex.
+	b, _ := store.GetBrief()
+	if b.Facts.Seniority != "mid" {
+		t.Errorf("seniority = %q, want mid (from date range)", b.Facts.Seniority)
+	}
+}
+
+func TestUpdateProfileRejectsBadStructured(t *testing.T) {
+	cases := []struct {
+		name, body, wantErr string
+	}{
+		{"experience missing title", `{"experience":[{"company":"Acme"}]}`, "title is required"},
+		{"experience bad date", `{"experience":[{"title":"SWE","start":"03/2021"}]}`, "invalid date"},
+		{"education missing institution", `{"education":[{"degree":"BS"}]}`, "institution is required"},
+		{"education bad end date", `{"education":[{"institution":"MIT","end":"2021-13"}]}`, "invalid date"},
+		{"experience not an array", `{"experience":{"title":"SWE"}}`, "array of objects"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := muxFor(t, db.NewFakeStore())
+			rec, _ := patchProfile(t, mux, tc.body)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tc.wantErr) {
+				t.Errorf("body = %s, want error containing %q", rec.Body.String(), tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestUpdateProfileRejectsBadValues(t *testing.T) {
 	cases := []struct {
 		name, body, wantErr string

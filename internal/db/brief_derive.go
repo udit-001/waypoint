@@ -116,31 +116,15 @@ func salaryFloorBrief(stored string) []SalaryFloorEntry {
 	return entries
 }
 
-// experienceYear pulls the first parseable "N years|yrs|yr" figure from an
-// experience string. Returns 0 when none is present.
+// experienceYearsRe matches a "N years|yrs|yr" figure in free text. It is the
+// fallback for experience entries without structured dates (see yearsInText).
 var experienceYearsRe = regexp.MustCompile(`(?i)(\d+)\s*y(?:ea)?rs?`)
 
-func experienceYears(s string) int {
-	m := experienceYearsRe.FindStringSubmatch(s)
-	if m == nil {
-		return 0
-	}
-	var n int
-	if _, err := fmt.Sscanf(m[1], "%d", &n); err != nil {
-		return 0
-	}
-	return n
-}
-
-// DeriveSeniority maps total experience years to a level. Returns "" when the
-// experience list carries no parseable year signal.
+// DeriveSeniority maps total experience to a level. Returns "" when experience
+// carries no year signal. Structured entries are counted by date range; entries
+// without dates fall back to a regex on their text.
 func DeriveSeniority(experience string) string {
-	var total int
-	for _, e := range stringList(experience) {
-		if y := experienceYears(e); y > total {
-			total = y
-		}
-	}
+	total := experienceYears(experience)
 	switch {
 	case total == 0:
 		return ""

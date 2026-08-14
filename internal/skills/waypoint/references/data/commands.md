@@ -28,6 +28,6 @@ All commands: `--json`.
 | Cmd | Flags |
 |-----|-------|
 | `categories list\|add\|rename\|delete` | |
-| `profile show\|set` | `--name` `--email` `--phone` `--title` `--skills` `--experience` `--education` `--industry` `--greeting-style` `--sign-off` |
+| `profile show\|set` | `--name` `--email` `--phone` `--title` `--skills` `--experience` `--education` `--industry` (experience/education take JSON object arrays) |
 | `start` | `--port` (8080) |
 | `init` | `--force` |

@@ -10,7 +10,14 @@ All data lives in a SQLite database at `~/.waypoint/waypoint.db`.
 | `categories` | Custom labels for grouping jobs |
 | `artifacts` | AI-generated content with multi-variant support |
 | `history` | Activity audit trail |
-| `profile` | Name, skills, experience, education |
+| `profile` | Name, skills, experience, education, brief fields |
+
+Experience/education are TEXT columns holding a JSON array of structured
+objects — `experience`: `{title, company, start, end}`, `education`:
+`{institution, degree, start, end}`. Dates are partial ISO (`YYYY-MM`, or
+`YYYY` when the month is unknown); an empty `end` means "present". Legacy
+flat-string arrays upgrade on read (`ParseExperienceEntries`). `DeriveSeniority`
+totals date ranges (regex is a fallback for date-less entries).
 | `settings` | Theme, default view, reminders |
 | `jobs_fts` / `artifacts_fts` | FTS5 full-text search indices |
 
@@ -78,6 +85,6 @@ same `db.Store` seam as the CLI — the web UI is read-only for everything else.
 | `GET /api/artifacts/{id}` | Single artifact with all variants |
 | `GET /api/profile` | User profile |
 | `GET /api/brief` | Curation brief (facts/constraints/preferences + open frontier) |
-| `PATCH /api/profile` | Write brief fields (verbatim keys from `profile brief --json`); returns the updated brief |
+| `PATCH /api/profile` | Write any profile field (verbatim keys the CLI writes; experience/education as structured entry arrays); returns the updated brief |
 | `GET /api/settings` | App settings |
 | `GET /api/search?q=` | Unified search across jobs and artifacts |

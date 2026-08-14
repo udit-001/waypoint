@@ -30,7 +30,7 @@ Alias: `waypoint cat`
 |---------|-------------|
 | `waypoint profile show` | Display your profile (`--json` for machine output) |
 | `waypoint scrape run <name>` | Run a job scraper. Flags: `--query`, `--location`, `--limit`, `--jobage`, `--remote`, `--page`, `--today <YYYY-MM-DD>` (reference date for recency) |
-| `waypoint profile set` | Update profile fields. Flags: `--name`, `--email`, `--phone`, `--title`, `--skills`, `--experience`, `--education`, `--industry`, `--greeting-style`, `--sign-off`. List fields (`--skills`, `--experience`, `--education`) take a comma-separated list or a JSON array |
+| `waypoint profile set` | Update profile fields. Flags: `--name`, `--email`, `--phone`, `--title`, `--skills`, `--experience`, `--education`, `--industry`. `--skills` takes a comma-separated list or a JSON array; `--experience`/`--education` take a JSON array of objects (`experience`: `{title, company, start, end}`, `education`: `{institution, degree, start, end}`, dates are `YYYY-MM` or `YYYY`, empty `end` = present) |
 
 ## Artifacts
 

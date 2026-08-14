@@ -165,3 +165,49 @@ func TestProfileSetBriefJSONOutput(t *testing.T) {
 		t.Errorf("JSON output missing remote field: %q", out)
 	}
 }
+
+func TestProfileSetStructuredExperienceEducation(t *testing.T) {
+	fake := db.NewFakeStore()
+	store = fake
+	jsonOut = false
+
+	if err := profileSetCmd.Flags().Set("experience", `[{"title":"Senior SWE","company":"Acme","start":"2021-03","end":"2023-06"}]`); err != nil {
+		t.Fatalf("Set experience: %v", err)
+	}
+	if err := profileSetCmd.Flags().Set("education", `[{"institution":"MIT","degree":"BS CS","start":"2015","end":"2019"}]`); err != nil {
+		t.Fatalf("Set education: %v", err)
+	}
+	if err := profileSetCmd.RunE(profileSetCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	p, _ := fake.GetProfile()
+	wantExp := `[{"title":"Senior SWE","company":"Acme","start":"2021-03","end":"2023-06"}]`
+	if p.Experience != wantExp {
+		t.Errorf("Experience = %q, want %q", p.Experience, wantExp)
+	}
+	wantEdu := `[{"institution":"MIT","degree":"BS CS","start":"2015","end":"2019"}]`
+	if p.Education != wantEdu {
+		t.Errorf("Education = %q, want %q", p.Education, wantEdu)
+	}
+}
+
+func TestProfileSetStructuredExperienceValidation(t *testing.T) {
+	fake := db.NewFakeStore()
+	store = fake
+	jsonOut = false
+
+	// Missing title is rejected.
+	if err := profileSetCmd.Flags().Set("experience", `[{"company":"Acme"}]`); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if err := profileSetCmd.RunE(profileSetCmd, nil); err == nil {
+		t.Fatal("expected error for experience without title, got nil")
+	}
+	// Bad date is rejected.
+	if err := profileSetCmd.Flags().Set("experience", `[{"title":"SWE","start":"03/2021"}]`); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if err := profileSetCmd.RunE(profileSetCmd, nil); err == nil {
+		t.Fatal("expected error for invalid start date, got nil")
+	}
+}
