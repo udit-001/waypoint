@@ -4,16 +4,94 @@ import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
   import Spinner from '../components/Spinner.svelte';
   import Card from '../components/Card.svelte';
+  import ChipInput from '../components/ChipInput.svelte';
+  import { prettify } from '../lib/brief.js';
   import * as api from '../stores/api.svelte.js';
 
   let profileData = $state(null);
+  let briefData = $state(null);
+
+  let saving = $state(false);
+  let saveError = $state(null);
+  let saveOk = $state(false);
+  let saveOkTimer = null;
+
+  // Editable salary-floor rows (free-text inputs commit on blur).
+  let salaryRows = $state([]);
+
+  const REMOTE_OPTIONS = [
+    { value: '', label: 'Any' },
+    { value: 'remote', label: 'Remote' },
+    { value: 'hybrid', label: 'Hybrid' },
+    { value: 'onsite', label: 'Onsite' },
+  ];
+  const VISA_OPTIONS = [
+    { value: '', label: 'Any' },
+    { value: 'yes', label: 'Yes' },
+    { value: 'no', label: 'No' },
+  ];
 
   onMount(async () => {
     setPage({ title: 'Profile' });
 
-    await api.profile.ensure();
+    await Promise.all([api.profile.ensure(), api.brief.ensure()]);
     profileData = api.profile.value;
+    briefData = api.brief.value;
+    syncSalaryRows();
   });
+
+  async function save(fields) {
+    saving = true;
+    saveError = null;
+    saveOk = false;
+    try {
+      briefData = await api.updateBrief(fields);
+      saveOk = true;
+      clearTimeout(saveOkTimer);
+      saveOkTimer = setTimeout(() => (saveOk = false), 1800);
+    } catch (e) {
+      saveError = e.message || 'Save failed';
+    } finally {
+      saving = false;
+    }
+    syncSalaryRows();
+  }
+
+  function syncSalaryRows() {
+    const floors = briefData?.constraints?.salary_floor || [];
+    salaryRows = floors.map((f) => ({ region: f.region || '', amount: String(f.amount ?? '') }));
+  }
+
+  function setVisa(value) {
+    if (briefData) briefData.constraints.visa_sponsorship = value;
+    save({ visa_sponsorship: value });
+  }
+
+  function setRemote(value) {
+    if (briefData) briefData.preferences.remote = value;
+    save({ remote: value });
+  }
+
+  function setList(key, value) {
+    if (briefData) briefData.preferences[key] = value;
+    save({ [key]: value });
+  }
+
+  function addSalaryRow() {
+    salaryRows = [...salaryRows, { region: '', amount: '' }];
+  }
+
+  function removeSalaryRow(i) {
+    salaryRows = salaryRows.filter((_, idx) => idx !== i);
+    commitSalaryRows();
+  }
+
+  function commitSalaryRows() {
+    const floors = salaryRows
+      .map((r) => ({ region: r.region.trim(), amount: Number(r.amount) }))
+      .filter((f) => f.region !== '' && Number.isFinite(f.amount) && f.amount > 0);
+    save({ salary_floor: floors });
+  }
 
   function esc(str) {
     if (!str) return '-';
@@ -25,8 +103,197 @@ import { setPage } from '../stores/page.svelte.js';
 
 <div class="space-y-4">
   <p class="text-sm text-slate-400 mb-4">
-    Your profile personalizes AI-generated content. Manage it via the CLI.
+    Your profile personalizes AI-generated content. The brief below is what the agent reads when
+    searching for jobs — facts come from your resume/seed, while constraints and preferences are
+    editable right here.
   </p>
+
+  <!-- Job Search Preferences -->
+  {#if briefData}
+    <Card hover={false}>
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200">
+            {@html iconSvg('target', 18)} Job Search Preferences
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">
+            {briefData.complete
+              ? 'Brief complete — ready to search on.'
+              : `${briefData.open.length} preference${briefData.open.length === 1 ? '' : 's'} still open.`}
+          </p>
+        </div>
+        <div class="flex items-center gap-2 text-xs shrink-0">
+          {#if saving}
+            <span class="text-slate-400">Saving…</span>
+          {:else if saveOk}
+            <span class="text-emerald-600 dark:text-emerald-400">Saved ✓</span>
+          {/if}
+          {#if saveError}
+            <span class="text-red-600 dark:text-red-400">{saveError}</span>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Facts — seeded, read-only -->
+      <section>
+        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Facts</h4>
+        <div class="grid grid-cols-3 gap-4 mb-1">
+          <div>
+            <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Title</label>
+            <div class="text-sm text-slate-700 dark:text-slate-200">{briefData.facts.title || '-'}</div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Seniority</label>
+            <div class="text-sm text-slate-700 dark:text-slate-200 capitalize">{briefData.facts.seniority || '-'}</div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Current Location</label>
+            <div class="text-sm text-slate-700 dark:text-slate-200">{briefData.facts.current_location || '-'}</div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Skills</label>
+          {#if briefData.facts.skills?.length}
+            <div class="flex flex-wrap gap-1.5">
+              {#each briefData.facts.skills as skill}
+                <span class="bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300 rounded-full px-2.5 py-0.5 text-xs">{skill}</span>
+              {/each}
+            </div>
+          {:else}
+            <p class="text-sm text-slate-400">No skills seeded yet.</p>
+          {/if}
+        </div>
+        <p class="text-[11px] text-slate-400 -mt-1">Facts are set by your resume seed and are read-only here.</p>
+      </section>
+
+      <div class="my-4 border-t border-slate-100 dark:border-slate-700" />
+
+      <!-- Constraints — editable -->
+      <section>
+        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Constraints</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Visa Sponsorship</label>
+            <select
+              class="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 px-2.5 h-[38px] outline-none focus:border-slate-400"
+              value={briefData.constraints.visa_sponsorship}
+              onchange={(e) => setVisa(e.currentTarget.value)}
+            >
+              {#each VISA_OPTIONS as opt}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Salary Floor</label>
+            <div class="space-y-1.5">
+              {#each salaryRows as row, i}
+                <div class="flex items-center gap-1.5">
+                  <input
+                    class="flex-1 min-w-0 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 px-2.5 h-[38px] outline-none focus:border-slate-400 placeholder:text-slate-400"
+                    placeholder="Region (e.g. IN)"
+                    bind:value={salaryRows[i].region}
+                    onblur={commitSalaryRows}
+                  />
+                  <input
+                    class="flex-1 min-w-0 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 px-2.5 h-[38px] outline-none focus:border-slate-400 placeholder:text-slate-400"
+                    placeholder="Amount"
+                    bind:value={salaryRows[i].amount}
+                    onblur={commitSalaryRows}
+                  />
+                  <button
+                    type="button"
+                    class="size-7 grid place-items-center rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer bg-transparent border-none shrink-0"
+                    aria-label="Remove salary floor"
+                    onclick={() => removeSalaryRow(i)}
+                  >{@html iconSvg('close', 15)}</button>
+                </div>
+              {/each}
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer bg-transparent border-none p-0"
+                onclick={addSalaryRow}
+              >{@html iconSvg('plus', 14)} Add salary floor</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="my-4 border-t border-slate-100 dark:border-slate-700" />
+
+      <!-- Preferences — chip-editable -->
+      <section>
+        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Preferences</h4>
+        <div class="space-y-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Remote</label>
+              <select
+                class="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 px-2.5 h-[38px] outline-none focus:border-slate-400"
+                value={briefData.preferences.remote}
+                onchange={(e) => setRemote(e.currentTarget.value)}
+              >
+                {#each REMOTE_OPTIONS as opt}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Location Preference</label>
+              <ChipInput
+                value={briefData.preferences.location_preference}
+                placeholder="e.g. Bengaluru, Remote"
+                {prettify}
+                onchange={(v) => setList('location_preference', v)}
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Companies</label>
+              <ChipInput
+                value={briefData.preferences.companies}
+                placeholder="e.g. Acme, Globex"
+                {prettify}
+                onchange={(v) => setList('companies', v)}
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Avoid Companies</label>
+              <ChipInput
+                value={briefData.preferences.avoid_companies}
+                placeholder="e.g. Enron"
+                {prettify}
+                onchange={(v) => setList('avoid_companies', v)}
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Keywords</label>
+              <ChipInput
+                value={briefData.preferences.keywords}
+                placeholder="e.g. Go, Distributed systems"
+                {prettify}
+                onchange={(v) => setList('keywords', v)}
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Dealbreakers</label>
+              <ChipInput
+                value={briefData.preferences.dealbreakers}
+                placeholder="e.g. Night shifts, Travel"
+                {prettify}
+                onchange={(v) => setList('dealbreakers', v)}
+              />
+            </div>
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-2">
+          Stored values are the normalized match form (e.g. <span class="font-mono">golang</span>);
+          they display prettified and never feed a search.
+        </p>
+      </section>
+    </Card>
+  {:else if api.brief.loading}
+    <Spinner text="Loading brief..." />
+  {/if}
 
   {#if profileData}
     <!-- Personal Info -->

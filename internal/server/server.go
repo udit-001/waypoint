@@ -45,6 +45,8 @@ func newMux(store db.Store, staticFS fs.FS) http.Handler {
 
 	// Profile & Settings
 	mux.HandleFunc("GET /api/profile", handleGetProfile(store))
+	mux.HandleFunc("GET /api/brief", handleGetBrief(store))
+	mux.HandleFunc("PATCH /api/profile", handleUpdateProfile(store))
 	mux.HandleFunc("GET /api/settings", handleGetSettings(store))
 
 	// PWA routes with proper cache headers.

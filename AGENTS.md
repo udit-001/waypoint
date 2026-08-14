@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Waypoint — a job-application tracker. Go backend (cobra CLI + REST server, pure-Go SQLite via `modernc.org/sqlite`, **no CGO**) + Svelte 5/Vite 8 frontend **embedded** into the binary via `//go:embed web/dist`. Mutations happen in the CLI; the web UI is read-only. `web/dist/` is committed, so `go build` alone produces a working binary — Node/pnpm are only needed when frontend source changes.
+Waypoint — a job-application tracker. Go backend (cobra CLI + REST server, pure-Go SQLite via `modernc.org/sqlite`, **no CGO**) + Svelte 5/Vite 8 frontend **embedded** into the binary via `//go:embed web/dist`. Most mutations happen in the CLI; the web UI is read-only except the profile brief — `PATCH /api/profile` writes the brief through the same `db.Store` seam as the CLI (see `internal/server/profile.go`). `web/dist/` is committed, so `go build` alone produces a working binary — Node/pnpm are only needed when frontend source changes.
 
 This file is for **contributors** (you, the agent working on the codebase). The product-usage skill at `.opencode/skills/waypoint/SKILL.md` is for end-users driving the job-search pipeline — different audience, don't conflate.
 
