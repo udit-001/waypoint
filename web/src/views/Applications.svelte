@@ -170,7 +170,7 @@
         class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedCli ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
         onclick={copyCli}
       >{copiedCli ? '✓ Copied' : 'Copy'}</button>
-      <pre class="bg-slate-100 dark:bg-slate-800 px-5 py-3 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300">waypoint jobs add "Company" "Position"</pre>
+      <pre class="bg-slate-100 dark:bg-slate-800 px-5 pr-20 py-3 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300">waypoint jobs add "Company" "Position"</pre>
     </div>
   </div>
 {:else if filteredJobs.length === 0 && filter.any}
