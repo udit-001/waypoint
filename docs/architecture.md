@@ -19,6 +19,13 @@ objects — `experience`: `{title, company, start, end, description}`, `educatio
 is free-text detail (role scope, bullet points, GPA) and is optional. Legacy
 flat-string arrays upgrade on read (`ParseExperienceEntries`). `DeriveSeniority`
 totals date ranges (regex is a fallback for date-less entries).
+
+Profile writes use the **document-patch pattern**: the writable surface is one
+JSON document (the same shape `profile show --json` emits). `waypoint profile
+schema --json` prints the empty template; `profile set --file doc.json` (CLI)
+and `PATCH /api/profile` (web) patch only the keys present. Keys, validation,
+and the schema template live behind the db seam (`internal/db/documents.go`),
+shared by both surfaces.
 | `settings` | Theme, default view, reminders |
 | `jobs_fts` / `artifacts_fts` | FTS5 full-text search indices |
 
@@ -86,6 +93,6 @@ same `db.Store` seam as the CLI — the web UI is read-only for everything else.
 | `GET /api/artifacts/{id}` | Single artifact with all variants |
 | `GET /api/profile` | User profile |
 | `GET /api/brief` | Curation brief (facts/constraints/preferences + open frontier) |
-| `PATCH /api/profile` | Write any profile field (verbatim keys the CLI writes; experience/education as structured entry arrays); returns the updated brief |
+| `PATCH /api/profile` | Write any profile field as a patch document (camelCase keys matching `GET /api/profile` and the CLI's `profile set --file`; `waypoint profile schema` shows the writable surface); returns the updated brief |
 | `GET /api/settings` | App settings |
 | `GET /api/search?q=` | Unified search across jobs and artifacts |

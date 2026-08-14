@@ -24,7 +24,7 @@ waypoint jobs stats --json && waypoint profile show --json
 ```
 
 - `total: 0` + empty `name` → fresh install. Ask conversationally, run commands yourself:
-  1. "Name and roles you're targeting?" → `profile set --name "..." --title "..." --skills "Go,React"`
+  1. "Name and roles you're targeting?" → `read` [data/profile](references/data/profile.md), write a profile document, `profile set --file <doc>`
   2. "Jobs already tracking?" → `jobs add "..." "..." --status "..."` per job
   3. "See dashboard?" → `start`
 - `total: 0` + has name → no jobs yet, ask if they want to add
@@ -43,9 +43,11 @@ waypoint jobs list --search "<company or role>" --json
 Found → use ID. Multiple → ask user. None → `read` [data/job-extract](references/data/job-extract.md) to parse from URL, PDF, or text, then `jobs add`.
 
 Profile `name`, `title`, `skills` must be non-empty. Missing → ask before generating.
+Write a profile document with the missing fields and apply it:
 ```bash
-waypoint profile set --name "Jane Doe" --title "Senior Engineer" --skills "Go,React,AWS"
+waypoint profile set --file <path-to-profile-doc>
 ```
+See [data/profile](references/data/profile.md) for the document rules.
 
 **Done when**: job ID resolved, profile complete.
 
@@ -80,7 +82,7 @@ waypoint jobs update 5 --notes "Salary: $35-55/hr — great fit"
 Every generation follows the same **draft**: pull data → pick options → draft → review. `read` the relevant gen-* reference for its options, structures, and done criteria.
 
 1. `waypoint jobs get <id>` — pull company, position, notes, URL
-2. `waypoint profile show --json` — pull name, skills, experience, education
+2. `waypoint profile show --json` — pull name, skills, experience, education (entry `description` fields are the depth for resume/SOP/cover-letter material)
 3. `read` the gen-* reference for options (tone, style, type, etc.)
 4. Pick options from user request; ask if ambiguous
 5. Draft following the reference's structure
@@ -105,7 +107,7 @@ Suggest a natural next step:
 - Cover letter → "Follow-up email too?"
 - Interview prep → "Career summary as well?"
 - First artifact → "`waypoint start` to see in web UI"
-- User shared new personal details (experience, education, skills, contact) → "I used this in your [artifact]. Save it to your profile for next time?" → `profile set`
+- User shared new personal details (experience, education, skills, contact) → "I used this in your [artifact]. Save it to your profile for next time?" → `read` [data/profile](references/data/profile.md) and save them via `profile set --file`
 
 ## Data sources
 
@@ -126,10 +128,11 @@ Suggest a natural next step:
 | [gen-career-summary](references/gen-career-summary.md) | resume summary in 5 styles |
 | [gen-statement-of-purpose](references/gen-statement-of-purpose.md) | SOP in 4 tones |
 
-### Data extraction — `read` the data/* reference
+### Data & profile — `read` the data/* reference
 
 | Ref | Output |
 |-----|--------|
+| [data/profile](references/data/profile.md) | profile read/write surface: `show --json` · `schema` template · `set --file` patch |
 | [data/job-extract](references/data/job-extract.md) | parse job from URL/PDF/text → jobs add |
 | [data/exa-search](references/data/exa-search.md) | discovery fallback + company/people/news research on tracked jobs |
 | [data/pdf-extract](references/data/pdf-extract.md) | extract text from PDFs (if pdftotext) |
