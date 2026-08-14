@@ -10,20 +10,23 @@ import (
 
 // ExperienceEntry is one structured role on a resume. Dates are partial ISO
 // (YYYY-MM, or YYYY when the month is unknown); an empty End means "present".
+// Description carries free-text detail about the role (bullet points, scope).
 type ExperienceEntry struct {
-	Title   string `json:"title"`
-	Company string `json:"company"`
-	Start   string `json:"start"`
-	End     string `json:"end"`
+	Title       string `json:"title"`
+	Company     string `json:"company"`
+	Start       string `json:"start"`
+	End         string `json:"end"`
+	Description string `json:"description,omitempty"`
 }
 
 // EducationEntry is one structured credential. Same date convention as
-// ExperienceEntry.
+// ExperienceEntry; Description carries free-text detail (GPA, focus areas).
 type EducationEntry struct {
 	Institution string `json:"institution"`
 	Degree      string `json:"degree"`
 	Start       string `json:"start"`
 	End         string `json:"end"`
+	Description string `json:"description,omitempty"`
 }
 
 // ParseExperienceEntries parses the stored JSON-array string into structured
@@ -98,7 +101,7 @@ func educationToJSON(entries []EducationEntry) (string, error) {
 func SerializeExperience(raw []byte) (string, error) {
 	var entries []ExperienceEntry
 	if err := json.Unmarshal(raw, &entries); err != nil {
-		return "", fmt.Errorf("must be a JSON array of {title, company, start, end} objects")
+		return "", fmt.Errorf("must be a JSON array of {title, company, start, end, description} objects")
 	}
 	for i, e := range entries {
 		if err := validateExperienceEntry(e); err != nil {
@@ -112,7 +115,7 @@ func SerializeExperience(raw []byte) (string, error) {
 func SerializeEducation(raw []byte) (string, error) {
 	var entries []EducationEntry
 	if err := json.Unmarshal(raw, &entries); err != nil {
-		return "", fmt.Errorf("must be a JSON array of {institution, degree, start, end} objects")
+		return "", fmt.Errorf("must be a JSON array of {institution, degree, start, end, description} objects")
 	}
 	for i, e := range entries {
 		if err := validateEducationEntry(e); err != nil {
@@ -199,7 +202,7 @@ func experienceYears(experience string) float64 {
 		if months := entryMonths(e.Start, e.End); months > 0 {
 			total += float64(months) / 12
 			dateCount++
-		} else if y := yearsInText(e.Title + " " + e.Company); y > 0 {
+		} else if y := yearsInText(e.Title + " " + e.Company + " " + e.Description); y > 0 {
 			total += float64(y)
 		}
 	}

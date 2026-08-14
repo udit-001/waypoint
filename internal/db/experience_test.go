@@ -15,6 +15,7 @@ func TestParseExperienceEntries(t *testing.T) {
 		{"empty", "", nil},
 		{"empty array", "[]", nil},
 		{"structured objects pass through", `[{"title":"SWE","company":"Acme","start":"2021-03","end":"2023-06"}]`, []ExperienceEntry{{Title: "SWE", Company: "Acme", Start: "2021-03", End: "2023-06"}}},
+		{"description parses", `[{"title":"SWE","company":"Acme","description":"Led team of 5"}]`, []ExperienceEntry{{Title: "SWE", Company: "Acme", Description: "Led team of 5"}}},
 		{"legacy flat strings upgrade", `["5 years backend development","Intern"]`, []ExperienceEntry{{Title: "5 years backend development"}, {Title: "Intern"}}},
 		{"mixed objects and legacy strings", `["Intern",{"title":"SWE","start":"2021-03"}]`, []ExperienceEntry{{Title: "Intern"}, {Title: "SWE", Start: "2021-03"}}},
 		{"blank legacy strings dropped", `["  ",{"title":"SWE"}]`, []ExperienceEntry{{Title: "SWE"}}},
@@ -42,7 +43,7 @@ func TestParseEducationEntries(t *testing.T) {
 }
 
 func TestExperienceToJSONRoundTrip(t *testing.T) {
-	entries := []ExperienceEntry{{Title: "SWE", Company: "Acme", Start: "2021-03", End: ""}}
+	entries := []ExperienceEntry{{Title: "SWE", Company: "Acme", Start: "2021-03", End: "", Description: "Shipped payments platform"}}
 	json, err := experienceToJSON(entries)
 	if err != nil {
 		t.Fatalf("experienceToJSON: %v", err)
@@ -50,6 +51,25 @@ func TestExperienceToJSONRoundTrip(t *testing.T) {
 	got := ParseExperienceEntries(json)
 	if !reflect.DeepEqual(got, entries) {
 		t.Errorf("round-trip = %#v, want %#v", got, entries)
+	}
+}
+
+func TestSerializeDescriptionRoundTrip(t *testing.T) {
+	// Description survives the write seam for both experience and education.
+	exp, err := SerializeExperience([]byte(`[{"title":"SWE","company":"Acme","start":"2021-03","description":"Led team of 5"}]`))
+	if err != nil {
+		t.Fatalf("SerializeExperience: %v", err)
+	}
+	if got := ParseExperienceEntries(exp); len(got) != 1 || got[0].Description != "Led team of 5" {
+		t.Errorf("experience description lost: %#v", got)
+	}
+
+	edu, err := SerializeEducation([]byte(`[{"institution":"MIT","degree":"BS","description":"GPA 3.9"}]`))
+	if err != nil {
+		t.Fatalf("SerializeEducation: %v", err)
+	}
+	if got := ParseEducationEntries(edu); len(got) != 1 || got[0].Description != "GPA 3.9" {
+		t.Errorf("education description lost: %#v", got)
 	}
 }
 
@@ -113,6 +133,7 @@ func TestDeriveSeniorityStructured(t *testing.T) {
 		{"present counts to now", entries("SWE", "2018-01", ""), "senior"},
 		{"no dates and no year signal", entries("SWE", "", ""), ""},
 		{"no dates, regex fallback in title", entries("5 years backend", "", ""), "mid"},
+		{"no dates, regex fallback in description", `[{"title":"SWE","description":"5 years backend development"}]`, "mid"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -13,9 +13,10 @@ All data lives in a SQLite database at `~/.waypoint/waypoint.db`.
 | `profile` | Name, skills, experience, education, brief fields |
 
 Experience/education are TEXT columns holding a JSON array of structured
-objects — `experience`: `{title, company, start, end}`, `education`:
-`{institution, degree, start, end}`. Dates are partial ISO (`YYYY-MM`, or
-`YYYY` when the month is unknown); an empty `end` means "present". Legacy
+objects — `experience`: `{title, company, start, end, description}`, `education`:
+`{institution, degree, start, end, description}`. Dates are partial ISO (`YYYY-MM`, or
+`YYYY` when the month is unknown); an empty `end` means "present". `description`
+is free-text detail (role scope, bullet points, GPA) and is optional. Legacy
 flat-string arrays upgrade on read (`ParseExperienceEntries`). `DeriveSeniority`
 totals date ranges (regex is a fallback for date-less entries).
 | `settings` | Theme, default view, reminders |

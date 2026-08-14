@@ -12,6 +12,8 @@
     secondaryKey,
     secondaryLabel,
     secondaryPlaceholder,
+    descriptionKey = 'description',
+    descriptionPlaceholder = 'Details, achievements, impact…',
     onchange,
   } = $props();
 
@@ -21,6 +23,7 @@
     rows = (entries ?? []).map((e) => ({
       primary: e[primaryKey] || '',
       secondary: e[secondaryKey] || '',
+      description: e[descriptionKey] || '',
       start: e.start || '',
       end: e.end || '',
       current: (e.end || '') === '',
@@ -34,6 +37,7 @@
       .map((r) => ({
         [primaryKey]: r.primary.trim(),
         [secondaryKey]: r.secondary.trim(),
+        [descriptionKey]: r.description.trim(),
         start: r.start,
         end: r.current ? '' : r.end,
       }))
@@ -41,6 +45,7 @@
         (e) =>
           e[primaryKey] !== '' ||
           e[secondaryKey] !== '' ||
+          e[descriptionKey] !== '' ||
           e.start !== '' ||
           e.end !== '',
       );
@@ -51,7 +56,7 @@
   }
 
   function addRow() {
-    rows = [...rows, { primary: '', secondary: '', start: '', end: '', current: false }];
+    rows = [...rows, { primary: '', secondary: '', description: '', start: '', end: '', current: false }];
   }
 
   function removeRow(i) {
@@ -101,6 +106,7 @@
           <input
             class="wp-input w-full"
             type="month"
+            placeholder="YYYY-MM"
             value={row.start}
             onchange={(e) => {
               rows[i].start = e.currentTarget.value;
@@ -113,6 +119,7 @@
           <input
             class="wp-input w-full"
             type="month"
+            placeholder="YYYY-MM"
             value={row.end}
             disabled={row.current}
             onchange={(e) => {
@@ -131,6 +138,19 @@
           aria-label="Remove entry"
           onclick={() => removeRow(i)}
         >{@html iconSvg('close', 15)}</button>
+      </div>
+      <div>
+        <label class="wp-label">Description</label>
+        <textarea
+          class="wp-input w-full resize-y min-h-16"
+          rows="2"
+          placeholder={descriptionPlaceholder}
+          value={row.description}
+          oninput={(e) => {
+            rows[i].description = e.currentTarget.value;
+          }}
+          onblur={commit}
+        />
       </div>
     </div>
   {/each}
