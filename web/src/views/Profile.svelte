@@ -45,7 +45,7 @@ import { setPage } from '../stores/page.svelte.js';
   // refreshes profileData after the write (brief-only edits don't need to).
   const PROFILE_KEYS = new Set([
     'name', 'email', 'phone', 'title', 'industry',
-    'current_location', 'skills', 'experience', 'education', 'seniority',
+    'currentLocation', 'skills', 'experience', 'education', 'seniority',
   ]);
 
   onMount(async () => {
@@ -85,7 +85,7 @@ import { setPage } from '../stores/page.svelte.js';
 
   function setVisa(value) {
     if (briefData) briefData.constraints.visa_sponsorship = value;
-    save({ visa_sponsorship: value });
+    save({ visaSponsorship: value });
   }
 
   function setRemote(value) {
@@ -93,8 +93,19 @@ import { setPage } from '../stores/page.svelte.js';
     save({ remote: value });
   }
 
+  // The brief's preference keys are the profile doc keys in snake_case — the
+  // bridge keeps the two documents' vocabularies separate.
+  const BRIEF_PREF_KEYS = {
+    locationPreference: 'location_preference',
+    companies: 'companies',
+    avoidCompanies: 'avoid_companies',
+    keywords: 'keywords',
+    dealbreakers: 'dealbreakers',
+  };
+
   function setList(key, value) {
-    if (briefData) briefData.preferences[key] = value;
+    const briefKey = BRIEF_PREF_KEYS[key];
+    if (briefData && briefKey) briefData.preferences[briefKey] = value;
     save({ [key]: value });
   }
 
@@ -111,7 +122,7 @@ import { setPage } from '../stores/page.svelte.js';
     const floors = salaryRows
       .map((r) => ({ region: r.region.trim(), amount: Number(r.amount) }))
       .filter((f) => f.region !== '' && Number.isFinite(f.amount) && f.amount > 0);
-    save({ salary_floor: floors });
+    save({ salaryFloor: floors });
   }
 </script>
 
@@ -157,7 +168,7 @@ import { setPage } from '../stores/page.svelte.js';
               value={briefData.preferences.location_preference}
               placeholder="e.g. Bengaluru, Remote"
               {prettify}
-              onchange={(v) => setList('location_preference', v)}
+              onchange={(v) => setList('locationPreference', v)}
             />
           </Field>
           <Field label="Companies">
@@ -173,7 +184,7 @@ import { setPage } from '../stores/page.svelte.js';
               value={briefData.preferences.avoid_companies}
               placeholder="e.g. Enron"
               {prettify}
-              onchange={(v) => setList('avoid_companies', v)}
+              onchange={(v) => setList('avoidCompanies', v)}
             />
           </Field>
           <Field label="Keywords">
@@ -257,7 +268,7 @@ import { setPage } from '../stores/page.svelte.js';
         <TextInput label="Email" type="email" value={profileData.email} placeholder="jane@example.com" oncommit={(v) => save({ email: v })} />
         <TextInput label="Phone" value={profileData.phone} placeholder="+1-555-0123" oncommit={(v) => save({ phone: v })} />
         <TextInput label="Industry" value={profileData.industry} placeholder="Biotech" oncommit={(v) => save({ industry: v })} />
-        <TextInput label="Current Location" value={profileData.currentLocation} placeholder="Bengaluru" oncommit={(v) => save({ current_location: v })} />
+        <TextInput label="Current Location" value={profileData.currentLocation} placeholder="Bengaluru" oncommit={(v) => save({ currentLocation: v })} />
         {#if briefData?.facts?.seniority}
           <div>
             <label class="wp-label">Seniority</label>
