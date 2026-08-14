@@ -149,7 +149,7 @@ func TestUpdateProfileRejectsBadStructured(t *testing.T) {
 		{"experience bad date", `{"experience":[{"title":"SWE","start":"03/2021"}]}`, "invalid date"},
 		{"education missing institution", `{"education":[{"degree":"BS"}]}`, "institution is required"},
 		{"education bad end date", `{"education":[{"institution":"MIT","end":"2021-13"}]}`, "invalid date"},
-		{"experience not an array", `{"experience":{"title":"SWE"}}`, "array of objects"},
+		{"experience not an array", `{"experience":{"title":"SWE"}}`, "must be a JSON array"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

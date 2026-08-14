@@ -28,6 +28,11 @@ All commands: `--json`.
 | Cmd | Flags |
 |-----|-------|
 | `categories list\|add\|rename\|delete` | |
-| `profile show\|set` | `--name` `--email` `--phone` `--title` `--skills` `--experience` `--education` `--industry` (experience/education take JSON object arrays) |
+| `profile show\|set` | `--name` `--email` `--phone` `--title` `--skills` `--experience` `--education` `--industry` `--experience-file` `--education-file` |
+
+Shell-safety rule: JSON object arrays (experience/education) are shell-unsafe
+in bash, PowerShell, and cmd — use `--experience-file`/`--education-file`
+(write the file with your file tool, never a shell heredoc), not the inline
+flags.
 | `start` | `--port` (8080) |
 | `init` | `--force` |

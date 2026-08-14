@@ -2,6 +2,7 @@ package db
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -42,9 +43,9 @@ func TestParseEducationEntries(t *testing.T) {
 
 func TestExperienceToJSONRoundTrip(t *testing.T) {
 	entries := []ExperienceEntry{{Title: "SWE", Company: "Acme", Start: "2021-03", End: ""}}
-	json, err := ExperienceToJSON(entries)
+	json, err := experienceToJSON(entries)
 	if err != nil {
-		t.Fatalf("ExperienceToJSON: %v", err)
+		t.Fatalf("experienceToJSON: %v", err)
 	}
 	got := ParseExperienceEntries(json)
 	if !reflect.DeepEqual(got, entries) {
@@ -98,7 +99,7 @@ func TestEntryMonths(t *testing.T) {
 
 func TestDeriveSeniorityStructured(t *testing.T) {
 	entries := func(title, start, end string) string {
-		json, _ := ExperienceToJSON([]ExperienceEntry{{Title: title, Company: "Acme", Start: start, End: end}})
+		json, _ := experienceToJSON([]ExperienceEntry{{Title: title, Company: "Acme", Start: start, End: end}})
 		return json
 	}
 	tests := []struct {
@@ -138,15 +139,57 @@ func TestDeriveSeniorityLegacyFallback(t *testing.T) {
 	}
 }
 
+func TestSerializeExperience(t *testing.T) {
+	raw := []byte(`[{"title":"Senior SWE","company":"Acme","start":"2021-03","end":"2023-06"}]`)
+	got, err := SerializeExperience(raw)
+	if err != nil {
+		t.Fatalf("SerializeExperience: %v", err)
+	}
+	want := `[{"title":"Senior SWE","company":"Acme","start":"2021-03","end":"2023-06"}]`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+
+	for _, tc := range []struct {
+		name, raw, wantErr string
+	}{
+		{"missing title", `[{"company":"Acme"}]`, "title is required"},
+		{"bad start date", `[{"title":"SWE","start":"03/2021"}]`, "invalid date"},
+		{"bad end date", `[{"title":"SWE","end":"2021-13"}]`, "invalid date"},
+		{"not an array", `{"title":"SWE"}`, "must be a JSON array"},
+		{"malformed", `garbage`, "must be a JSON array"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := SerializeExperience([]byte(tc.raw)); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("SerializeExperience(%s) error = %v, want containing %q", tc.raw, err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestSerializeEducation(t *testing.T) {
+	got, err := SerializeEducation([]byte(`[{"institution":"MIT","degree":"BS CS","start":"2015","end":"2019"}]`))
+	if err != nil {
+		t.Fatalf("SerializeEducation: %v", err)
+	}
+	want := `[{"institution":"MIT","degree":"BS CS","start":"2015","end":"2019"}]`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if _, err := SerializeEducation([]byte(`[{"degree":"BS"}]`)); err == nil {
+		t.Error("expected error for missing institution, got nil")
+	}
+}
+
 func TestValidatePartialDate(t *testing.T) {
 	for _, ok := range []string{"", "2021-03", "2019", "2021-12"} {
-		if err := ValidatePartialDate(ok); err != nil {
-			t.Errorf("ValidatePartialDate(%q) = %v, want nil", ok, err)
+		if err := validatePartialDate(ok); err != nil {
+			t.Errorf("validatePartialDate(%q) = %v, want nil", ok, err)
 		}
 	}
 	for _, bad := range []string{"2021-13", "garbage", "03/2021", "2021-3"} {
-		if err := ValidatePartialDate(bad); err == nil {
-			t.Errorf("ValidatePartialDate(%q) = nil, want error", bad)
+		if err := validatePartialDate(bad); err == nil {
+			t.Errorf("validatePartialDate(%q) = nil, want error", bad)
 		}
 	}
 }

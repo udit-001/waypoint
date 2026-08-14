@@ -97,32 +97,14 @@ func handleUpdateProfile(store db.Store) http.HandlerFunc {
 				}
 				updates[key] = serialized
 			case "experience":
-				serialized, err := structuredFromJSON(raw,
-					func(e db.ExperienceEntry) error {
-						if strings.TrimSpace(e.Title) == "" {
-							return fmt.Errorf("title is required")
-						}
-						if err := db.ValidatePartialDate(e.Start); err != nil {
-							return err
-						}
-						return db.ValidatePartialDate(e.End)
-					}, db.ExperienceToJSON)
+				serialized, err := db.SerializeExperience(raw)
 				if err != nil {
 					jsonError(w, "experience: "+err.Error(), http.StatusBadRequest)
 					return
 				}
 				updates[key] = serialized
 			case "education":
-				serialized, err := structuredFromJSON(raw,
-					func(e db.EducationEntry) error {
-						if strings.TrimSpace(e.Institution) == "" {
-							return fmt.Errorf("institution is required")
-						}
-						if err := db.ValidatePartialDate(e.Start); err != nil {
-							return err
-						}
-						return db.ValidatePartialDate(e.End)
-					}, db.EducationToJSON)
+				serialized, err := db.SerializeEducation(raw)
 				if err != nil {
 					jsonError(w, "education: "+err.Error(), http.StatusBadRequest)
 					return
@@ -188,22 +170,6 @@ func briefValueFromJSON(key string, raw json.RawMessage) (string, error) {
 		return "", err
 	}
 	return string(b), nil
-}
-
-// structuredFromJSON parses a client-provided array of structured entries
-// (experience/education), validates each via validate, and serializes to the
-// stored JSON-array string.
-func structuredFromJSON[T any](raw json.RawMessage, validate func(T) error, toJSON func([]T) (string, error)) (string, error) {
-	var entries []T
-	if err := json.Unmarshal(raw, &entries); err != nil {
-		return "", fmt.Errorf("expected an array of objects")
-	}
-	for i, e := range entries {
-		if err := validate(e); err != nil {
-			return "", fmt.Errorf("entry %d: %w", i+1, err)
-		}
-	}
-	return toJSON(entries)
 }
 
 // salaryFloorFromJSON parses a client-provided [{region, amount}] list.

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -209,5 +211,36 @@ func TestProfileSetStructuredExperienceValidation(t *testing.T) {
 	}
 	if err := profileSetCmd.RunE(profileSetCmd, nil); err == nil {
 		t.Fatal("expected error for invalid start date, got nil")
+	}
+}
+
+func TestProfileSetStructuredExperienceFromFile(t *testing.T) {
+	fake := db.NewFakeStore()
+	store = fake
+	jsonOut = false
+
+	// The cross-shell path: JSON object arrays go through a file (quotes and
+	// braces are shell-unsafe in bash, PowerShell, and cmd).
+	expFile := filepath.Join(t.TempDir(), "experience.json")
+	if err := os.WriteFile(expFile, []byte(`[{"title":"Senior SWE","company":"Acme","start":"2021-03","end":"2023-06"}]`), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	if err := profileSetCmd.Flags().Set("experience-file", expFile); err != nil {
+		t.Fatalf("Set experience-file: %v", err)
+	}
+	if err := profileSetCmd.RunE(profileSetCmd, nil); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	p, _ := fake.GetProfile()
+	if p.Experience != `[{"title":"Senior SWE","company":"Acme","start":"2021-03","end":"2023-06"}]` {
+		t.Errorf("Experience = %q, want content read from the file", p.Experience)
+	}
+
+	// A missing file is an error, not a silent no-op.
+	if err := profileSetCmd.Flags().Set("experience-file", filepath.Join(t.TempDir(), "missing.json")); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if err := profileSetCmd.RunE(profileSetCmd, nil); err == nil {
+		t.Fatal("expected error for missing experience file, got nil")
 	}
 }
