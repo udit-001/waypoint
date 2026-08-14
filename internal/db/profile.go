@@ -25,7 +25,7 @@ type Profile struct {
 
 	// Curation brief — constraints.
 	VisaSponsorship string `db:"visa_sponsorship" json:"visaSponsorship"`
-	SalaryFloor     string `db:"salary_floor" json:"salaryFloor"`
+	SalaryFloor     string `db:"salary_floor" json:"-"` // raw JSON string from DB; emitted as array via MarshalJSON
 
 	// Curation brief — preferences (the brief). Array-valued ones store a
 	// JSON array string and are emitted as arrays via MarshalJSON.
@@ -51,16 +51,27 @@ func (p Profile) MarshalJSON() ([]byte, error) {
 		}
 		return arr
 	}
+	parseFloors := func(s string) []SalaryFloorEntry {
+		if s == "" {
+			return []SalaryFloorEntry{}
+		}
+		var arr []SalaryFloorEntry
+		if err := json.Unmarshal([]byte(s), &arr); err != nil {
+			return []SalaryFloorEntry{}
+		}
+		return arr
+	}
 	return json.Marshal(&struct {
 		*Alias
-		Skills         []string          `json:"skills"`
-		Experience     []ExperienceEntry `json:"experience"`
-		Education      []EducationEntry  `json:"education"`
-		LocationPref   []string          `json:"locationPreference"`
-		Companies      []string          `json:"companies"`
-		AvoidCompanies []string          `json:"avoidCompanies"`
-		Keywords       []string          `json:"keywords"`
-		Dealbreakers   []string          `json:"dealbreakers"`
+		Skills         []string           `json:"skills"`
+		Experience     []ExperienceEntry  `json:"experience"`
+		Education      []EducationEntry   `json:"education"`
+		LocationPref   []string           `json:"locationPreference"`
+		Companies      []string           `json:"companies"`
+		AvoidCompanies []string           `json:"avoidCompanies"`
+		Keywords       []string           `json:"keywords"`
+		Dealbreakers   []string           `json:"dealbreakers"`
+		SalaryFloor    []SalaryFloorEntry `json:"salaryFloor"`
 	}{
 		Alias:          (*Alias)(&p),
 		Skills:         parseArray(p.Skills),
@@ -71,6 +82,7 @@ func (p Profile) MarshalJSON() ([]byte, error) {
 		AvoidCompanies: parseArray(p.AvoidCompanies),
 		Keywords:       parseArray(p.Keywords),
 		Dealbreakers:   parseArray(p.Dealbreakers),
+		SalaryFloor:    parseFloors(p.SalaryFloor),
 	})
 }
 
