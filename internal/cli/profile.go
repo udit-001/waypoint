@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/db"
 )
 
 var profileCmd = &cobra.Command{
@@ -101,7 +102,7 @@ Examples:
 		fmt.Printf("    Skills:          %s\n", joinList(b.Facts.Skills))
 		fmt.Printf("  Constraints:\n")
 		fmt.Printf("    Visa sponsorship:%s\n", displayVal(b.Constraints.VisaSponsorship))
-		fmt.Printf("    Salary floor:    %s\n", displayVal(b.Constraints.SalaryFloor))
+		fmt.Printf("    Salary floor:    %s\n", salaryFloorDisplay(b.Constraints.SalaryFloor))
 		fmt.Printf("  Preferences:\n")
 		fmt.Printf("    Remote:          %s\n", displayVal(b.Preferences.Remote))
 		fmt.Printf("    Location:        %s\n", joinList(b.Preferences.LocationPref))
@@ -129,6 +130,23 @@ func joinList(items []string) string {
 	return strings.Join(items, ", ")
 }
 
+// salaryFloorDisplay renders salary-floor entries with their derived currency,
+// e.g. "INR 100000 (IN)" or a dash when none.
+func salaryFloorDisplay(entries []db.SalaryFloorEntry) string {
+	if len(entries) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.Currency != "" {
+			parts = append(parts, fmt.Sprintf("%s %d (%s)", e.Currency, e.Amount, e.Region))
+		} else {
+			parts = append(parts, fmt.Sprintf("%d (%s)", e.Amount, e.Region))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
 // --- set ---
 
 var profileSetFlags struct {
@@ -142,6 +160,18 @@ var profileSetFlags struct {
 	industry      string
 	greetingStyle string
 	signOff       string
+
+	// Curation brief.
+	currentLocation string
+	seniority       string
+	visaSponsorship string
+	salaryFloor     string
+	remote          string
+	locationPref    string
+	companies       string
+	avoidCompanies  string
+	keywords        string
+	dealbreakers    string
 }
 
 var profileSetCmd = &cobra.Command{
@@ -207,6 +237,85 @@ Examples:
 			updates["sign_off"] = profileSetFlags.signOff
 		}
 
+		// Curation brief. Each flag uses cmd.Flags().Changed so an explicit
+		// empty value clears the field (set → open) rather than being ignored.
+		// Flag names equal the profile key verbatim (WP-103).
+		setScalar := func(flagName, key, val string) {
+			if cmd.Flags().Changed(flagName) {
+				updates[key] = val
+			}
+		}
+		setList := func(flagName, key, val string) error {
+			if !cmd.Flags().Changed(flagName) {
+				return nil
+			}
+			if val == "" {
+				updates[key] = "[]"
+				return nil
+			}
+			normalized, err := parseListInput(val)
+			if err != nil {
+				return fmt.Errorf("%s: %w", key, err)
+			}
+			updates[key] = normalized
+			return nil
+		}
+
+		setScalar("current-location", "current_location", profileSetFlags.currentLocation)
+
+		// Seniority is a derived fact: once experience carries a year signal,
+		// the level is derived, not manually assignable. Manual set is a
+		// placeholder for when experience has not arrived yet (no resume seed).
+		if cmd.Flags().Changed("seniority") {
+			exp, _ := store.GetProfile()
+			if derived := db.DeriveSeniority(exp.Experience); derived != "" {
+				return fmt.Errorf("seniority derives from experience as %q — correct experience instead, or clear it first", derived)
+			}
+			updates["seniority"] = profileSetFlags.seniority
+		}
+		setScalar("visa-sponsorship", "visa_sponsorship", profileSetFlags.visaSponsorship)
+		setScalar("remote", "remote", profileSetFlags.remote)
+
+		if cmd.Flags().Changed("salary-floor") {
+			if profileSetFlags.salaryFloor == "" {
+				updates["salary_floor"] = "[]"
+			} else {
+				// Amount-only entries default their region to the effective
+				// current location: the --current-location flag if set this
+				// run, otherwise the profile's stored value. Region is the
+				// user's decision; currency is derived from it (never asked).
+				defaultRegion := ""
+				if cmd.Flags().Changed("current-location") {
+					defaultRegion = profileSetFlags.currentLocation
+				} else {
+					if p, err := store.GetProfile(); err == nil {
+						defaultRegion = p.CurrentLocation
+					}
+				}
+				floors, err := db.ParseSalaryFloor(profileSetFlags.salaryFloor, defaultRegion)
+				if err != nil {
+					return formatError("invalid salary floor", err)
+				}
+				serialized, err := db.SalaryFloorToJSON(floors)
+				if err != nil {
+					return formatError("failed to encode salary floor", err)
+				}
+				updates["salary_floor"] = serialized
+			}
+		}
+
+		for _, f := range []struct{ flag, key, val string }{
+			{"location-preference", "location_preference", profileSetFlags.locationPref},
+			{"companies", "companies", profileSetFlags.companies},
+			{"avoid-companies", "avoid_companies", profileSetFlags.avoidCompanies},
+			{"keywords", "keywords", profileSetFlags.keywords},
+			{"dealbreakers", "dealbreakers", profileSetFlags.dealbreakers},
+		} {
+			if err := setList(f.flag, f.key, f.val); err != nil {
+				return err
+			}
+		}
+
 		if len(updates) == 0 {
 			return fmt.Errorf("no fields to update — use --flags to specify changes")
 		}
@@ -245,6 +354,26 @@ Examples:
 				fmt.Println("    Greeting Style: updated")
 			case "sign_off":
 				fmt.Println("    Sign-Off:       updated")
+			case "current_location":
+				fmt.Println("    Current Location: updated")
+			case "seniority":
+				fmt.Println("    Seniority:      updated")
+			case "visa_sponsorship":
+				fmt.Println("    Visa Sponsorship: updated")
+			case "salary_floor":
+				fmt.Println("    Salary Floor:   updated")
+			case "remote":
+				fmt.Println("    Remote:         updated")
+			case "location_preference":
+				fmt.Println("    Location:       updated")
+			case "companies":
+				fmt.Println("    Companies:      updated")
+			case "avoid_companies":
+				fmt.Println("    Avoid:          updated")
+			case "keywords":
+				fmt.Println("    Keywords:       updated")
+			case "dealbreakers":
+				fmt.Println("    Dealbreakers:   updated")
 			}
 		}
 		fmt.Println()
@@ -268,6 +397,18 @@ func init() {
 	profileSetCmd.Flags().StringVar(&profileSetFlags.industry, "industry", "", "Target industry")
 	profileSetCmd.Flags().StringVar(&profileSetFlags.greetingStyle, "greeting-style", "", "Greeting style (formal, casual, creative)")
 	profileSetCmd.Flags().StringVar(&profileSetFlags.signOff, "sign-off", "", "Email sign-off")
+
+	// Curation brief.
+	profileSetCmd.Flags().StringVar(&profileSetFlags.currentLocation, "current-location", "", "Where you live now (seeds salary/remote defaults)")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.seniority, "seniority", "", "Seniority level (junior|mid|senior); derived from experience when unset")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.visaSponsorship, "visa-sponsorship", "", "Visa sponsorship required (yes|no)")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.salaryFloor, "salary-floor", "", "Salary floor as region:amount, e.g. \"IN:100000,GB:30000\"")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.remote, "remote", "", "Workplace type (remote|hybrid|onsite)")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.locationPref, "location-preference", "", "Location preference as comma list or JSON array")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.companies, "companies", "", "Target companies as comma list or JSON array")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.avoidCompanies, "avoid-companies", "", "Companies to avoid as comma list or JSON array")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.keywords, "keywords", "", "Must-have keywords as comma list or JSON array")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.dealbreakers, "dealbreakers", "", "Must-not-have terms as comma list or JSON array")
 }
 
 // displayVal returns the value or a dash if empty.

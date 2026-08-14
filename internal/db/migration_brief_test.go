@@ -55,7 +55,8 @@ func TestMigration00006_addsBriefColumns(t *testing.T) {
 	if b.Facts.CurrentLocation != "Bengaluru" || b.Facts.Seniority != "mid" {
 		t.Errorf("facts = %+v", b.Facts)
 	}
-	if len(b.Preferences.LocationPref) != 2 || b.Preferences.LocationPref[0] != "Bengaluru" {
+	// List preferences are normalized (case-folded) for matching.
+	if len(b.Preferences.LocationPref) != 2 || b.Preferences.LocationPref[0] != "bengaluru" {
 		t.Errorf("LocationPref = %v", b.Preferences.LocationPref)
 	}
 }

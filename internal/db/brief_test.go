@@ -94,6 +94,66 @@ func TestGetBrief_partialFactsAndConstraints(t *testing.T) {
 	}
 }
 
+func TestGetBrief_seniorityPreferStoredOverDerived(t *testing.T) {
+	f := NewFakeStore()
+	f.Profile = Profile{
+		Seniority:  "senior", // stored value wins
+		Experience: `["1 year at NCBS"]`,
+		Remote:     "onsite",
+		Companies:  `["NCBS"]`,
+		Keywords:   `["genomics"]`,
+		// location_preference left empty → one open item.
+	}
+
+	b, err := f.GetBrief()
+	if err != nil {
+		t.Fatalf("GetBrief: %v", err)
+	}
+	if b.Facts.Seniority != "senior" {
+		t.Errorf("stored seniority should win, got %q", b.Facts.Seniority)
+	}
+}
+
+func TestGetBrief_seniorityDerivedFromExperience(t *testing.T) {
+	f := NewFakeStore()
+	f.Profile = Profile{
+		Experience: `["8 years in genomics"]`,
+		Remote:     "onsite",
+		Companies:  `["NCBS"]`,
+		Keywords:   `["genomics"]`,
+	}
+
+	b, err := f.GetBrief()
+	if err != nil {
+		t.Fatalf("GetBrief: %v", err)
+	}
+	if b.Facts.Seniority != "senior" {
+		t.Errorf("expected derived seniority 'senior', got %q", b.Facts.Seniority)
+	}
+}
+
+func TestGetBrief_salaryFloorCurrencyDerived(t *testing.T) {
+	f := NewFakeStore()
+	f.Profile = Profile{
+		SalaryFloor: `[{"region":"IN","amount":100000},{"region":"GB","amount":30000}]`,
+		Remote:      "onsite",
+		Companies:   `["NCBS"]`,
+		Keywords:    `["genomics"]`,
+	}
+
+	b, err := f.GetBrief()
+	if err != nil {
+		t.Fatalf("GetBrief: %v", err)
+	}
+	entries := b.Constraints.SalaryFloor
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 salary entries, got %d", len(entries))
+	}
+	if entries[0].Currency != "INR" || entries[1].Currency != "GBP" {
+		t.Errorf("currencies = %q, %q; want INR, GBP", entries[0].Currency, entries[1].Currency)
+	}
+}
+
 func TestGetBrief_optionalRefinementsDoNotGate(t *testing.T) {
 	f := NewFakeStore()
 	// dealbreakers and avoid_companies are optional refinements — empty
