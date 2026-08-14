@@ -72,7 +72,9 @@ func parseEntries[T any](stored string, wrap func(s string) T) []T {
 }
 
 // experienceToJSON serializes structured entries to the stored JSON array.
-func ExperienceToJSON(entries []ExperienceEntry) (string, error) {
+// Prefer SerializeExperience at the write seam — it validates before
+// serializing; this is the marshal-only helper used internally and by tests.
+func experienceToJSON(entries []ExperienceEntry) (string, error) {
 	b, err := json.Marshal(entries)
 	if err != nil {
 		return "", err
@@ -81,12 +83,67 @@ func ExperienceToJSON(entries []ExperienceEntry) (string, error) {
 }
 
 // educationToJSON serializes structured entries to the stored JSON array.
-func EducationToJSON(entries []EducationEntry) (string, error) {
+func educationToJSON(entries []EducationEntry) (string, error) {
 	b, err := json.Marshal(entries)
 	if err != nil {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// SerializeExperience is the write seam for experience: parse a client-supplied
+// JSON array of {title, company, start, end} objects, validate each entry, and
+// return the stored JSON-array string. Shared by the CLI and the web route so
+// the entry rule lives in one place.
+func SerializeExperience(raw []byte) (string, error) {
+	var entries []ExperienceEntry
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return "", fmt.Errorf("must be a JSON array of {title, company, start, end} objects")
+	}
+	for i, e := range entries {
+		if err := validateExperienceEntry(e); err != nil {
+			return "", fmt.Errorf("entry %d: %w", i+1, err)
+		}
+	}
+	return experienceToJSON(entries)
+}
+
+// SerializeEducation is the education counterpart of SerializeExperience.
+func SerializeEducation(raw []byte) (string, error) {
+	var entries []EducationEntry
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return "", fmt.Errorf("must be a JSON array of {institution, degree, start, end} objects")
+	}
+	for i, e := range entries {
+		if err := validateEducationEntry(e); err != nil {
+			return "", fmt.Errorf("entry %d: %w", i+1, err)
+		}
+	}
+	return educationToJSON(entries)
+}
+
+// validateExperienceEntry enforces the experience entry rule: a title, and
+// partial dates when present.
+func validateExperienceEntry(e ExperienceEntry) error {
+	if strings.TrimSpace(e.Title) == "" {
+		return fmt.Errorf("title is required")
+	}
+	if err := validatePartialDate(e.Start); err != nil {
+		return err
+	}
+	return validatePartialDate(e.End)
+}
+
+// validateEducationEntry enforces the education entry rule: an institution, and
+// partial dates when present.
+func validateEducationEntry(e EducationEntry) error {
+	if strings.TrimSpace(e.Institution) == "" {
+		return fmt.Errorf("institution is required")
+	}
+	if err := validatePartialDate(e.Start); err != nil {
+		return err
+	}
+	return validatePartialDate(e.End)
 }
 
 // partialDateMonths returns a partial ISO date (YYYY-MM or YYYY) as a count of
@@ -170,9 +227,9 @@ func yearsInText(s string) int {
 	return n
 }
 
-// ValidatePartialDate reports whether s is a valid partial ISO date (YYYY-MM or
+// validatePartialDate reports whether s is a valid partial ISO date (YYYY-MM or
 // YYYY) or empty (empty is valid — it means "present" for an end date).
-func ValidatePartialDate(s string) error {
+func validatePartialDate(s string) error {
 	if s == "" {
 		return nil
 	}

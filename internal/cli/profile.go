@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -148,14 +149,16 @@ func salaryFloorDisplay(entries []db.SalaryFloorEntry) string {
 // --- set ---
 
 var profileSetFlags struct {
-	name       string
-	email      string
-	phone      string
-	title      string
-	skills     string
-	experience string
-	education  string
-	industry   string
+	name           string
+	email          string
+	phone          string
+	title          string
+	skills         string
+	experience     string
+	experienceFile string
+	education      string
+	educationFile  string
+	industry       string
 
 	// Curation brief.
 	currentLocation string
@@ -179,9 +182,11 @@ Skills take a comma-separated list (shell-safe) or a JSON array:
   --skills "Go,React,Python"
 
 Experience and education are structured — a JSON array of objects, dates as
-YYYY-MM (or YYYY), empty end means present:
-  --experience '[{"title":"Senior SWE","company":"Acme","start":"2021-03","end":"2023-06"}]'
-  --education '[{"institution":"MIT","degree":"BS CS","start":"2015","end":"2019"}]'
+YYYY-MM (or YYYY), empty end means present. The JSON is shell-unsafe (quotes,
+braces), so pass it via a file for cross-shell safety (bash, PowerShell, cmd):
+  --experience-file path/to/experience.json   # [{"title":"Senior SWE","company":"Acme",...}]
+  --education-file  path/to/education.json    # [{"institution":"MIT","degree":"BS CS",...}]
+The inline flags accept the same JSON when the value is simple enough.
 
 Examples:
   waypoint profile set --name "Jane Doe" --title "Senior Engineer"
@@ -211,32 +216,25 @@ Examples:
 			}
 			updates["skills"] = normalized
 		}
-		// Experience / education are structured: a JSON array of objects only.
-		if profileSetFlags.experience != "" {
-			serialized, err := parseStructuredInput(profileSetFlags.experience, db.ExperienceToJSON, func(e db.ExperienceEntry) error {
-				if strings.TrimSpace(e.Title) == "" {
-					return fmt.Errorf("title is required")
-				}
-				if err := db.ValidatePartialDate(e.Start); err != nil {
-					return err
-				}
-				return db.ValidatePartialDate(e.End)
-			})
+		// Experience / education are structured: a JSON array of objects. The
+		// JSON is shell-unsafe (quotes, braces), so it prefers a file; the
+		// inline flag is accepted when the value is simple enough. Both go
+		// through the db serialize seam, which owns the entry rule.
+		if raw, err := readStructuredFlag(profileSetFlags.experience, profileSetFlags.experienceFile); raw != "" {
+			if err != nil {
+				return formatError("failed to read experience", err)
+			}
+			serialized, err := db.SerializeExperience([]byte(raw))
 			if err != nil {
 				return fmt.Errorf("experience: %w", err)
 			}
 			updates["experience"] = serialized
 		}
-		if profileSetFlags.education != "" {
-			serialized, err := parseStructuredInput(profileSetFlags.education, db.EducationToJSON, func(e db.EducationEntry) error {
-				if strings.TrimSpace(e.Institution) == "" {
-					return fmt.Errorf("institution is required")
-				}
-				if err := db.ValidatePartialDate(e.Start); err != nil {
-					return err
-				}
-				return db.ValidatePartialDate(e.End)
-			})
+		if raw, err := readStructuredFlag(profileSetFlags.education, profileSetFlags.educationFile); raw != "" {
+			if err != nil {
+				return formatError("failed to read education", err)
+			}
+			serialized, err := db.SerializeEducation([]byte(raw))
 			if err != nil {
 				return fmt.Errorf("education: %w", err)
 			}
@@ -397,8 +395,10 @@ func init() {
 	profileSetCmd.Flags().StringVar(&profileSetFlags.phone, "phone", "", "Phone number")
 	profileSetCmd.Flags().StringVar(&profileSetFlags.title, "title", "", "Professional title")
 	profileSetCmd.Flags().StringVar(&profileSetFlags.skills, "skills", "", "Skills as JSON array")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.experience, "experience", "", "Experience as JSON array of {title, company, start, end} objects")
-	profileSetCmd.Flags().StringVar(&profileSetFlags.education, "education", "", "Education as JSON array of {institution, degree, start, end} objects")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.experience, "experience", "", "Experience as JSON array of {title, company, start, end} objects (inline; prefer --experience-file)")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.experienceFile, "experience-file", "", "Read experience JSON object array from a file (overrides --experience; cross-shell safe)")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.education, "education", "", "Education as JSON array of {institution, degree, start, end} objects (inline; prefer --education-file)")
+	profileSetCmd.Flags().StringVar(&profileSetFlags.educationFile, "education-file", "", "Read education JSON object array from a file (overrides --education; cross-shell safe)")
 	profileSetCmd.Flags().StringVar(&profileSetFlags.industry, "industry", "", "Target industry")
 
 	// Curation brief.
@@ -479,24 +479,18 @@ func parseListInput(s string) (string, error) {
 	return string(b), nil
 }
 
-// parseStructuredInput parses a JSON array of structured entries for the
-// experience/education flags, validates each via validate, and serializes to
-// the stored JSON-array string.
-func parseStructuredInput[T any](raw string, toJSON func([]T) (string, error), validate func(T) error) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "", fmt.Errorf("value cannot be empty")
-	}
-	var entries []T
-	if err := json.Unmarshal([]byte(trimmed), &entries); err != nil {
-		return "", fmt.Errorf("must be a JSON array of objects, e.g. '[{\"title\":\"SWE\",\"start\":\"2021-03\"}]'")
-	}
-	for i, e := range entries {
-		if err := validate(e); err != nil {
-			return "", fmt.Errorf("entry %d: %w", i+1, err)
+// readStructuredFlag returns the raw JSON text for a structured field: the
+// file flag wins when set (the JSON is shell-unsafe, so a file is the
+// cross-shell path), otherwise the inline flag. Empty means the flag is unset.
+func readStructuredFlag(inline, file string) (string, error) {
+	if file != "" {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			return "", fmt.Errorf("reading %s: %w", file, err)
 		}
+		return string(content), nil
 	}
-	return toJSON(entries)
+	return inline, nil
 }
 
 // displayExperience renders structured experience entries for `profile show`.
