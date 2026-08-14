@@ -111,7 +111,7 @@ import { setPage } from '../stores/page.svelte.js';
   <!-- Job Search Preferences -->
   {#if briefData}
     <Card hover={false}>
-      <div class="flex items-start justify-between mb-4">
+      <div class="flex items-start justify-between mb-5">
         <div>
           <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200">
             {@html iconSvg('target', 18)} Job Search Preferences
@@ -136,8 +136,8 @@ import { setPage } from '../stores/page.svelte.js';
 
       <!-- Facts — seeded, read-only -->
       <section>
-        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Facts</h4>
-        <div class="grid grid-cols-3 gap-4 mb-1">
+        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Facts</h4>
+        <div class="grid grid-cols-3 gap-4 mb-4">
           <div>
             <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Title</label>
             <div class="text-sm text-slate-700 dark:text-slate-200">{briefData.facts.title || '-'}</div>
@@ -151,8 +151,8 @@ import { setPage } from '../stores/page.svelte.js';
             <div class="text-sm text-slate-700 dark:text-slate-200">{briefData.facts.current_location || '-'}</div>
           </div>
         </div>
-        <div class="mb-3">
-          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Skills</label>
+        <div class="mb-4">
+          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-2">Skills</label>
           {#if briefData.facts.skills?.length}
             <div class="flex flex-wrap gap-1.5">
               {#each briefData.facts.skills as skill}
@@ -163,14 +163,14 @@ import { setPage } from '../stores/page.svelte.js';
             <p class="text-sm text-slate-400">No skills seeded yet.</p>
           {/if}
         </div>
-        <p class="text-[11px] text-slate-400 -mt-1">Facts are set by your resume seed and are read-only here.</p>
+        <p class="text-[11px] text-slate-400 mt-2">Facts are set by your resume seed and are read-only here.</p>
       </section>
 
-      <div class="my-4 border-t border-slate-100 dark:border-slate-700" />
+      <div class="my-6 border-t border-slate-100 dark:border-slate-700" />
 
       <!-- Constraints — editable -->
       <section>
-        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Constraints</h4>
+        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Constraints</h4>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Visa Sponsorship</label>
@@ -186,7 +186,7 @@ import { setPage } from '../stores/page.svelte.js';
           </div>
           <div>
             <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Salary Floor</label>
-            <div class="space-y-1.5">
+            <div class="space-y-2">
               {#each salaryRows as row, i}
                 <div class="flex items-center gap-1.5">
                   <input
@@ -219,12 +219,12 @@ import { setPage } from '../stores/page.svelte.js';
         </div>
       </section>
 
-      <div class="my-4 border-t border-slate-100 dark:border-slate-700" />
+      <div class="my-6 border-t border-slate-100 dark:border-slate-700" />
 
       <!-- Preferences — chip-editable -->
       <section>
-        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Preferences</h4>
-        <div class="space-y-3">
+        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Preferences</h4>
+        <div class="space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Remote</label>
