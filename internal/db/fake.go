@@ -530,20 +530,22 @@ func (f *FakeStore) UpsertProfile(updates map[string]any) error {
 	if v, ok := updates["remote"]; ok {
 		p.Remote = fmt.Sprint(v)
 	}
+	// List-valued preferences are normalized in the same way the SQLite store
+	// normalizes them, so FakeStore and SQLiteStore behave identically.
 	if v, ok := updates["location_preference"]; ok {
-		p.LocationPref = fmt.Sprint(v)
+		p.LocationPref = normalizeListJSON(fmt.Sprint(v))
 	}
 	if v, ok := updates["companies"]; ok {
-		p.Companies = fmt.Sprint(v)
+		p.Companies = normalizeListJSON(fmt.Sprint(v))
 	}
 	if v, ok := updates["avoid_companies"]; ok {
-		p.AvoidCompanies = fmt.Sprint(v)
+		p.AvoidCompanies = normalizeListJSON(fmt.Sprint(v))
 	}
 	if v, ok := updates["keywords"]; ok {
-		p.Keywords = fmt.Sprint(v)
+		p.Keywords = normalizeListJSON(fmt.Sprint(v))
 	}
 	if v, ok := updates["dealbreakers"]; ok {
-		p.Dealbreakers = fmt.Sprint(v)
+		p.Dealbreakers = normalizeListJSON(fmt.Sprint(v))
 	}
 	return nil
 }

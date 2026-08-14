@@ -141,6 +141,12 @@ func (s *SQLiteStore) UpsertProfile(updates map[string]any) error {
 	var args []any
 	for key, col := range columnMap {
 		if val, ok := updates[key]; ok {
+			// Normalize the brief's list-valued preferences so the stored
+			// value is the normalized match form (case-fold, trim, dedupe).
+			if isListPrefKey(key) {
+				s, _ := val.(string)
+				val = normalizeListJSON(s)
+			}
 			setClauses = append(setClauses, col+" = ?")
 			args = append(args, val)
 		}
@@ -155,6 +161,16 @@ func (s *SQLiteStore) UpsertProfile(updates map[string]any) error {
 	query := fmt.Sprintf("UPDATE profile SET %s WHERE id = ?", strings.Join(setClauses, ", "))
 	_, err := s.Exec(query, args...)
 	return err
+}
+
+// isListPrefKey reports whether a profile key is a brief preference whose
+// stored value is a normalized JSON list (case-fold, trim, dedupe).
+func isListPrefKey(key string) bool {
+	switch key {
+	case "location_preference", "companies", "avoid_companies", "keywords", "dealbreakers":
+		return true
+	}
+	return false
 }
 
 // GetSettings returns the app settings. If no settings row exists yet, it

@@ -34,8 +34,8 @@ type BriefFacts struct {
 
 // BriefConstraints holds one-time user constraints.
 type BriefConstraints struct {
-	VisaSponsorship string `json:"visa_sponsorship"`
-	SalaryFloor     string `json:"salary_floor"`
+	VisaSponsorship string             `json:"visa_sponsorship"`
+	SalaryFloor     []SalaryFloorEntry `json:"salary_floor"`
 }
 
 // BriefPreferences is the brief — the search intent the agent uses.
@@ -51,16 +51,23 @@ type BriefPreferences struct {
 // getBrief derives a Brief from a Profile. Purely functional so both
 // SQLiteStore and FakeStore share the exact same logic.
 func getBrief(p Profile) Brief {
+	// Seniority: stored value wins; otherwise derive from experience. A fact
+	// is never gated, but when experience can answer it, show the answer.
+	seniority := p.Seniority
+	if seniority == "" {
+		seniority = DeriveSeniority(p.Experience)
+	}
+
 	facts := BriefFacts{
 		Title:           p.Title,
-		Seniority:       p.Seniority,
+		Seniority:       seniority,
 		CurrentLocation: p.CurrentLocation,
 		Skills:          stringList(p.Skills),
 	}
 
 	constraints := BriefConstraints{
 		VisaSponsorship: p.VisaSponsorship,
-		SalaryFloor:     p.SalaryFloor,
+		SalaryFloor:     salaryFloorBrief(p.SalaryFloor),
 	}
 
 	prefs := BriefPreferences{
