@@ -16,6 +16,24 @@
   background-color: var(--color-tint-amber);
 }
 
+/* ── Brief form primitives ──
+ * Single source of truth for the profile-brief card's repeated field markup:
+ * section titles, field labels, text inputs, and selects. One place to change
+ * spacing/height/styling instead of nine copies.
+ */
+@utility wp-section-title {
+  @apply text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4;
+}
+@utility wp-label {
+  @apply block text-xs font-medium uppercase tracking-wide text-slate-400 mb-2;
+}
+@utility wp-input {
+  @apply rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 px-2.5 h-[38px] outline-none focus:border-slate-400;
+}
+@utility wp-select {
+  @apply w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 px-2.5 h-[38px] outline-none focus:border-slate-400;
+}
+
 /* ── Nord-themed color tokens ──
  * Light: Aurora / Snow Storm on Polar Night accents
  * Dark:  Polar Night surfaces with Frost + Aurora accents

@@ -4,6 +4,7 @@ import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
   import Spinner from '../components/Spinner.svelte';
   import Card from '../components/Card.svelte';
+  import Field from '../components/Field.svelte';
   import ChipInput from '../components/ChipInput.svelte';
   import { prettify } from '../lib/brief.js';
   import * as api from '../stores/api.svelte.js';
@@ -102,24 +103,18 @@ import { setPage } from '../stores/page.svelte.js';
 </script>
 
 <div class="space-y-4">
-  <p class="text-sm text-slate-400 mb-4">
-    Your profile personalizes AI-generated content. The brief below is what the agent reads when
-    searching for jobs — facts come from your resume/seed, while constraints and preferences are
-    editable right here.
-  </p>
-
   <!-- Job Search Preferences -->
   {#if briefData}
     <Card hover={false}>
-      <div class="flex items-start justify-between mb-5">
+      <div class="flex items-start justify-between mb-6">
         <div>
           <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200">
             {@html iconSvg('target', 18)} Job Search Preferences
           </h3>
-          <p class="text-xs text-slate-400 mt-1">
+          <p class="text-xs text-slate-400 mt-2">
             {briefData.complete
-              ? 'Brief complete — ready to search on.'
-              : `${briefData.open.length} preference${briefData.open.length === 1 ? '' : 's'} still open.`}
+              ? 'All set — ready to search.'
+              : `${briefData.open.length} preference${briefData.open.length === 1 ? '' : 's'} still to set.`}
           </p>
         </div>
         <div class="flex items-center gap-2 text-xs shrink-0">
@@ -134,48 +129,73 @@ import { setPage } from '../stores/page.svelte.js';
         </div>
       </div>
 
-      <!-- Facts — seeded, read-only -->
+      <!-- Preferences — primary, chip-editable -->
       <section>
-        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Facts</h4>
-        <div class="grid grid-cols-3 gap-4 mb-4">
-          <div>
-            <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Title</label>
-            <div class="text-sm text-slate-700 dark:text-slate-200">{briefData.facts.title || '-'}</div>
-          </div>
-          <div>
-            <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Seniority</label>
-            <div class="text-sm text-slate-700 dark:text-slate-200 capitalize">{briefData.facts.seniority || '-'}</div>
-          </div>
-          <div>
-            <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Current Location</label>
-            <div class="text-sm text-slate-700 dark:text-slate-200">{briefData.facts.current_location || '-'}</div>
-          </div>
-        </div>
-        <div class="mb-4">
-          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-2">Skills</label>
-          {#if briefData.facts.skills?.length}
-            <div class="flex flex-wrap gap-1.5">
-              {#each briefData.facts.skills as skill}
-                <span class="bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300 rounded-full px-2.5 py-0.5 text-xs">{skill}</span>
+        <h4 class="wp-section-title">Preferences</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
+          <Field label="Remote">
+            <select
+              class="wp-select"
+              value={briefData.preferences.remote}
+              onchange={(e) => setRemote(e.currentTarget.value)}
+            >
+              {#each REMOTE_OPTIONS as opt}
+                <option value={opt.value}>{opt.label}</option>
               {/each}
-            </div>
-          {:else}
-            <p class="text-sm text-slate-400">No skills seeded yet.</p>
-          {/if}
+            </select>
+          </Field>
+          <Field label="Location Preference">
+            <ChipInput
+              value={briefData.preferences.location_preference}
+              placeholder="e.g. Bengaluru, Remote"
+              {prettify}
+              onchange={(v) => setList('location_preference', v)}
+            />
+          </Field>
+          <Field label="Companies">
+            <ChipInput
+              value={briefData.preferences.companies}
+              placeholder="e.g. Acme, Globex"
+              {prettify}
+              onchange={(v) => setList('companies', v)}
+            />
+          </Field>
+          <Field label="Avoid Companies">
+            <ChipInput
+              value={briefData.preferences.avoid_companies}
+              placeholder="e.g. Enron"
+              {prettify}
+              onchange={(v) => setList('avoid_companies', v)}
+            />
+          </Field>
+          <Field label="Keywords">
+            <ChipInput
+              value={briefData.preferences.keywords}
+              placeholder="e.g. Go, Distributed systems"
+              {prettify}
+              onchange={(v) => setList('keywords', v)}
+            />
+          </Field>
+          <Field label="Dealbreakers">
+            <ChipInput
+              value={briefData.preferences.dealbreakers}
+              placeholder="e.g. Night shifts, Travel"
+              {prettify}
+              onchange={(v) => setList('dealbreakers', v)}
+            />
+          </Field>
         </div>
-        <p class="text-[11px] text-slate-400 mt-2">Facts are set by your resume seed and are read-only here.</p>
       </section>
 
       <div class="my-6 border-t border-slate-100 dark:border-slate-700" />
 
       <!-- Constraints — editable -->
       <section>
-        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Constraints</h4>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Visa Sponsorship</label>
+        <h4 class="wp-section-title">Constraints</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
+          <Field label="Visa Sponsorship">
             <select
-              class="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 px-2.5 h-[38px] outline-none focus:border-slate-400"
+              class="wp-select"
               value={briefData.constraints.visa_sponsorship}
               onchange={(e) => setVisa(e.currentTarget.value)}
             >
@@ -183,20 +203,19 @@ import { setPage } from '../stores/page.svelte.js';
                 <option value={opt.value}>{opt.label}</option>
               {/each}
             </select>
-          </div>
-          <div>
-            <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Salary Floor</label>
+          </Field>
+          <Field label="Salary Floor">
             <div class="space-y-2">
               {#each salaryRows as row, i}
                 <div class="flex items-center gap-1.5">
                   <input
-                    class="flex-1 min-w-0 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 px-2.5 h-[38px] outline-none focus:border-slate-400 placeholder:text-slate-400"
+                    class="wp-input flex-1 min-w-0 placeholder:text-slate-400"
                     placeholder="Region (e.g. IN)"
                     bind:value={salaryRows[i].region}
                     onblur={commitSalaryRows}
                   />
                   <input
-                    class="flex-1 min-w-0 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 px-2.5 h-[38px] outline-none focus:border-slate-400 placeholder:text-slate-400"
+                    class="wp-input flex-1 min-w-0 placeholder:text-slate-400"
                     placeholder="Amount"
                     bind:value={salaryRows[i].amount}
                     onblur={commitSalaryRows}
@@ -215,80 +234,42 @@ import { setPage } from '../stores/page.svelte.js';
                 onclick={addSalaryRow}
               >{@html iconSvg('plus', 14)} Add salary floor</button>
             </div>
-          </div>
+          </Field>
         </div>
       </section>
 
       <div class="my-6 border-t border-slate-100 dark:border-slate-700" />
 
-      <!-- Preferences — chip-editable -->
+      <!-- Facts — supporting, read-only (seed-edited) -->
       <section>
-        <h4 class="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Preferences</h4>
-        <div class="space-y-4">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Remote</label>
-              <select
-                class="w-full rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 px-2.5 h-[38px] outline-none focus:border-slate-400"
-                value={briefData.preferences.remote}
-                onchange={(e) => setRemote(e.currentTarget.value)}
-              >
-                {#each REMOTE_OPTIONS as opt}
-                  <option value={opt.value}>{opt.label}</option>
-                {/each}
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Location Preference</label>
-              <ChipInput
-                value={briefData.preferences.location_preference}
-                placeholder="e.g. Bengaluru, Remote"
-                {prettify}
-                onchange={(v) => setList('location_preference', v)}
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Companies</label>
-              <ChipInput
-                value={briefData.preferences.companies}
-                placeholder="e.g. Acme, Globex"
-                {prettify}
-                onchange={(v) => setList('companies', v)}
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Avoid Companies</label>
-              <ChipInput
-                value={briefData.preferences.avoid_companies}
-                placeholder="e.g. Enron"
-                {prettify}
-                onchange={(v) => setList('avoid_companies', v)}
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Keywords</label>
-              <ChipInput
-                value={briefData.preferences.keywords}
-                placeholder="e.g. Go, Distributed systems"
-                {prettify}
-                onchange={(v) => setList('keywords', v)}
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5">Dealbreakers</label>
-              <ChipInput
-                value={briefData.preferences.dealbreakers}
-                placeholder="e.g. Night shifts, Travel"
-                {prettify}
-                onchange={(v) => setList('dealbreakers', v)}
-              />
-            </div>
+        <h4 class="wp-section-title">Facts</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-5">
+          <div>
+            <label class="wp-label">Title</label>
+            <div class="text-sm text-slate-700 dark:text-slate-200">{briefData.facts.title || '-'}</div>
+          </div>
+          <div>
+            <label class="wp-label">Seniority</label>
+            <div class="text-sm text-slate-700 dark:text-slate-200 capitalize">{briefData.facts.seniority || '-'}</div>
+          </div>
+          <div>
+            <label class="wp-label">Current Location</label>
+            <div class="text-sm text-slate-700 dark:text-slate-200">{briefData.facts.current_location || '-'}</div>
           </div>
         </div>
-        <p class="text-[11px] text-slate-400 mt-2">
-          Stored values are the normalized match form (e.g. <span class="font-mono">golang</span>);
-          they display prettified and never feed a search.
-        </p>
+        <div class="mt-5">
+          <label class="wp-label">Skills</label>
+          {#if briefData.facts.skills?.length}
+            <div class="flex flex-wrap gap-1.5">
+              {#each briefData.facts.skills as skill}
+                <span class="bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300 rounded-full px-2.5 py-0.5 text-xs">{skill}</span>
+              {/each}
+            </div>
+          {:else}
+            <p class="text-sm text-slate-400">No skills yet.</p>
+          {/if}
+        </div>
+        <p class="text-[11px] text-slate-400 mt-3">Read-only — set from your resume.</p>
       </section>
     </Card>
   {:else if api.brief.loading}
