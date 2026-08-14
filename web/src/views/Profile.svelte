@@ -295,6 +295,7 @@ import { setPage } from '../stores/page.svelte.js';
         secondaryKey="company"
         secondaryLabel="Company"
         secondaryPlaceholder="Acme Corp"
+        descriptionPlaceholder="Key achievements, scope, tech used…"
         onchange={(v) => save({ experience: v })}
       />
     </Card>
@@ -312,6 +313,7 @@ import { setPage } from '../stores/page.svelte.js';
         secondaryKey="degree"
         secondaryLabel="Degree"
         secondaryPlaceholder="BS Computer Science"
+        descriptionPlaceholder="Focus areas, GPA, thesis…"
         onchange={(v) => save({ education: v })}
       />
     </Card>
