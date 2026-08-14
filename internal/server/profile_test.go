@@ -43,7 +43,7 @@ func TestUpdateProfileWritesBrief(t *testing.T) {
 	store := db.NewFakeStore()
 	mux := muxFor(t, store)
 
-	body := `{"visa_sponsorship":"yes","remote":"remote","companies":[" GoLang ","Acme"],"salary_floor":[{"region":"IN","amount":100000}]}`
+	body := `{"visaSponsorship":"yes","remote":"remote","companies":[" GoLang ","Acme"],"salaryFloor":[{"region":"IN","amount":100000}]}`
 	rec, b := patchProfile(t, mux, body)
 
 	if rec.Code != http.StatusOK {
@@ -173,8 +173,8 @@ func TestUpdateProfileRejectsBadValues(t *testing.T) {
 		{"empty body", ``, "no fields"},
 		{"non-string scalar", `{"remote":5}`, "expected a string"},
 		{"non-array list", `{"companies":"acme"}`, "array of strings"},
-		{"negative salary", `{"salary_floor":[{"region":"IN","amount":-1}]}`, "positive"},
-		{"missing salary region", `{"salary_floor":[{"amount":1000}]}`, "region"},
+		{"negative salary", `{"salaryFloor":[{"region":"IN","amount":-1}]}`, "positive"},
+		{"missing salary region", `{"salaryFloor":[{"amount":1000}]}`, "region"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -185,6 +185,24 @@ func TestUpdateProfileRejectsBadValues(t *testing.T) {
 			}
 			if !strings.Contains(rec.Body.String(), tc.wantErr) {
 				t.Errorf("body = %s, want error containing %q", rec.Body.String(), tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestUpdateProfileRejectsSnakeKeys: the PATCH payload uses the profile
+// document keys (camelCase, matching GET /api/profile and the CLI doc). The
+// old snake_case keys are unknown fields now — a typo, never a silent drop.
+func TestUpdateProfileRejectsSnakeKeys(t *testing.T) {
+	for _, key := range []string{"visa_sponsorship", "salary_floor", "current_location", "location_preference", "avoid_companies"} {
+		t.Run(key, func(t *testing.T) {
+			mux := muxFor(t, db.NewFakeStore())
+			rec, _ := patchProfile(t, mux, `{"`+key+`":"x"}`)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), "unknown profile field") {
+				t.Errorf("body = %s, want unknown-field error", rec.Body.String())
 			}
 		})
 	}
