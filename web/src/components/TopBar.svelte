@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
-  import { getPage } from '../stores/page.svelte.js';
+  import { getPage, setEditing } from '../stores/page.svelte.js';
   import { getFilter } from '../stores/filter.svelte.js';
   import { getCommandPalette } from '../stores/commandPalette.svelte.js';
   import { getLayout } from '../stores/layout.svelte.js';
@@ -135,6 +135,18 @@
         </button>
         <FilterModal />
       {/if}
+    {:else if router.current.route === 'profile'}
+      <!-- Edit/Done — profile view mode (WP-117). Same cluster as
+           List/Kanban: view-level controls live top-right. -->
+      <button
+        class="flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium transition-colors cursor-pointer {page.editing ? 'bg-slate-700 dark:bg-slate-900 text-white' : 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600'}"
+        onclick={() => setEditing(!page.editing)}
+        aria-pressed={page.editing}
+        title={page.editing ? 'Done editing' : 'Edit profile'}
+      >
+        {@html iconSvg(page.editing ? 'check' : 'edit', 14, { duotone: false })}
+        <span>{page.editing ? 'Done' : 'Edit'}</span>
+      </button>
     {/if}
 
     <button

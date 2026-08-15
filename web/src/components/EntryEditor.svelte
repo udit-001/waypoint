@@ -14,6 +14,7 @@
     secondaryPlaceholder,
     descriptionKey = 'description',
     descriptionPlaceholder = 'Details, achievements, impact…',
+    readonly = false,
     onchange,
   } = $props();
 
@@ -78,6 +79,31 @@
 </script>
 
 <div class="space-y-3">
+  {#if readonly}
+    <!-- Read-only (WP-117): LinkedIn-style rows — title bold, company + dates
+         muted on one line, description as a bullet list. -->
+    <div class="space-y-4">
+      {#each rows as row}
+        {#if row.primary || row.secondary || row.start || row.end || row.description}
+          <div>
+            <div class="text-sm font-semibold text-slate-800 dark:text-slate-200">{row.primary}</div>
+            {#if row.secondary || row.start || row.end}
+              <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {row.secondary}{#if row.secondary && (row.start || row.end)}{' · '}{/if}{#if row.start}{row.start}{/if}{#if row.end}{' – '}{row.end}{:else if row.start}{' – present'}{/if}
+              </div>
+            {/if}
+            {#if row.description}
+              <ul class="mt-1 space-y-0.5 text-sm text-slate-600 dark:text-slate-300">
+                {#each row.description.split('\n').filter((l) => l.trim()) as line}
+                  <li class="flex gap-1.5"><span class="text-slate-400 select-none">•</span><span>{line}</span></li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        {/if}
+      {/each}
+    </div>
+  {:else}
   {#each rows as row, i}
     <div class="rounded-lg border border-slate-200 dark:border-slate-600 p-3 space-y-2">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -159,4 +185,5 @@
     class="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer bg-transparent border-none p-0"
     onclick={addRow}
   >{@html iconSvg('plus', 14)} Add entry</button>
+  {/if}
 </div>
