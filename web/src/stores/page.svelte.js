@@ -9,12 +9,21 @@
 let title = $state('Applications');
 let byline = $state('');
 let breadcrumbs = $state([]);
+// Profile view mode (WP-117): false = clean read-only render, true = forms.
+// Transient page state — the profile view resets it on mount (first-run
+// auto-enters edit), so edit mode never sticks across navigation.
+let editing = $state(false);
 
 export function setPage(opts) {
   title = opts.title || 'Applications';
   byline = opts.byline || '';
   breadcrumbs = opts.breadcrumbs || [];
+  if (opts.editing !== undefined) editing = opts.editing;
   document.title = title + ' — Waypoint';
+}
+
+export function setEditing(v) {
+  editing = v;
 }
 
 export function getPage() {
@@ -22,5 +31,6 @@ export function getPage() {
     get title() { return title; },
     get byline() { return byline; },
     get breadcrumbs() { return breadcrumbs; },
+    get editing() { return editing; },
   };
 }
