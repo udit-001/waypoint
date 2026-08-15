@@ -49,7 +49,7 @@ func handleUpdateProfile(store db.Store) http.HandlerFunc {
 			jsonError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		updates, err := db.NormalizeProfileDocument(body, exp.Experience)
+		updates, err := db.NormalizeProfileDocument(body, exp)
 		if err != nil {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return

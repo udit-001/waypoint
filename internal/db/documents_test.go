@@ -15,7 +15,7 @@ func TestNormalizeProfileDocument(t *testing.T) {
 		"currentLocation": json.RawMessage(`"Bengaluru"`),
 		"skills":          json.RawMessage(`["Go","React"]`),
 	}
-	updates, err := NormalizeProfileDocument(doc, "")
+	updates, err := NormalizeProfileDocument(doc, Profile{})
 	if err != nil {
 		t.Fatalf("NormalizeProfileDocument: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestNormalizeProfileDocument(t *testing.T) {
 func TestNormalizeProfileDocumentPatchSemantics(t *testing.T) {
 	updates, err := NormalizeProfileDocument(map[string]json.RawMessage{
 		"title": json.RawMessage(`"Senior Engineer"`),
-	}, "")
+	}, Profile{})
 	if err != nil {
 		t.Fatalf("NormalizeProfileDocument: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestNormalizeProfileDocumentClear(t *testing.T) {
 	updates, err := NormalizeProfileDocument(map[string]json.RawMessage{
 		"email":  json.RawMessage(`""`),
 		"skills": json.RawMessage(`[]`),
-	}, "")
+	}, Profile{})
 	if err != nil {
 		t.Fatalf("NormalizeProfileDocument: %v", err)
 	}
@@ -72,14 +72,14 @@ func TestNormalizeProfileDocumentClear(t *testing.T) {
 func TestNormalizeProfileDocumentUnknownKey(t *testing.T) {
 	_, err := NormalizeProfileDocument(map[string]json.RawMessage{
 		"namee": json.RawMessage(`"Jane"`),
-	}, "")
+	}, Profile{})
 	if err == nil || !strings.Contains(err.Error(), `unknown profile field "namee"`) {
 		t.Errorf("error = %v, want unknown profile field", err)
 	}
 }
 
 func TestNormalizeProfileDocumentEmpty(t *testing.T) {
-	_, err := NormalizeProfileDocument(map[string]json.RawMessage{}, "")
+	_, err := NormalizeProfileDocument(map[string]json.RawMessage{}, Profile{})
 	if err == nil || !strings.Contains(err.Error(), "no fields provided") {
 		t.Errorf("error = %v, want no fields provided", err)
 	}
@@ -99,7 +99,7 @@ func TestNormalizeProfileDocumentTypeErrors(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := NormalizeProfileDocument(tc.doc, "")
+			_, err := NormalizeProfileDocument(tc.doc, Profile{})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error = %v, want containing %q", err, tc.want)
 			}
@@ -110,7 +110,7 @@ func TestNormalizeProfileDocumentTypeErrors(t *testing.T) {
 func TestNormalizeProfileDocumentSalaryFloor(t *testing.T) {
 	updates, err := NormalizeProfileDocument(map[string]json.RawMessage{
 		"salaryFloor": json.RawMessage(`[{"region":"IN","amount":100000},{"region":"GB","amount":30000}]`),
-	}, "")
+	}, Profile{})
 	if err != nil {
 		t.Fatalf("NormalizeProfileDocument: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestNormalizeProfileDocumentSalaryFloor(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := NormalizeProfileDocument(map[string]json.RawMessage{
 				"salaryFloor": json.RawMessage(tc.raw),
-			}, "")
+			}, Profile{})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error = %v, want containing %q", err, tc.want)
 			}
@@ -144,7 +144,7 @@ func TestNormalizeProfileDocumentExperienceEducation(t *testing.T) {
 	updates, err := NormalizeProfileDocument(map[string]json.RawMessage{
 		"experience": json.RawMessage(`[{"title":"SWE","company":"Acme","start":"2021-03","description":"Led team of 5"}]`),
 		"education":  json.RawMessage(`[{"institution":"MIT","degree":"BS","description":"GPA 3.9"}]`),
-	}, "")
+	}, Profile{})
 	if err != nil {
 		t.Fatalf("NormalizeProfileDocument: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestNormalizeProfileDocumentExperienceEducation(t *testing.T) {
 
 	_, err = NormalizeProfileDocument(map[string]json.RawMessage{
 		"experience": json.RawMessage(`[{"company":"Acme"}]`),
-	}, "")
+	}, Profile{})
 	if err == nil || !strings.Contains(err.Error(), "experience: entry 1: title is required") {
 		t.Errorf("error = %v, want experience: entry 1: title is required", err)
 	}
@@ -175,7 +175,7 @@ func TestNormalizeProfileDocumentSeniorityGate(t *testing.T) {
 	updates, err := NormalizeProfileDocument(map[string]json.RawMessage{
 		"title":     json.RawMessage(`"SWE"`),
 		"seniority": json.RawMessage(`""`),
-	}, dated)
+	}, Profile{Experience: dated})
 	if err != nil {
 		t.Fatalf("empty seniority should be a no-op, got %v", err)
 	}
@@ -187,7 +187,7 @@ func TestNormalizeProfileDocumentSeniorityGate(t *testing.T) {
 	updates, err = NormalizeProfileDocument(map[string]json.RawMessage{
 		"title":     json.RawMessage(`"SWE"`),
 		"seniority": json.RawMessage(`"mid"`),
-	}, dated)
+	}, Profile{Experience: dated})
 	if err != nil {
 		t.Fatalf("equal seniority should be a no-op, got %v", err)
 	}
@@ -198,7 +198,7 @@ func TestNormalizeProfileDocumentSeniorityGate(t *testing.T) {
 	// Derived level + a different manual seniority → rejected.
 	_, err = NormalizeProfileDocument(map[string]json.RawMessage{
 		"seniority": json.RawMessage(`"junior"`),
-	}, dated)
+	}, Profile{Experience: dated})
 	if err == nil || !strings.Contains(err.Error(), "seniority derives from experience") {
 		t.Errorf("error = %v, want seniority derives from experience", err)
 	}
@@ -206,7 +206,7 @@ func TestNormalizeProfileDocumentSeniorityGate(t *testing.T) {
 	// No experience yet → manual seniority is the placeholder.
 	updates, err = NormalizeProfileDocument(map[string]json.RawMessage{
 		"seniority": json.RawMessage(`"mid"`),
-	}, "")
+	}, Profile{})
 	if err != nil {
 		t.Fatalf("NormalizeProfileDocument: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestNormalizeProfileDocumentSeniorityGate(t *testing.T) {
 	// Experience without a year signal → manual seniority still allowed.
 	if _, err := NormalizeProfileDocument(map[string]json.RawMessage{
 		"seniority": json.RawMessage(`"mid"`),
-	}, `[{"title":"SWE"}]`); err != nil {
+	}, Profile{Experience: `[{"title":"SWE"}]`}); err != nil {
 		t.Errorf("expected allowed with date-less experience, got %v", err)
 	}
 
@@ -226,7 +226,7 @@ func TestNormalizeProfileDocumentSeniorityGate(t *testing.T) {
 	_, err = NormalizeProfileDocument(map[string]json.RawMessage{
 		"experience": json.RawMessage(dated),
 		"seniority":  json.RawMessage(`"junior"`),
-	}, "")
+	}, Profile{})
 	if err == nil || !strings.Contains(err.Error(), "seniority derives from experience") {
 		t.Errorf("error = %v, want seniority derives from experience (doc's own experience)", err)
 	}
@@ -249,7 +249,7 @@ func TestProfileDocumentRoundTrips(t *testing.T) {
 	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("unmarshal show output: %v", err)
 	}
-	updates, err := NormalizeProfileDocument(doc, p.Experience)
+	updates, err := NormalizeProfileDocument(doc, p)
 	if err != nil {
 		t.Fatalf("round-trip rejected: %v", err)
 	}
@@ -336,5 +336,130 @@ func TestEmptyEntryTemplateShape(t *testing.T) {
 	}
 	if got := emptyEntryTemplate("unknown"); got != nil {
 		t.Errorf("unknown key template = %#v, want nil", got)
+	}
+}
+
+// TestNormalizeProfileDocumentListOps: append/remove op objects merge against
+// the current profile's stored list, idempotently and per-field.
+func TestNormalizeProfileDocumentListOps(t *testing.T) {
+	t.Run("append to skills dedupes exactly and keeps case", func(t *testing.T) {
+		doc := map[string]json.RawMessage{
+			"skills": json.RawMessage(`{"append":["Kotlin","React"]}`),
+		}
+		updates, err := NormalizeProfileDocument(doc, Profile{Skills: `["Go","React"]`})
+		if err != nil {
+			t.Fatalf("NormalizeProfileDocument: %v", err)
+		}
+		if updates["skills"] != `["Go","React","Kotlin"]` {
+			t.Errorf("skills = %#v, want [\"Go\",\"React\",\"Kotlin\"]", updates["skills"])
+		}
+	})
+
+	t.Run("append to companies folds to lowercase", func(t *testing.T) {
+		doc := map[string]json.RawMessage{
+			"companies": json.RawMessage(`{"append":["GitHub"]}`),
+		}
+		updates, err := NormalizeProfileDocument(doc, Profile{Companies: `["acme"]`})
+		if err != nil {
+			t.Fatalf("NormalizeProfileDocument: %v", err)
+		}
+		if updates["companies"] != `["acme","github"]` {
+			t.Errorf("companies = %#v, want [\"acme\",\"github\"]", updates["companies"])
+		}
+	})
+
+	t.Run("remove from skills", func(t *testing.T) {
+		doc := map[string]json.RawMessage{
+			"skills": json.RawMessage(`{"remove":["React"]}`),
+		}
+		updates, err := NormalizeProfileDocument(doc, Profile{Skills: `["Go","React","Kotlin"]`})
+		if err != nil {
+			t.Fatalf("NormalizeProfileDocument: %v", err)
+		}
+		if updates["skills"] != `["Go","Kotlin"]` {
+			t.Errorf("skills = %#v, want [\"Go\",\"Kotlin\"]", updates["skills"])
+		}
+	})
+
+	t.Run("remove from companies is case-insensitive", func(t *testing.T) {
+		doc := map[string]json.RawMessage{
+			"companies": json.RawMessage(`{"remove":["GitHub"]}`),
+		}
+		updates, err := NormalizeProfileDocument(doc, Profile{Companies: `["acme","github"]`})
+		if err != nil {
+			t.Fatalf("NormalizeProfileDocument: %v", err)
+		}
+		if updates["companies"] != `["acme"]` {
+			t.Errorf("companies = %#v, want [\"acme\"]", updates["companies"])
+		}
+	})
+
+	t.Run("append existing and remove missing are no-ops", func(t *testing.T) {
+		doc := map[string]json.RawMessage{
+			"skills":   json.RawMessage(`{"append":["Go"]}`),
+			"keywords": json.RawMessage(`{"remove":["absent"]}`),
+		}
+		updates, err := NormalizeProfileDocument(doc, Profile{
+			Skills:   `["Go"]`,
+			Keywords: `["go","genomics"]`,
+		})
+		if err != nil {
+			t.Fatalf("NormalizeProfileDocument: %v", err)
+		}
+		if updates["skills"] != `["Go"]` {
+			t.Errorf("skills = %#v, want [\"Go\"] (no duplicate)", updates["skills"])
+		}
+		if updates["keywords"] != `["go","genomics"]` {
+			t.Errorf("keywords = %#v, want unchanged", updates["keywords"])
+		}
+	})
+}
+
+// TestNormalizeProfileDocumentListOpErrors: malformed or ambiguous op objects
+// are hard errors, never silent no-ops.
+func TestNormalizeProfileDocumentListOpErrors(t *testing.T) {
+	current := Profile{Skills: `["Go"]`}
+	for _, tc := range []struct {
+		name, raw, want string
+	}{
+		{"both verbs", `{"append":["Kotlin"],"remove":["Go"]}`, "append or remove, not both"},
+		{"unknown op key", `{"foop":["Kotlin"]}`, "unknown list op"},
+		{"append not array", `{"append":"Kotlin"}`, "append expects an array of strings"},
+		{"empty op object", `{}`, "op object needs append or remove"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NormalizeProfileDocument(map[string]json.RawMessage{
+				"skills": json.RawMessage(tc.raw),
+			}, current)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %v, want containing %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestProfileDocOps: the CLI feedback labels match the doc's list verbs.
+func TestProfileDocOps(t *testing.T) {
+	doc := map[string]json.RawMessage{
+		"skills":       json.RawMessage(`{"append":["Kotlin"]}`),
+		"companies":    json.RawMessage(`{"remove":["acme"]}`),
+		"keywords":     json.RawMessage(`["go"]`),
+		"dealbreakers": json.RawMessage(`[]`),
+		"name":         json.RawMessage(`"Jane"`), // scalar: not a list → absent
+	}
+	ops := ProfileDocOps(doc)
+	want := map[string]string{
+		"skills":       "append",
+		"companies":    "remove",
+		"keywords":     "replace",
+		"dealbreakers": "clear",
+	}
+	if len(ops) != len(want) {
+		t.Fatalf("ops has %d entries, want %d: %v", len(ops), len(want), ops)
+	}
+	for k, v := range want {
+		if ops[k] != v {
+			t.Errorf("ops[%q] = %q, want %q", k, ops[k], v)
+		}
 	}
 }
