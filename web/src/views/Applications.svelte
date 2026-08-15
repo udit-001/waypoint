@@ -192,13 +192,15 @@
       <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">Welcome to Waypoint</h3>
       <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Your assistant does the legwork — you stay in control.</p>
 
-      <p class="text-xs text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wide">Copy this into your assistant</p>
+      <p class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Copy this into your assistant</p>
       <div class="relative inline-block max-w-full">
         <button
-          class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedPrompt ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
+          class="absolute top-2 right-2 p-2 rounded-md bg-white text-slate-500 hover:text-slate-700 border border-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer {copiedPrompt ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500' : ''}"
           onclick={copyPrompt}
-        >{copiedPrompt ? '✓ Copied' : 'Copy'}</button>
-        <pre class="text-left bg-slate-100 dark:bg-slate-800 px-5 pr-20 py-3 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap max-w-lg">{WELCOME_PROMPT}</pre>
+          title="Copy prompt"
+          aria-label="Copy prompt"
+        >{@html iconSvg(copiedPrompt ? 'check' : 'copy', 14)}</button>
+        <pre class="text-left bg-slate-100 dark:bg-slate-800 px-5 pr-14 py-3 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap max-w-lg">{WELCOME_PROMPT}</pre>
       </div>
 
       <div class="mt-6">
