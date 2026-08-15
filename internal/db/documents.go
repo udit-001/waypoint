@@ -90,13 +90,12 @@ var profileSpec = docSpec{
 // names). Patch semantics: only keys present are changed. Unknown keys are
 // rejected so a typo never silently drops an edit.
 //
-// currentExperience gates manual seniority: once experience carries a derived
-// year signal, the level is derived, not manually assignable. Manual set is a
-// placeholder for before a resume seed arrives. The gate evaluates the NEW
-// experience when the doc also sets it — a doc cannot sneak a manual
-// seniority past a derived level it writes in the same pass.
-func NormalizeProfileDocument(doc map[string]json.RawMessage, currentExperience string) (map[string]any, error) {
-	effExperience := currentExperience
+// current is the profile the patch applies to: its lists seed append/remove
+// merges, and its experience gates manual seniority. The seniority gate
+// evaluates the NEW experience when the doc also sets it — a doc cannot sneak
+// a manual seniority past a derived level it writes in the same pass.
+func NormalizeProfileDocument(doc map[string]json.RawMessage, current Profile) (map[string]any, error) {
+	effExperience := current.Experience
 	if raw, ok := doc["experience"]; ok {
 		if s, err := SerializeExperience(raw); err == nil {
 			effExperience = s
@@ -118,7 +117,7 @@ func NormalizeProfileDocument(doc map[string]json.RawMessage, currentExperience 
 			delete(doc, "seniority")
 		}
 	}
-	return normalizeDocument(profileSpec, doc)
+	return normalizeDocument(profileSpec, doc, current)
 }
 
 // ProfileSchemaTemplate returns the empty profile document — the write schema
@@ -129,7 +128,7 @@ func ProfileSchemaTemplate() string {
 
 // normalizeDocument validates a patch document against a spec: unknown keys
 // are rejected, each value is normalized to the store-ready form.
-func normalizeDocument(spec docSpec, doc map[string]json.RawMessage) (map[string]any, error) {
+func normalizeDocument(spec docSpec, doc map[string]json.RawMessage, current Profile) (map[string]any, error) {
 	if len(doc) == 0 {
 		return nil, fmt.Errorf("no fields provided")
 	}
@@ -143,24 +142,32 @@ func normalizeDocument(spec docSpec, doc map[string]json.RawMessage) (map[string
 		if !ok {
 			return nil, fmt.Errorf("unknown %s field %q", spec.name, key)
 		}
-		normalize := keySpec.normalize
-		if normalize == nil {
-			switch keySpec.kind {
-			case docScalar:
-				normalize = normalizeScalar
-			case docList:
-				normalize = normalizeList
-			default:
-				return nil, fmt.Errorf("field %q has no normalizer", key)
-			}
-		}
-		val, err := normalize(raw)
+		val, err := normalizeValue(keySpec, raw, current)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", key, err)
 		}
 		updates[keySpec.store] = val
 	}
 	return updates, nil
+}
+
+// normalizeValue dispatches a raw document value by kind. Lists accept a bare
+// array (replace/clear) or an op object (append/remove) merged against the
+// current profile; every other kind follows its spec normalizer.
+func normalizeValue(keySpec docKey, raw json.RawMessage, current Profile) (any, error) {
+	if keySpec.kind == docList {
+		return normalizeListDoc(raw, current, keySpec.store)
+	}
+	normalize := keySpec.normalize
+	if normalize == nil {
+		switch keySpec.kind {
+		case docScalar:
+			normalize = normalizeScalar
+		default:
+			return nil, fmt.Errorf("field %q has no normalizer", keySpec.name)
+		}
+	}
+	return normalize(raw)
 }
 
 // renderSchema builds the empty document from a spec. Entry objects take
@@ -232,6 +239,180 @@ func normalizeList(raw json.RawMessage) (any, error) {
 		return nil, err
 	}
 	return string(b), nil
+}
+
+// normalizeListDoc handles a string-list value. A bare array replaces the list
+// ([] clears it); an op object {"append":[...]} or {"remove":[...]} merges
+// against the field's current stored list. The merge is idempotent: appending
+// an existing value or removing a missing one is a no-op.
+func normalizeListDoc(raw json.RawMessage, current Profile, storeKey string) (any, error) {
+	if !strings.HasPrefix(strings.TrimSpace(string(raw)), "{") {
+		return normalizeList(raw) // bare array: replace / clear
+	}
+	add, del, err := parseListOp(raw)
+	if err != nil {
+		return nil, err
+	}
+	hasAppend, hasRemove := add != nil, del != nil
+	if hasAppend && hasRemove {
+		return nil, fmt.Errorf("an op object may set append or remove, not both")
+	}
+	if !hasAppend && !hasRemove {
+		return nil, fmt.Errorf("op object needs append or remove")
+	}
+	fold := isListPrefKey(storeKey)
+	cur := stringList(listCurrentValue(current, storeKey))
+	if hasAppend {
+		return mergeListAppend(cur, add, fold)
+	}
+	return mergeListRemove(cur, del, fold)
+}
+
+// parseListOp parses a list op object, rejecting unknown keys (a typo is never
+// a silent no-op) and non-array verb values.
+func parseListOp(raw json.RawMessage) (appendVals, removeVals []string, err error) {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, nil, fmt.Errorf("op object must be {append} or {remove}")
+	}
+	for k := range m {
+		if k != "append" && k != "remove" {
+			return nil, nil, fmt.Errorf("unknown list op %q (allowed: append, remove)", k)
+		}
+	}
+	if r, ok := m["append"]; ok {
+		var v []string
+		if err := json.Unmarshal(r, &v); err != nil {
+			return nil, nil, fmt.Errorf("append expects an array of strings")
+		}
+		appendVals = v
+	}
+	if r, ok := m["remove"]; ok {
+		var v []string
+		if err := json.Unmarshal(r, &v); err != nil {
+			return nil, nil, fmt.Errorf("remove expects an array of strings")
+		}
+		removeVals = v
+	}
+	return appendVals, removeVals, nil
+}
+
+// listCurrentValue reads a list field's stored JSON-array string from the
+// current profile, keyed by the Store seam's snake_case name.
+func listCurrentValue(p Profile, storeKey string) string {
+	switch storeKey {
+	case "skills":
+		return p.Skills
+	case "location_preference":
+		return p.LocationPref
+	case "companies":
+		return p.Companies
+	case "avoid_companies":
+		return p.AvoidCompanies
+	case "keywords":
+		return p.Keywords
+	case "dealbreakers":
+		return p.Dealbreakers
+	}
+	return ""
+}
+
+// listMatchKey maps a list value to its match key: case-folded for preference
+// lists, exact for skills (which stay case-sensitive).
+func listMatchKey(v string, fold bool) string {
+	if fold {
+		return strings.ToLower(strings.TrimSpace(v))
+	}
+	return v
+}
+
+// mergeListAppend appends values that are not already present. Preference
+// lists store the folded form; skills keep the original case. Empty values are
+// skipped.
+func mergeListAppend(cur, add []string, fold bool) (string, error) {
+	merged := append([]string(nil), cur...)
+	seen := make(map[string]bool, len(merged))
+	for _, v := range merged {
+		seen[listMatchKey(v, fold)] = true
+	}
+	for _, v := range add {
+		k := listMatchKey(v, fold)
+		if k == "" || seen[k] {
+			continue
+		}
+		seen[k] = true
+		if fold {
+			merged = append(merged, k)
+		} else {
+			merged = append(merged, v)
+		}
+	}
+	return marshalStringList(merged)
+}
+
+// mergeListRemove drops every value whose match key is in del. No-op when a
+// value is absent.
+func mergeListRemove(cur, del []string, fold bool) (string, error) {
+	remove := make(map[string]bool, len(del))
+	for _, v := range del {
+		remove[listMatchKey(v, fold)] = true
+	}
+	out := make([]string, 0, len(cur))
+	for _, v := range cur {
+		if !remove[listMatchKey(v, fold)] {
+			out = append(out, v)
+		}
+	}
+	return marshalStringList(out)
+}
+
+// marshalStringList serializes a list to the stored JSON-array string. A nil
+// slice serializes as "[]" — an empty list, not JSON null.
+func marshalStringList(list []string) (string, error) {
+	if list == nil {
+		list = []string{}
+	}
+	b, err := json.Marshal(list)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// docValueOp labels a list document value for set feedback: append, remove,
+// replace, or clear.
+func docValueOp(raw json.RawMessage) string {
+	if strings.HasPrefix(strings.TrimSpace(string(raw)), "{") {
+		var m map[string]json.RawMessage
+		json.Unmarshal(raw, &m)
+		if _, ok := m["append"]; ok {
+			return "append"
+		}
+		if _, ok := m["remove"]; ok {
+			return "remove"
+		}
+		return "replace"
+	}
+	if strings.TrimSpace(string(raw)) == "[]" {
+		return "clear"
+	}
+	return "replace"
+}
+
+// ProfileDocOps returns storeKey → verb label for every list field present in a
+// patch document, reusing the profileSpec grammar (which fields are lists).
+// The CLI uses it only for 'profile set' feedback.
+func ProfileDocOps(doc map[string]json.RawMessage) map[string]string {
+	ops := make(map[string]string)
+	for _, k := range profileSpec.keys {
+		if k.kind != docList {
+			continue
+		}
+		if raw, ok := doc[k.name]; ok {
+			ops[k.store] = docValueOp(raw)
+		}
+	}
+	return ops
 }
 
 // normalizeSalaryFloor validates a [{region, amount}] list. Currency is a

@@ -163,6 +163,9 @@ keys present in the document are changed; every other field stays untouched.
 To clear a field, include it with an empty value — "" for a scalar
 ({"email": ""}), [] for a list ({"skills": []}).
 
+A list value is a bare array (replace the whole list) or one op object:
+  {"skills": {"append": ["Kotlin"]}}   {"skills": {"remove": ["Java"]}}
+
 The document is the same shape 'profile show --json' emits — run
 'waypoint profile schema' for the empty template. Unknown keys are rejected,
 so a typo never silently drops an edit. The file is read directly, so the
@@ -191,7 +194,7 @@ Examples:
 		if err != nil {
 			return formatError("failed to get profile", err)
 		}
-		updates, err := db.NormalizeProfileDocument(doc, exp.Experience)
+		updates, err := db.NormalizeProfileDocument(doc, exp)
 		if err != nil {
 			return err
 		}
@@ -209,6 +212,7 @@ Examples:
 			return nil
 		}
 
+		ops := db.ProfileDocOps(doc)
 		keys := make([]string, 0, len(updates))
 		for k := range updates {
 			keys = append(keys, k)
@@ -217,7 +221,7 @@ Examples:
 		fmt.Println()
 		fmt.Printf("  ✓ Profile updated\n")
 		for _, k := range keys {
-			fmt.Printf("    %s: updated\n", profileKeyLabel(k))
+			fmt.Printf("    %s: %s\n", profileKeyLabel(k), docOpVerb(ops[k]))
 		}
 		fmt.Println()
 		return nil
@@ -259,6 +263,22 @@ func profileKeyLabel(key string) string {
 	return strings.Join(words, " ")
 }
 
+// docOpVerb maps a list op label to a past-tense verb for 'profile set' output.
+func docOpVerb(op string) string {
+	switch op {
+	case "append":
+		return "appended"
+	case "remove":
+		return "removed"
+	case "replace":
+		return "replaced"
+	case "clear":
+		return "cleared"
+	default:
+		return "updated"
+	}
+}
+
 // readDocInput reads the patch document: a file path, or stdin when the value
 // is "-". The file is read directly — no shell interpretation of its contents.
 func readDocInput(path string) ([]byte, error) {
@@ -279,6 +299,7 @@ back; keys absent from your document stay unchanged. The template is a valid
 empty document — every value is what 'set' accepts unchanged.
 
 To clear a field, write an empty value: "" for a scalar, [] for a list.
+A list accepts a bare array (replace) or one op object {append|remove}.
 
 Entry shapes: experience is [{"title","company","start","end","description"}],
 education [{"institution","degree","start","end","description"}]; dates are

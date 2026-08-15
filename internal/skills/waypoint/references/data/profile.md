@@ -43,6 +43,9 @@ with your file tool and passed to `set --file`. No inline JSON flags.
   number. Currency is derived, never written.
 - **Clearing** — include a key with an empty value to clear it: `""` for a
   scalar, `[]` for a list. An absent key leaves the field unchanged.
+- **List changes** — a list value is a bare array (replace) or one op object:
+  `{"append": [...]}` or `{"remove": [...]}`. `[]` clears. append/remove are
+  idempotent (no duplicates; removing a missing value is a no-op).
 - **seniority** is derived from experience once experience carries a year
   signal — don't write it unless no experience exists yet.
 
