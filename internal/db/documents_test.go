@@ -48,6 +48,25 @@ func TestNormalizeProfileDocumentPatchSemantics(t *testing.T) {
 	}
 }
 
+// TestNormalizeProfileDocumentClear: a key present with an empty value clears
+// the field — "" for a scalar, [] for a list. This is the complement of patch
+// semantics: absent = keep, present-with-empty = clear.
+func TestNormalizeProfileDocumentClear(t *testing.T) {
+	updates, err := NormalizeProfileDocument(map[string]json.RawMessage{
+		"email":  json.RawMessage(`""`),
+		"skills": json.RawMessage(`[]`),
+	}, "")
+	if err != nil {
+		t.Fatalf("NormalizeProfileDocument: %v", err)
+	}
+	if updates["email"] != "" {
+		t.Errorf("email = %#v, want empty (cleared)", updates["email"])
+	}
+	if updates["skills"] != `[]` {
+		t.Errorf("skills = %#v, want [] (cleared)", updates["skills"])
+	}
+}
+
 // TestNormalizeProfileDocumentUnknownKey: a typo is a hard error, never a
 // silent no-op.
 func TestNormalizeProfileDocumentUnknownKey(t *testing.T) {

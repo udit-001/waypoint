@@ -160,6 +160,9 @@ var profileSetCmd = &cobra.Command{
 	Long: `Update profile fields from a JSON document with patch semantics: only
 keys present in the document are changed; every other field stays untouched.
 
+To clear a field, include it with an empty value — "" for a scalar
+({"email": ""}), [] for a list ({"skills": []}).
+
 The document is the same shape 'profile show --json' emits — run
 'waypoint profile schema' for the empty template. Unknown keys are rejected,
 so a typo never silently drops an edit. The file is read directly, so the
@@ -274,6 +277,8 @@ var profileSchemaCmd = &cobra.Command{
 surface for 'waypoint profile set --file'. Fill in values and pass the file
 back; keys absent from your document stay unchanged. The template is a valid
 empty document — every value is what 'set' accepts unchanged.
+
+To clear a field, write an empty value: "" for a scalar, [] for a list.
 
 Entry shapes: experience is [{"title","company","start","end","description"}],
 education [{"institution","degree","start","end","description"}]; dates are
