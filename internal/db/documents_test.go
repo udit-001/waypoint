@@ -164,19 +164,47 @@ func TestNormalizeProfileDocumentExperienceEducation(t *testing.T) {
 	}
 }
 
-// TestNormalizeProfileDocumentSeniorityGate: manual seniority is rejected once
-// experience carries a derived level; allowed before a resume seed arrives.
+// TestNormalizeProfileDocumentSeniorityGate: seniority is read-only once
+// experience carries a derived level. An empty or equal value is a no-op (so a
+// show|set round-trip works); a different manual level is rejected; before a
+// resume seed arrives, manual seniority remains the placeholder.
 func TestNormalizeProfileDocumentSeniorityGate(t *testing.T) {
-	// Derived experience (5 years) + manual seniority → rejected.
-	_, err := NormalizeProfileDocument(map[string]json.RawMessage{
+	const dated = `[{"title":"SWE","start":"2019-01","end":"2024-01"}]` // 5y → mid
+
+	// Derived level + empty seniority (the stored-empty round-trip case) → no-op.
+	updates, err := NormalizeProfileDocument(map[string]json.RawMessage{
+		"title":     json.RawMessage(`"SWE"`),
+		"seniority": json.RawMessage(`""`),
+	}, dated)
+	if err != nil {
+		t.Fatalf("empty seniority should be a no-op, got %v", err)
+	}
+	if _, ok := updates["seniority"]; ok {
+		t.Errorf("seniority written when empty, want dropped")
+	}
+
+	// Derived level + equal seniority → no-op.
+	updates, err = NormalizeProfileDocument(map[string]json.RawMessage{
+		"title":     json.RawMessage(`"SWE"`),
 		"seniority": json.RawMessage(`"mid"`),
-	}, `[{"title":"SWE","start":"2019-01","end":"2024-01"}]`)
+	}, dated)
+	if err != nil {
+		t.Fatalf("equal seniority should be a no-op, got %v", err)
+	}
+	if _, ok := updates["seniority"]; ok {
+		t.Errorf("seniority written when equal, want dropped")
+	}
+
+	// Derived level + a different manual seniority → rejected.
+	_, err = NormalizeProfileDocument(map[string]json.RawMessage{
+		"seniority": json.RawMessage(`"junior"`),
+	}, dated)
 	if err == nil || !strings.Contains(err.Error(), "seniority derives from experience") {
 		t.Errorf("error = %v, want seniority derives from experience", err)
 	}
 
 	// No experience yet → manual seniority is the placeholder.
-	updates, err := NormalizeProfileDocument(map[string]json.RawMessage{
+	updates, err = NormalizeProfileDocument(map[string]json.RawMessage{
 		"seniority": json.RawMessage(`"mid"`),
 	}, "")
 	if err != nil {
@@ -193,15 +221,40 @@ func TestNormalizeProfileDocumentSeniorityGate(t *testing.T) {
 		t.Errorf("expected allowed with date-less experience, got %v", err)
 	}
 
-	// The gate evaluates the doc's OWN experience: a doc that writes a
-	// derived level AND a manual seniority in the same pass is rejected,
-	// even when the stored experience was empty.
+	// The gate evaluates the doc's OWN experience: a doc that writes a derived
+	// level AND a conflicting manual seniority in the same pass is rejected.
 	_, err = NormalizeProfileDocument(map[string]json.RawMessage{
-		"experience": json.RawMessage(`[{"title":"SWE","start":"2019-01","end":"2024-01"}]`),
+		"experience": json.RawMessage(dated),
 		"seniority":  json.RawMessage(`"junior"`),
 	}, "")
 	if err == nil || !strings.Contains(err.Error(), "seniority derives from experience") {
 		t.Errorf("error = %v, want seniority derives from experience (doc's own experience)", err)
+	}
+}
+
+// TestProfileDocumentRoundTrips: profile show --json → profile set --file -
+// succeeds for a profile whose seniority derives from dated experience (the
+// common state: experience dated, seniority never manually written).
+func TestProfileDocumentRoundTrips(t *testing.T) {
+	p := Profile{
+		Name:       "Jane Doe",
+		Experience: `[{"title":"SWE","start":"2019-01","end":"2024-01"}]`, // 5y → mid
+		// Seniority left empty — derived, never manually written.
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		t.Fatalf("marshal profile: %v", err)
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("unmarshal show output: %v", err)
+	}
+	updates, err := NormalizeProfileDocument(doc, p.Experience)
+	if err != nil {
+		t.Fatalf("round-trip rejected: %v", err)
+	}
+	if _, ok := updates["seniority"]; ok {
+		t.Errorf("round-trip wrote seniority, want dropped (derived/read-only)")
 	}
 }
 

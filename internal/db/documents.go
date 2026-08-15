@@ -102,9 +102,20 @@ func NormalizeProfileDocument(doc map[string]json.RawMessage, currentExperience 
 			effExperience = s
 		}
 	}
-	if _, ok := doc["seniority"]; ok {
+	if raw, ok := doc["seniority"]; ok {
 		if derived := DeriveSeniority(effExperience); derived != "" {
-			return nil, fmt.Errorf("seniority derives from experience as %q — correct experience instead, or clear it first", derived)
+			var v string
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, fmt.Errorf("seniority: expected a string")
+			}
+			// Read-only once a level derives: only the derived value or an
+			// empty one (the stored-empty round-trip case) is tolerated, and
+			// both are dropped — a show|set round-trip never re-writes the
+			// derived fact. A different level is a manual override, rejected.
+			if v != "" && v != derived {
+				return nil, fmt.Errorf("seniority derives from experience as %q — correct experience instead, or clear it first", derived)
+			}
+			delete(doc, "seniority")
 		}
 	}
 	return normalizeDocument(profileSpec, doc)
