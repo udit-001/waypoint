@@ -200,7 +200,7 @@
           title="Copy prompt"
           aria-label="Copy prompt"
         >{@html iconSvg(copiedPrompt ? 'check' : 'copy', 14)}</button>
-        <pre class="text-left bg-slate-100 dark:bg-slate-800 px-5 pr-14 py-3 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap max-w-lg">{WELCOME_PROMPT}</pre>
+        <pre class="text-left bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-5 pr-14 py-3 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap max-w-lg">{WELCOME_PROMPT}</pre>
       </div>
 
       <div class="mt-6">
