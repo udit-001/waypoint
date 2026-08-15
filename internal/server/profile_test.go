@@ -211,10 +211,11 @@ func TestUpdateProfileRejectsSnakeKeys(t *testing.T) {
 func TestUpdateProfileSeniorityGate(t *testing.T) {
 	t.Run("derived from experience blocks manual set", func(t *testing.T) {
 		store := db.NewFakeStore()
-		store.Profile.Experience = `["5 years backend development"]`
+		store.Profile.Experience = `["5 years backend development"]` // derive → mid
 		mux := muxFor(t, store)
 
-		rec, _ := patchProfile(t, mux, `{"seniority":"mid"}`)
+		// A manual level that differs from the derived one is rejected.
+		rec, _ := patchProfile(t, mux, `{"seniority":"junior"}`)
 
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
