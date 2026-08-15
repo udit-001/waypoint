@@ -6,6 +6,7 @@
   import { getCommandPalette } from '../stores/commandPalette.svelte.js';
   import { getLayout } from '../stores/layout.svelte.js';
   import { getChartsOpen } from '../stores/chartsOpen.svelte.js';
+  import * as api from '../stores/api.svelte.js';
   import FilterModal from './FilterModal.svelte';
   import { iconSvg } from '../lib/icons.js';
 
@@ -80,9 +81,11 @@
   </div>
 
   <div class="flex items-center gap-2">
-    {#if router.current.route === 'applications'}
-      <!-- WP-95: List|Kanban segmented toggle, only on /applications.
-           Matches the WP-93 prototype's inset-track + active-button style. -->
+    {#if router.current.route === 'applications' && (api.jobs.value ?? []).length > 0}
+      <!-- View controls only mean something with data: on a fresh install the
+           onboarding welcome is the only thing that matters (WP-119). -->
+      <!-- WP-95: List|Kanban segmented toggle. Matches the WP-93 prototype's
+           inset-track + active-button style. -->
       <div class="flex items-center gap-0.5 p-0.5 rounded-md bg-slate-100 dark:bg-slate-700 shadow-[inset_0_1px_2px_rgba(0,0,0,0.10)]">
         <button
           class="px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors {layoutStore.current === 'list' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
