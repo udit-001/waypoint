@@ -26,6 +26,7 @@ depth — pull from them for resume bullets, STAR answers, and cover letters.
 4. **Verify** — `waypoint profile show --json` round-trips the fields you set.
 
 Unknown keys are rejected — a typo is a hard error, never a silent drop.
+Clearing a field is an empty value — see Rules.
 
 **Done when**: every profile change you intend goes through a document written
 with your file tool and passed to `set --file`. No inline JSON flags.
@@ -40,6 +41,8 @@ with your file tool and passed to `set --file`. No inline JSON flags.
   (GPA, focus areas).
 - **salaryFloor** is `[{region, amount}]` — region required, amount a positive
   number. Currency is derived, never written.
+- **Clearing** — include a key with an empty value to clear it: `""` for a
+  scalar, `[]` for a list. An absent key leaves the field unchanged.
 - **seniority** is derived from experience once experience carries a year
   signal — don't write it unless no experience exists yet.
 
