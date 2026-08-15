@@ -39,8 +39,33 @@
   let allJobs = $state([]);
   let loaded = $state(false);
   let firstRender = true;
-  let copiedCli = $state(false);
+  let copiedPrompt = $state(false);
   let collapsedGroups = $state(new Set());
+
+  // First-run onboarding (WP-119): the assistant drives the pipeline, so the
+  // welcome card hands the HUMAN a prompt for their assistant — never CLI
+  // commands. Dismissal is respected and never re-shown; once jobs exist the
+  // card is gone for good.
+  const WELCOME_PROMPT =
+    "Set up my job search on Waypoint.\n" +
+    "If you don't have the waypoint skill installed yet, install it first with `waypoint skills install`.\n" +
+    "Then interview me about what I'm looking for, save my profile, and start finding jobs for me to review.";
+  let onboardingDismissed = $state(
+    typeof localStorage !== 'undefined' && localStorage.getItem('wp_onboarding_dismissed') === '1',
+  );
+
+  function copyPrompt() {
+    try {
+      navigator.clipboard.writeText(WELCOME_PROMPT);
+      copiedPrompt = true;
+      setTimeout(() => { copiedPrompt = false; }, 1500);
+    } catch { /* clipboard blocked */ }
+  }
+
+  function dismissOnboarding() {
+    onboardingDismissed = true;
+    try { localStorage.setItem('wp_onboarding_dismissed', '1'); } catch { /* storage blocked */ }
+  }
 
   // Status identity (icon + color) is the canonical visual marker.
   // Sourced from lib/status.js STATUS_META — single source of truth.
@@ -160,19 +185,38 @@
     </div>
   {/if}
 {:else if allJobs.length === 0}
-  <!-- First-time empty: no jobs at all. Centered CLI hint + copy. -->
-  <div class="text-center py-20 text-slate-400 dark:text-slate-500">
-    <div class="text-5xl mb-4 opacity-50 flex items-center justify-center">{@html iconSvg('list', 64)}</div>
-    <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-300 mb-2">Your applications appear here</h3>
-    <p class="max-w-sm mx-auto mb-6 leading-relaxed text-sm">Use the CLI to add them:</p>
-    <div class="relative inline-block">
+  {#if !onboardingDismissed}
+    <!-- First-run welcome (WP-119): agent-driven onboarding. The assistant
+         does the work — the web is the review surface. No CLI for humans. -->
+    <div class="max-w-xl mx-auto py-14 text-center px-4">
+      <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">Welcome to Waypoint</h3>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Your assistant does the legwork — you stay in control.</p>
+
+      <p class="text-xs text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wide">Copy this into your assistant</p>
+      <div class="relative inline-block max-w-full">
+        <button
+          class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedPrompt ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
+          onclick={copyPrompt}
+        >{copiedPrompt ? '✓ Copied' : 'Copy'}</button>
+        <pre class="text-left bg-slate-100 dark:bg-slate-800 px-5 pr-20 py-3 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap max-w-lg">{WELCOME_PROMPT}</pre>
+      </div>
+
+      <div class="mt-6">
+        <a href="/profile" class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 underline cursor-pointer">Or start with your profile — it's the first thing your assistant reads.</a>
+      </div>
+
       <button
-        class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedCli ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
-        onclick={copyCli}
-      >{copiedCli ? '✓ Copied' : 'Copy'}</button>
-      <pre class="bg-slate-100 dark:bg-slate-800 px-5 pr-20 py-3 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300">waypoint jobs add "Company" "Position"</pre>
+        class="mt-6 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer bg-transparent border-none p-0"
+        onclick={dismissOnboarding}
+      >Skip — I'll explore on my own.</button>
     </div>
-  </div>
+  {:else}
+    <!-- Dismissed (WP-119): quiet line, no card, no CLI. -->
+    <div class="text-center py-20 text-slate-400 dark:text-slate-500">
+      <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('list', 48)}</div>
+      <p class="text-sm">No applications yet — ask your assistant to find jobs for you.</p>
+    </div>
+  {/if}
 {:else if filteredJobs.length === 0 && filter.any}
   <!-- Velocity chart: edge-to-edge, flush with TopBar. Optional (collapsed
        by default; toggled from the TopBar's Chart button). -->
