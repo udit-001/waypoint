@@ -2,154 +2,107 @@
   <img src="web/public/icons/icon-192.svg" width="64" height="64" alt="Waypoint logo">
 </p>
 
-# Waypoint — Job Tracker
+# Waypoint — your job search, in one place
 
-A job application tracker with a Go backend and Svelte frontend.
-Data mutations happen through the CLI; the web UI is read-only except your
-profile, which you can edit in the browser (Profile — personal info, skills,
-structured experience/education, and the job-search brief).
-The entire web UI is compiled into a single self-contained binary.
+A private job application tracker that lives on your computer and works with
+your AI assistant. Waypoint remembers every application, finds new openings,
+and writes the paperwork — cover letters, emails, interview prep — so you
+don't have to.
 
-## Install
+## Why Waypoint
 
-### Recommended: `go install` (works everywhere, no binary downloads)
+- **Everything in one place.** Every application, note, and document for your
+  job search — searchable and organized, not scattered across spreadsheets,
+  browser tabs, and your inbox.
+- **Private by default.** Your data lives on your computer, in one folder.
+  Nothing is uploaded anywhere. No account, no cloud, no tracking.
+- **Your AI does the grunt work.** Waypoint pairs with AI assistants like
+  Claude, Codex, and pi. You say *"add an application at Google"* or
+  *"write a cover letter for the Stripe role"* — the assistant does the rest.
 
-```bash
-go install github.com/udit-001/waypoint/cmd/waypoint@latest
-```
+## Get started
 
-This compiles Waypoint from source with the web UI embedded. No pre-built
-binaries to download, no Windows SmartScreen warnings, no trust decisions.
+**1. Install Waypoint**
 
-### From a release (if you don't have Go installed)
+No prerequisites — paste this into a terminal:
 
 ```bash
 curl -sfL https://raw.githubusercontent.com/udit-001/waypoint/main/install.sh | sh
 ```
 
-Install a specific version:
+(If you already have Go installed, `go install github.com/udit-001/waypoint/cmd/waypoint@latest` works too.)
 
-```bash
-curl -sfL https://raw.githubusercontent.com/udit-001/waypoint/main/install.sh | sh -s -- v0.4.0
-```
-
-### From source
-
-```bash
-git clone https://github.com/udit-001/waypoint.git
-cd waypoint
-make build     # builds frontend + Go binary
-```
-
-### How it works
-
-The Svelte frontend is pre-built and committed to `web/dist/`, which is embedded
-into the Go binary at compile time via `//go:embed`. This means:
-- `go install` downloads source + pre-built frontend from git → fully functional binary
-- No `node_modules` or build tools needed to install
-- Frontend rebuild is only needed when modifying UI code
-
-### Upgrade
-
-```bash
-waypoint upgrade
-```
-
-This runs `go install github.com/udit-001/waypoint/cmd/waypoint@latest` internally,
-stopping and restarting the server if it's running.
-
-## Quick Start
+**2. Open the dashboard**
 
 ```bash
 waypoint init
 waypoint start
 ```
 
-Opens at `http://localhost:8080`. Use `--port` to change the port.
+Your browser opens at `http://localhost:8080`.
 
-## Usage
-
-Waypoint is CLI-first. Add, update, and delete jobs from the terminal.
-The web UI is a read-only dashboard for what you've tracked — your profile
-(Profile page) is the one thing you can edit there.
-
-```bash
-waypoint jobs add "Google" "Senior SWE" --status Applied
-waypoint jobs add "Meta" "Staff Engineer" --status "Not Applied"
-waypoint jobs stats
-waypoint jobs list
-```
-
-Full CLI reference at [docs/cli.md](docs/cli.md).
-
-### Key commands at a glance
-
-- **`jobs add/list/get/update/delete/stats`** — Track applications
-- **`profile show/set`** — Personal info for AI content generation
-- **`artifacts add/list/get/delete/archive`** — Save generated content
-- **`categories list/add/rename/delete`** — Organize jobs into groups
-- **`init/start/stop`** — System management
-
-All commands accept `--json`.
-
-## AI Integration
-
-Waypoint ships a skill file that teaches AI coding assistants
-how to use the CLI and generate job-search content.
+**3. Connect your AI assistant**
 
 ```bash
 waypoint skills install --agent pi.dev
 ```
 
-Supported agents: `pi.dev`, `claude-code`, `codex`, `opencode`.
+That teaches your assistant how to run Waypoint for you. Supported agents:
+`pi.dev`, `claude-code`, `codex`, `opencode`. Now just talk to it naturally —
+"track a job at Meta, I applied Monday", "what should I follow up on?",
+"prep me for the Amazon interview".
 
-### Built-in generation skills
+To update Waypoint later: `waypoint upgrade`.
 
-| Skill | What it produces |
-|-------|-----------------|
-| Email Generator | Application, follow-up, thank-you, networking (4 tones) |
-| Cover Letter Generator | Formal, casual, creative, executive styles |
-| Resume Keyword Optimizer | Match score, gap analysis, verb suggestions |
-| Interview Prep Assistant | Role-specific Q&A, research checklist |
-| Career Summary Generator | 5 resume summary styles |
-| Statement of Purpose Generator | SOP for grad school, fellowships, research |
+## What you can do
 
-When an AI agent generates content, it saves it as an artifact.
-Artifacts store every variant (tones, lengths, styles) and link to the job.
+**Track every application**
+Add jobs with status, salary, contacts, links, and notes. See your search at
+a glance on the dashboard — progress charts, a Kanban board for your
+pipeline, and a sortable list. Search everything instantly.
 
-```bash
-waypoint artifacts add --skill cover-letter --title "Cover" -f /tmp/cover.txt --job 3
-waypoint artifacts list --job 3
-waypoint artifacts get 12
-```
+**Tell Waypoint about yourself**
+Build a profile once — work history, education, skills — and import it from
+your public LinkedIn page with one click. Set your job-search preferences
+(role, location, constraints) so the AI knows what to look for and tailor
+content to you.
 
-## Web UI
+**Find new openings**
+Search job portals directly, and keep an eye on specific companies: ask your
+assistant to watch a company's careers page and it will flag new postings
+for you to review and track.
 
-Read-only dashboard with 9 views. Manage data via CLI.
+**Let AI write for you**
+Waypoint's built-in skills generate application emails, cover letters,
+interview prep, career summaries, and more — in multiple tones and styles,
+all grounded in your profile. Every version is saved to the job it belongs
+to, so nothing gets lost.
 
-- **Dashboard** — Stats cards + charts (status, category, monthly trend)
-- **Kanban** — Columnar board grouped by status
-- **Table** — Sortable table with category filter
-- **Search** — Full-text search across jobs and artifacts
-- **Categories** — Manage categories
-- **Profile** — View personal info, skills, education
-- **AI Integration** — Browse skills, install command
-- **Artifacts** — Browse generated content with variant tabs
-- **Settings** — Typography, CLI reference, app settings
+Sharing your resume with an AI? Waypoint can strip your phone number and
+email from the copy it hands over automatically.
 
-### Keyboard Shortcuts
+## Where your data lives
 
-| Shortcut | Action |
-|----------|--------|
-| `/` | Focus search |
+One folder on your computer: `~/.waypoint/`. Back that folder up and you've
+backed up everything. Waypoint also works offline — it's a web app that runs
+from your own machine, not from the internet.
 
-## Data
+## The dashboard
 
-SQLite at `~/.waypoint/waypoint.db`. 7 tables: jobs, categories, artifacts,
-history, profile, settings, FTS5 indices.
+- **Dashboard** — charts and stats on how your search is going
+- **Applications** — your pipeline as a Kanban board, list, or table
+- **Search** — one box across jobs, notes, and documents
+- **Profile** — your details, LinkedIn import, and job-search preferences
+- **Documents** — everything your AI has written, organized per job
+- **Categories** — group applications your way
+- **Settings** — appearance and reference
 
-See [docs/architecture.md](docs/architecture.md) for the full schema,
-tech stack, API endpoints, and project layout.
+Press `/` anywhere to jump to search.
+
+## Going deeper
+
+- **[CLI reference](docs/cli.md)** — every command, if you like the terminal
+- **[Architecture](docs/architecture.md)** — how Waypoint is built, for contributors
 
 ## License
 
