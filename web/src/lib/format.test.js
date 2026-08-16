@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatDate, formatDateShort, formatDateTime, formatDateFull } from './format.js';
+import { formatDate, formatDateShort, formatDateTime, formatDateFull, formatMonth } from './format.js';
 
 describe('formatDate', () => {
   it('formats a date with month, day, and year', () => {
@@ -59,5 +59,27 @@ describe('formatDateFull', () => {
 
   it('returns empty string for null', () => {
     assert.equal(formatDateFull(null), '');
+  });
+});
+
+describe('formatMonth', () => {
+  it('formats partial ISO YYYY-MM as abbreviated month + year', () => {
+    assert.equal(formatMonth('2023-03'), 'Mar 2023');
+  });
+
+  it('formats December and January boundaries', () => {
+    assert.equal(formatMonth('2000-01'), 'Jan 2000');
+    assert.equal(formatMonth('1999-12'), 'Dec 1999');
+  });
+
+  it('returns empty string for empty input', () => {
+    assert.equal(formatMonth(''), '');
+    assert.equal(formatMonth(null), '');
+    assert.equal(formatMonth(undefined), '');
+  });
+
+  it('returns invalid input unchanged', () => {
+    assert.equal(formatMonth('2023-13'), '2023-13');
+    assert.equal(formatMonth('not-a-date'), 'not-a-date');
   });
 });

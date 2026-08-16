@@ -1,5 +1,6 @@
 <script>
   import { iconSvg } from '../lib/icons.js';
+  import { formatMonth } from '../lib/format.js';
 
   // Structured list editor for experience/education. Entries are objects with
   // primary/secondary text fields plus partial ISO start/end dates (YYYY-MM);
@@ -80,17 +81,22 @@
 
 <div class="space-y-3">
   {#if readonly}
-    <!-- Read-only (WP-117): LinkedIn-style rows — title bold, company + dates
-         muted on one line, description as a bullet list. -->
+    <!-- Read-only (WP-117): LinkedIn-style rows — title bold with the date
+         range floated right, company muted below, description as bullets. -->
     <div class="space-y-4">
       {#each rows as row}
         {#if row.primary || row.secondary || row.start || row.end || row.description}
           <div>
-            <div class="text-sm font-semibold text-slate-800 dark:text-slate-200">{row.primary}</div>
-            {#if row.secondary || row.start || row.end}
-              <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {row.secondary}{#if row.secondary && (row.start || row.end)}{' · '}{/if}{#if row.start}{row.start}{/if}{#if row.end}{' – '}{row.end}{:else if row.start}{' – present'}{/if}
-              </div>
+            <div class="flex items-baseline justify-between gap-3">
+              <div class="text-sm font-semibold text-slate-800 dark:text-slate-200">{row.primary}</div>
+              {#if row.start || row.end}
+                <span class="text-xs text-slate-500 dark:text-slate-400 tabular-nums shrink-0">
+                  {#if row.start}{formatMonth(row.start)}{/if}{#if row.end}{' – '}{formatMonth(row.end)}{:else if row.start}{' – Present'}{/if}
+                </span>
+              {/if}
+            </div>
+            {#if row.secondary}
+              <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{row.secondary}</div>
             {/if}
             {#if row.description}
               <ul class="mt-1 space-y-0.5 text-sm text-slate-600 dark:text-slate-300">
