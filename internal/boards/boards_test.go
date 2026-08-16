@@ -20,10 +20,16 @@ func (f *fakeFetcher) GetJSON(ctx context.Context, rawURL string, policy HostPol
 		return nil, err
 	}
 	f.requested = append(f.requested, rawURL)
-	for prefix, body := range f.responses {
-		if strings.HasPrefix(rawURL, prefix) {
-			return json.RawMessage(body), nil
+	// Longest-prefix-wins so a detail URL (".../jobs/123") can shadow a
+	// list URL (".../jobs") when both keys exist.
+	best, bestLen := "", -1
+	for prefix := range f.responses {
+		if strings.HasPrefix(rawURL, prefix) && len(prefix) > bestLen {
+			best, bestLen = prefix, len(prefix)
 		}
+	}
+	if bestLen >= 0 {
+		return json.RawMessage(f.responses[best]), nil
 	}
 	return nil, fmt.Errorf("fake: no response for %s", rawURL)
 }
@@ -119,11 +125,12 @@ const bambooListFixture = `{"result":[{"id":"42","jobOpeningName":"Woodworker","
 const bambooDetailFixture = `{"meta":{},"result":{"jobOpening":{"jobOpeningName":"Woodworker","datePosted":"2026-08-01","description":"<p>Sand <b>wood</b>.</p>","minimumExperience":"Entry-level","compensation":"","employmentStatusLabel":"Full Time","departmentLabel":"Shop"}}}`
 
 func TestBambooDetectAndFetch(t *testing.T) {
-	bh := BambooHR{Fetcher: &fakeFetcher{responses: map[string]string{
+	// Fetch is list-only now: metadata, no date, no description.
+	ff := &fakeFetcher{responses: map[string]string{
 		"https://concept2.bamboohr.com/careers/list":      bambooListFixture,
 		"https://concept2.bamboohr.com/careers/42/detail": bambooDetailFixture,
-		// 43 has no canned detail → must degrade, not fail.
-	}}}
+	}}
+	bh := BambooHR{Fetcher: ff}
 	b := Board{Name: "concept2", Company: "Concept2", URL: "https://concept2.bamboohr.com/careers"}
 	p, hit, err := DetectProvider(b)
 	if err != nil {
@@ -139,29 +146,46 @@ func TestBambooDetectAndFetch(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("results = %d", len(results))
 	}
-	// Job 42: detail enriched.
-	enriched := results[0]
-	if enriched.Date != "2026-08-01" {
-		t.Fatalf("date = %q, want 2026-08-01 from detail", enriched.Date)
-	}
-	if enriched.Description != "Sand wood ." {
-		t.Fatalf("description = %q, want HTML-stripped", enriched.Description)
-	}
-	if enriched.Metadata["experience"] != "Entry-level" || enriched.Metadata["employmentType"] != "Full Time" {
-		t.Fatalf("metadata = %v", enriched.Metadata)
-	}
-	// Job 43: detail fetch failed → posting survives dateless.
-	if results[1].Title != "Rower" || results[1].Date != "" {
-		t.Fatalf("degraded posting wrong: %+v", results[1])
+	if results[0].Title != "Woodworker" || results[0].Date != "" || results[0].Description != "" {
+		t.Fatalf("list should be lean (no date, no description): %+v", results[0])
 	}
 	if results[0].URL != "https://concept2.bamboohr.com/careers/42" {
 		t.Fatalf("url = %q", results[0].URL)
 	}
+	// Fetch must not have called the detail endpoint (it is lazy now).
+	for _, req := range ff.requested {
+		if strings.Contains(req, "/detail") {
+			t.Fatalf("Fetch called detail endpoint (lazy fetch broken): %s", req)
+		}
+	}
+}
+
+func TestBambooDetail(t *testing.T) {
+	bh := BambooHR{Fetcher: &fakeFetcher{responses: map[string]string{
+		"https://concept2.bamboohr.com/careers/42/detail": bambooDetailFixture,
+	}}}
+	b := Board{Name: "concept2", Company: "Concept2", URL: "https://concept2.bamboohr.com/careers"}
+	r, err := bh.Detail(context.Background(), b, "42")
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+	if r.Date != "2026-08-01" {
+		t.Fatalf("date = %q", r.Date)
+	}
+	if r.Description == "" || strings.Contains(r.Description, "<") {
+		t.Fatalf("description = %q, want HTML-stripped", r.Description)
+	}
+	if r.Metadata["experience"] != "Entry-level" || r.Metadata["department"] != "Shop" {
+		t.Fatalf("metadata = %v", r.Metadata)
+	}
+	if r.URL != "https://concept2.bamboohr.com/careers/42" {
+		t.Fatalf("url = %q", r.URL)
+	}
 }
 
 const workdayFixture = `{"total":2,"jobPostings":[
-  {"title":"Staff Engineer","bulletOne":"Posted 3 Days Ago","bulletTwo":"San Francisco, CA","externalPath":"/job/SF/Staff-Engineer_JR1"},
-  {"title":"PM","bulletOne":"Posted Today","bulletTwo":"Remote, US","externalPath":"/job/US/PM_JR2"}
+  {"title":"Staff Engineer","postedOn":"Posted 3 Days Ago","locationsText":"San Francisco, CA","bulletFields":["JR1"],"externalPath":"/job/SF/Staff-Engineer_JR1"},
+  {"title":"PM","postedOn":"Posted Today","locationsText":"Remote, US","bulletFields":["JR2"],"externalPath":"/job/US/PM_JR2"}
 ]}`
 
 func TestWorkdayDetectAndFetch(t *testing.T) {
@@ -186,7 +210,17 @@ func TestWorkdayDetectAndFetch(t *testing.T) {
 	if results[0].Date == "" || results[1].Date == "" {
 		t.Fatalf("posted-ago dates not parsed: %+v", results)
 	}
-	if !strings.HasPrefix(results[0].URL, "https://salesforce.wd12.myworkdayjobs.com/en-US/Slack/job/") {
+	// ID must be the externalPath tail so detail can be invoked.
+	if results[0].ID != "Staff-Engineer_JR1" {
+		t.Fatalf("id = %q, want externalPath tail", results[0].ID)
+	}
+	if results[0].Metadata["reqId"] != "JR1" {
+		t.Fatalf("reqId metadata missing: %v", results[0].Metadata)
+	}
+	if results[0].Location != "San Francisco, CA" {
+		t.Fatalf("location = %q", results[0].Location)
+	}
+	if !strings.HasPrefix(results[0].URL, "https://salesforce.wd12.myworkdayjobs.com/Slack/job/") {
 		t.Fatalf("url = %q", results[0].URL)
 	}
 }
@@ -245,6 +279,73 @@ func TestWorkdayInstanceAutoProbe(t *testing.T) {
 	}
 	if !probed {
 		t.Fatal("fetch never probed wd1")
+	}
+}
+
+const greenhouseDetailFixture = `{"id":123,"title":"Software Engineer","absolute_url":"https://job-boards.greenhouse.io/khanacademy/jobs/1","location":{"name":"Remote"},"first_published":"2026-07-15T02:23:11-04:00","updated_at":"2026-08-01T00:00:00Z","content":"<p>Build <b>learning</b>.</p>","departments":[{"name":"Engineering"},{"name":"Core"}]}`
+
+func TestGreenhouseDetail(t *testing.T) {
+	g := Greenhouse{Fetcher: &fakeFetcher{responses: map[string]string{
+		"https://boards-api.greenhouse.io/v1/boards/khanacademy/jobs/123": greenhouseDetailFixture,
+	}}}
+	b := Board{Name: "khanacademy", Company: "Khan Academy", URL: "https://job-boards.greenhouse.io/khanacademy/"}
+	r, err := g.Detail(context.Background(), b, "123")
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+	// FirstPublished (when the posting went live) wins over updated_at.
+	if r.Date != "2026-07-15" {
+		t.Fatalf("date = %q, want first_published normalized", r.Date)
+	}
+	if r.Description == "" || strings.Contains(r.Description, "<") {
+		t.Fatalf("description = %q, want HTML-stripped", r.Description)
+	}
+	if r.Metadata["department"] != "Engineering, Core" {
+		t.Fatalf("departments = %q", r.Metadata["department"])
+	}
+	if r.URL != "https://job-boards.greenhouse.io/khanacademy/jobs/1" {
+		t.Fatalf("url = %q", r.URL)
+	}
+}
+
+const workdayDetailFixture = `{"jobPostingInfo":{"id":"1fc0e5e7f4c21001badca004e1800000","title":"Sr. Staff Software Engineer, Android","jobDescription":"<p>Build <b>Android</b>.</p>","location":"California - San Francisco","postedOn":"Posted 3 Days Ago","startDate":"2026-08-13","timeType":"Full time","jobReqId":"JR355162","jobPostingId":"Sr-Staff-Software-Engineer--Android_JR355162","externalUrl":"https://salesforce.wd12.myworkdayjobs.com/Slack/job/California---San-Francisco/Sr-Staff-Software-Engineer--Android_JR355162","remoteType":"Office Tech-Flexible","country":{"descriptor":"United States of America"}}}`
+
+func TestWorkdayDetail(t *testing.T) {
+	w := Workday{Fetcher: &fakeFetcher{responses: map[string]string{
+		"https://salesforce.wd12.myworkdayjobs.com/wday/cxs/salesforce/Slack/job/": workdayDetailFixture,
+	}}}
+	b := Board{Name: "slack", Company: "Slack", URL: "https://salesforce.wd12.myworkdayjobs.com/Slack/"}
+	r, err := w.Detail(context.Background(), b, "Sr-Staff-Software-Engineer--Android_JR355162")
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+	// Absolute startDate wins over the relative postedOn label.
+	if r.Date != "2026-08-13" {
+		t.Fatalf("date = %q, want startDate", r.Date)
+	}
+	if r.Description == "" || strings.Contains(r.Description, "<") {
+		t.Fatalf("description = %q, want HTML-stripped", r.Description)
+	}
+	if r.Metadata["employmentType"] != "Full time" || r.Metadata["remoteType"] != "Office Tech-Flexible" || r.Metadata["reqId"] != "JR355162" || r.Metadata["country"] != "United States of America" {
+		t.Fatalf("metadata = %v", r.Metadata)
+	}
+	if !strings.HasSuffix(r.URL, "/Sr-Staff-Software-Engineer--Android_JR355162") {
+		t.Fatalf("url = %q", r.URL)
+	}
+}
+
+func TestLeverDetail(t *testing.T) {
+	const one = `{"id":"aaa-111","text":"Backend Engineer","hostedUrl":"https://jobs.lever.co/3pillarglobal/aaa-111","createdAt":1754000000000,"categories":{"location":"Remote"},"descriptionPlain":"Build things."}`
+	l := Lever{Fetcher: &fakeFetcher{responses: map[string]string{
+		"https://api.lever.co/v0/postings/3pillarglobal/aaa-111": one,
+	}}}
+	b := Board{Name: "3pillarglobal", Company: "3Pillar Global", URL: "https://jobs.lever.co/3pillarglobal"}
+	r, err := l.Detail(context.Background(), b, "aaa-111")
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+	if r.Title != "Backend Engineer" || r.Description != "Build things." || r.Date == "" {
+		t.Fatalf("unexpected result: %+v", r)
 	}
 }
 

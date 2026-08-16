@@ -475,6 +475,83 @@ reviewed the staged jobs; any failed board needs attention.`,
 	},
 }
 
+// --- boards detail ---
+
+var boardsDetailCmd = &cobra.Command{
+	Use:   "detail <board> <id>",
+	Short: "Fetch the full body for one posting",
+	Long: `Fetch the full description, date, and metadata for a single posting by
+its board-scoped id (the id field on the listings printed by 'boards list'
+or the jobs array in 'boards sweep'). The provider calls the board's
+per-job detail endpoint.
+
+The swept list carried only title, location, and the list's date. Detail
+is the on-demand enrichment step for postings you're seriously
+considering — for cover-letter generation or final fit judgment. The
+result is merged into the staged entry when one exists (description and
+metadata; the list's structured fields are kept).
+
+Examples:
+  waypoint boards detail khanacademy 123
+  waypoint boards detail slack Sr-Staff-Software-Engineer--Android_JR355162
+  waypoint boards detail concept2 42 --json`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name, id := args[0], args[1]
+		bf, _, err := loadBoardsStore()
+		if err != nil {
+			return err
+		}
+		e := bf.Find(name)
+		if e == nil {
+			return fmt.Errorf("no board named %q", name)
+		}
+		p, hit, err := boards.DetectProvider(toBoard(*e))
+		if err != nil {
+			return fmt.Errorf("provider for board %q: %w", name, err)
+		}
+		_ = hit
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		r, err := p.Detail(ctx, toBoard(*e), id)
+		if err != nil {
+			return formatError("detail failed", err)
+		}
+		// Merge description + metadata into any staged entry (no-op if absent).
+		if r.URL != "" {
+			if err := store.EnrichStaging(r.URL, r.Description, r.Metadata); err != nil {
+				return formatError("enrich staging", err)
+			}
+		}
+		if jsonOut {
+			printJSON(map[string]any{
+				"meta":   map[string]any{"board": name, "provider": p.Name(), "id": id},
+				"result": r,
+			})
+			return nil
+		}
+		fmt.Printf("  %s\n", r.Title)
+		if r.Company != "" || r.Location != "" {
+			fmt.Printf("  %s · %s\n", r.Company, r.Location)
+		}
+		if r.Date != "" {
+			fmt.Printf("  posted %s\n", r.Date)
+		}
+		if len(r.Metadata) > 0 {
+			fmt.Println()
+			for _, k := range sortedKeys(r.Metadata) {
+				fmt.Printf("  %s: %s\n", k, r.Metadata[k])
+			}
+		}
+		if r.Description != "" {
+			fmt.Println()
+			fmt.Println(r.Description)
+		}
+		fmt.Printf("\n  URL: %s\n", r.URL)
+		return nil
+	},
+}
+
 func init() {
 	boardsAddCmd.Flags().StringVar(&boardsAddFlags.company, "company", "", "display company name (default: board name)")
 	boardsAddCmd.Flags().String("url", "", "careers/board URL to detect and verify (required)")
@@ -490,4 +567,5 @@ func init() {
 	boardsCmd.AddCommand(boardsDisableCmd)
 	boardsCmd.AddCommand(boardsVerifyCmd)
 	boardsCmd.AddCommand(boardsSweepCmd)
+	boardsCmd.AddCommand(boardsDetailCmd)
 }

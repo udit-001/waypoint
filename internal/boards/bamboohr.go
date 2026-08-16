@@ -12,11 +12,12 @@ import (
 	"github.com/udit-001/waypoint/internal/scraper"
 )
 
-// BambooHR scrapes a per-tenant BambooHR careers board. The public list
-// endpoint carries only metadata (title, location); posting dates and
-// descriptions live on the per-job detail endpoint, so Fetch makes one
-// detail request per posting (N+1 total). Detail failures degrade to a
-// dateless result rather than failing the board.
+// BambooHR scrapes a per-tenant BambooHR careers board. The public
+// /careers/list endpoint carries only posting metadata (title, location);
+// posting dates and descriptions live on the per-job /careers/{id}/detail
+// endpoint. Fetch returns the lean list (no dates, no descriptions) and
+// Detail is the on-demand enrichment step the agent runs on postings it's
+// seriously considering.
 type BambooHR struct {
 	Fetcher JSONFetcher
 }
@@ -102,10 +103,6 @@ func (BambooHR) policy() HostPolicy {
 	}
 }
 
-// detailDelay spaces out per-job detail requests; BambooHR fronts boards
-// with Cloudflare, and bursts are the fastest way to lose access.
-const detailDelay = 150 * time.Millisecond
-
 func (b BambooHR) Fetch(ctx context.Context, bo Board, hit DetectHit, opts FetchOpts) ([]scraper.Result, error) {
 	f := b.Fetcher
 	if f == nil {
@@ -132,60 +129,64 @@ func (b BambooHR) Fetch(ctx context.Context, bo Board, hit DetectHit, opts Fetch
 			}
 			loc += "Remote"
 		}
-		r := scraper.Result{
+		results = append(results, scraper.Result{
 			ID:       j.ID,
 			Title:    strings.TrimSpace(j.JobOpeningName),
 			Company:  bo.Company,
 			Location: loc,
 			URL:      origin + "/careers/" + strings.TrimSpace(j.ID),
-		}
-		// Detail enriches the result with date, description, and tags.
-		// Failure degrades the posting (no date), never the board.
-		if detail := b.fetchDetail(ctx, f, origin, j.ID); detail != nil {
-			d := detail.Result.JobOpening
-			if d.DatePosted != "" {
-				r.Date = d.DatePosted
-			}
-			if d.Description != "" {
-				r.Description = scraper.CleanHTML(d.Description)
-			}
-			meta := map[string]string{}
-			if d.MinimumExperience != "" {
-				meta["experience"] = d.MinimumExperience
-			}
-			if d.Compensation != "" {
-				meta["compensation"] = d.Compensation
-			}
-			if d.EmploymentLabel != "" {
-				meta["employmentType"] = d.EmploymentLabel
-			}
-			if d.DepartmentLabel != "" {
-				meta["department"] = d.DepartmentLabel
-			}
-			if len(meta) > 0 {
-				r.Metadata = meta
-			}
-		}
-		results = append(results, r)
-		select {
-		case <-time.After(detailDelay):
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
+		})
 	}
 	results = scraper.FilterByRecency(results, opts.JobAgeDays, time.Time{})
 	return scraper.Truncate(results, opts.Limit), nil
 }
 
-// fetchDetail retrieves one posting's detail document, or nil on any error.
-func (b BambooHR) fetchDetail(ctx context.Context, f JSONFetcher, origin, id string) *bambooHRDetailResponse {
+// Detail fetches /careers/{id}/detail and returns the full posting: date
+// posted, HTML-stripped description, and metadata (experience, employment
+// type, department, compensation).
+func (b BambooHR) Detail(ctx context.Context, bo Board, id string) (scraper.Result, error) {
+	origin, ok := bambooOrigin(bo)
+	if !ok {
+		return scraper.Result{}, fmt.Errorf("bamboohr: not a bamboo board: %s", bo.URL)
+	}
+	f := b.Fetcher
+	if f == nil {
+		f = &HTTPFetcher{}
+	}
 	raw, err := f.GetJSON(ctx, origin+"/careers/"+id+"/detail", b.policy())
 	if err != nil {
-		return nil
+		return scraper.Result{}, err
 	}
-	var d bambooHRDetailResponse
-	if err := json.Unmarshal(raw, &d); err != nil {
-		return nil
+	var resp bambooHRDetailResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return scraper.Result{}, err
 	}
-	return &d
+	d := resp.Result.JobOpening
+	loc := strings.TrimSpace(d.Location.City + " " + d.Location.State)
+	r := scraper.Result{
+		ID:          id,
+		Title:       strings.TrimSpace(d.JobOpeningName),
+		Company:     bo.Company,
+		Location:    loc,
+		Date:        d.DatePosted,
+		URL:         origin + "/careers/" + id,
+		Description: strings.TrimSpace(scraper.HTMLToMarkdown(d.Description)),
+	}
+	meta := map[string]string{}
+	if d.MinimumExperience != "" {
+		meta["experience"] = d.MinimumExperience
+	}
+	if d.Compensation != "" {
+		meta["compensation"] = d.Compensation
+	}
+	if d.EmploymentLabel != "" {
+		meta["employmentType"] = d.EmploymentLabel
+	}
+	if d.DepartmentLabel != "" {
+		meta["department"] = d.DepartmentLabel
+	}
+	if len(meta) > 0 {
+		r.Metadata = meta
+	}
+	return r, nil
 }

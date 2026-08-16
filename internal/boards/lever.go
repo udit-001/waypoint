@@ -126,3 +126,54 @@ func (l Lever) Fetch(ctx context.Context, b Board, hit DetectHit, opts FetchOpts
 	results = scraper.FilterByRecency(results, opts.JobAgeDays, time.Time{})
 	return scraper.Truncate(results, opts.Limit), nil
 }
+
+// Detail fetches /v0/postings/{slug}/{id}. The Lever postings API returns
+// the full body in the list, so Detail is mostly a single-posting lookup
+// (refresh from the live API); on detail-only fields (categories, plain
+// description) the live fetch is authoritative when the staged copy is stale.
+func (l Lever) Detail(ctx context.Context, b Board, id string) (scraper.Result, error) {
+	raw := b.URL
+	if raw == "" {
+		return scraper.Result{}, fmt.Errorf("lever: board URL is empty")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return scraper.Result{}, err
+	}
+	m := leverBoardRE.FindStringSubmatch(u.Hostname())
+	if m == nil {
+		return scraper.Result{}, fmt.Errorf("lever: cannot derive slug from %s", raw)
+	}
+	slug := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")[0]
+	if slug == "" {
+		return scraper.Result{}, fmt.Errorf("lever: empty slug in %s", raw)
+	}
+	f := l.Fetcher
+	if f == nil {
+		f = &HTTPFetcher{}
+	}
+	api := fmt.Sprintf("https://api.%s/v0/postings/%s/%s", m[1], slug, id)
+	respBytes, err := f.GetJSON(ctx, api, l.policy())
+	if err != nil {
+		return scraper.Result{}, err
+	}
+	var p leverPosting
+	if err := json.Unmarshal(respBytes, &p); err != nil {
+		return scraper.Result{}, err
+	}
+	r := scraper.Result{
+		ID:          p.ID,
+		Title:       strings.TrimSpace(p.Text),
+		Company:     b.Company,
+		Location:    strings.TrimSpace(p.Cat.Location),
+		URL:         strings.TrimSpace(p.Hosted),
+		Description: strings.TrimSpace(p.Description),
+	}
+	if p.Created > 0 {
+		r.Date = time.UnixMilli(p.Created).Format("2006-01-02")
+	}
+	if r.ID == "" {
+		r.ID = r.URL
+	}
+	return r, nil
+}

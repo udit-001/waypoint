@@ -19,7 +19,9 @@ var greenhouseHosts = []string{
 	"job-boards.eu.greenhouse.io",
 }
 
-// Greenhouse scrapes the public Greenhouse boards API.
+// Greenhouse scrapes the public Greenhouse boards API. The list endpoint
+// returns metadata only (title, location, updated_at); the per-job detail
+// endpoint adds the full HTML description and the department list.
 type Greenhouse struct {
 	Fetcher JSONFetcher
 }
@@ -52,7 +54,8 @@ func (g Greenhouse) Detect(b Board) (*DetectHit, error) {
 	return &DetectHit{API: api}, nil
 }
 
-type greenhouseResponse struct {
+// greenhouseListResponse is the /jobs list response: metadata only.
+type greenhouseListResponse struct {
 	Jobs []struct {
 		ID          json.Number `json:"id"`
 		Title       string      `json:"title"`
@@ -62,6 +65,24 @@ type greenhouseResponse struct {
 		} `json:"location"`
 		UpdatedAt string `json:"updated_at"`
 	} `json:"jobs"`
+}
+
+// greenhouseDetailResponse is the /jobs/{id} detail response. It carries
+// the full HTML content and the structured department list the list
+// endpoint omits.
+type greenhouseDetailResponse struct {
+	ID          json.Number `json:"id"`
+	Title       string      `json:"title"`
+	AbsoluteURL string      `json:"absolute_url"`
+	Content     string      `json:"content"` // full HTML description
+	Location    struct {
+		Name string `json:"name"`
+	} `json:"location"`
+	FirstPublished string `json:"first_published"`
+	UpdatedAt      string `json:"updated_at"`
+	Departments    []struct {
+		Name string `json:"name"`
+	} `json:"departments"`
 }
 
 // policy returns the SSRF host policy for Greenhouse.
@@ -94,7 +115,7 @@ func (g Greenhouse) Fetch(ctx context.Context, b Board, hit DetectHit, opts Fetc
 	if err != nil {
 		return nil, err
 	}
-	var resp greenhouseResponse
+	var resp greenhouseListResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, err
 	}
@@ -118,6 +139,61 @@ func (g Greenhouse) Fetch(ctx context.Context, b Board, hit DetectHit, opts Fetc
 	}
 	results = scraper.FilterByRecency(results, opts.JobAgeDays, time.Time{})
 	return scraper.Truncate(results, opts.Limit), nil
+}
+
+// Detail fetches /v1/boards/{board}/jobs/{id} and returns the full posting
+// body: HTML-stripped description, the preferred published date, and a
+// department-list metadata entry.
+func (g Greenhouse) Detail(ctx context.Context, b Board, id string) (scraper.Result, error) {
+	raw := b.URL
+	if raw == "" {
+		return scraper.Result{}, fmt.Errorf("greenhouse: board URL is empty")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return scraper.Result{}, err
+	}
+	board := strings.Split(strings.Trim(u.Path, "/"), "/")[0]
+	if board == "" || board == "embed" {
+		return scraper.Result{}, fmt.Errorf("greenhouse: cannot derive board token from %s", raw)
+	}
+	f := g.Fetcher
+	if f == nil {
+		f = &HTTPFetcher{}
+	}
+	api := fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs/%s", board, id)
+	respBytes, err := f.GetJSON(ctx, api, g.policy())
+	if err != nil {
+		return scraper.Result{}, err
+	}
+	var d greenhouseDetailResponse
+	if err := json.Unmarshal(respBytes, &d); err != nil {
+		return scraper.Result{}, err
+	}
+	r := scraper.Result{
+		ID:          id,
+		Title:       strings.TrimSpace(d.Title),
+		Company:     b.Company,
+		Location:    strings.TrimSpace(d.Location.Name),
+		URL:         strings.TrimSpace(d.AbsoluteURL),
+		Description: strings.TrimSpace(scraper.HTMLToMarkdown(d.Content)),
+	}
+	// Prefer FirstPublished (when the posting went live); fall back to UpdatedAt.
+	if d.FirstPublished != "" {
+		r.Date = parseAPIDate(d.FirstPublished)
+	} else if d.UpdatedAt != "" {
+		r.Date = parseAPIDate(d.UpdatedAt)
+	}
+	var deptNames []string
+	for _, dep := range d.Departments {
+		if n := strings.TrimSpace(dep.Name); n != "" {
+			deptNames = append(deptNames, n)
+		}
+	}
+	if len(deptNames) > 0 {
+		r.Metadata = map[string]string{"department": strings.Join(deptNames, ", ")}
+	}
+	return r, nil
 }
 
 // parseAPIDate normalizes an RFC3339 timestamp to YYYY-MM-DD. Empty or
