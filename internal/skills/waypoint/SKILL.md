@@ -14,6 +14,8 @@ When the user wants to find new jobs or see what's new:
 
 Scrape is the primary path, but Exa is a legitimate discovery fallback when scrapers fall short. The scraping reference's Entry condition decides when.
 
+When the user names **target companies** (or already-tracked boards), there is a third path: `read` [boards](references/boards.md) — company ATS boards swept on demand.
+
 ## Pipeline
 
 ### Step 1 — Enroll
@@ -136,6 +138,7 @@ Suggest a natural next step:
 | [data/job-extract](references/data/job-extract.md) | parse job from URL/PDF/text → jobs add |
 | [data/exa-search](references/data/exa-search.md) | discovery fallback + company/people/news research on tracked jobs |
 | [data/pdf-extract](references/data/pdf-extract.md) | extract model-safe resume text (pdf_oxide auto, poppler fallback) |
+| [boards](references/boards.md) | company ATS boards: add target companies, sweep for new postings |
 
 Skill IDs: `email-generator` `cover-letter` `resume-optimizer` `interview-prep` `career-summary` `statement-of-purpose`
 

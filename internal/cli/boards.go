@@ -137,7 +137,7 @@ Exit non-zero when no provider claims the URL or verification fails.`,
 		if jsonOut {
 			printJSON(map[string]any{"meta": map[string]any{
 				"board": entry.Name, "provider": p.Name(), "verified": true,
-				"url": entry.URL, "sample_jobs": len(results),
+				"fetched": len(results),
 			}})
 			return nil
 		}
@@ -322,8 +322,8 @@ Workday boards whose URL pins no instance auto-probe known instances.`,
 
 		if jsonOut {
 			printJSON(map[string]any{
-				"meta":   map[string]any{"probed": len(out), "failed": failed},
-				"boards": out,
+				"meta":    map[string]any{"probed": len(out), "failed": failed},
+				"results": out,
 			})
 		} else {
 			for _, s := range out {
@@ -356,10 +356,11 @@ jobs, stage the new postings, and print a per-board summary.
 
 The JSON meta block is the completion contract for agents:
   fetched  jobs returned by the board
-  new      staged this sweep
+  new      staged this sweep (listed in that board's jobs array)
   seen     already staged or tracked (skipped)
-A board with new==0 is swept; failed>0 means the board needs attention
-(verify it, fix its URL, or disable it).`,
+  failed   this board errored — verify it, fix its URL, or disable it
+Sweep is done when every enabled board reports new==0 or the user has
+reviewed the staged jobs; any failed board needs attention.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		bf, _, err := loadBoardsStore()
 		if err != nil {
@@ -385,13 +386,14 @@ A board with new==0 is swept; failed>0 means the board needs attention
 		defer cancel()
 
 		type sweepResult struct {
-			Board    string `json:"board"`
-			Provider string `json:"provider"`
-			Fetched  int    `json:"fetched"`
-			New      int    `json:"new"`
-			Seen     int    `json:"seen"`
-			Failed   bool   `json:"failed"`
-			Error    string `json:"error,omitempty"`
+			Board    string           `json:"board"`
+			Provider string           `json:"provider"`
+			Fetched  int              `json:"fetched"`
+			New      int              `json:"new"`
+			Seen     int              `json:"seen"`
+			Failed   bool             `json:"failed"`
+			Error    string           `json:"error,omitempty"`
+			Jobs     []scraper.Result `json:"jobs,omitempty"` // staged this sweep — present these to the user
 		}
 		var out []sweepResult
 		totalNew, failed := 0, 0
@@ -445,6 +447,7 @@ A board with new==0 is swept; failed>0 means the board needs attention
 			}
 			sr.New = len(fresh)
 			totalNew += len(fresh)
+			sr.Jobs = fresh
 			out = append(out, sr)
 		}
 
@@ -477,7 +480,7 @@ func init() {
 	boardsAddCmd.Flags().String("url", "", "careers/board URL to detect and verify (required)")
 	_ = boardsAddCmd.MarkFlagRequired("url")
 
-	boardsSweepCmd.Flags().IntVar(&boardsSweepFlags.jobage, "jobage", 0, "only postings from the last N days (0 = all)")
+	boardsSweepCmd.Flags().IntVar(&boardsSweepFlags.jobage, "jobage", 90, "only postings from the last N days (0 = all; same default as scrape run)")
 	boardsSweepCmd.Flags().IntVar(&boardsSweepFlags.limit, "limit", 0, "cap results per board (0 = no cap)")
 
 	boardsCmd.AddCommand(boardsAddCmd)

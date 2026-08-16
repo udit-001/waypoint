@@ -37,7 +37,14 @@ Alias: `waypoint cat`
 
 | Command | Description |
 |---------|-------------|
-| `waypoint scrape run <name>` | Run a job scraper. Flags: `--query`, `--location`, `--limit`, `--jobage`, `--remote`, `--page`, `--today <YYYY-MM-DD>` (reference date for recency) |
+| `waypoint scrape run <name>` | Run a job scraper and stage/print new results. Flags: `--query`, `--location`, `--limit`, `--jobage` (default 90), `--remote`, `--page`, `--today <YYYY-MM-DD>` (reference date for recency) |
+| `waypoint scrape list` | List registered scrapers with categories |
+| `waypoint scrape staged` | Review staged results. Flags: `--status new|dismissed`, `--limit` |
+| `waypoint scrape dismiss <url>` | Mark a staged result as dismissed |
+| `waypoint scrape promote [<url>]` | Move staged result(s) into tracked jobs; `--all` promotes every new entry |
+| `waypoint scrape detail <name> <id>` | Fetch full posting details (LinkedIn) |
+| `waypoint scrape prune` | Remove old staged entries. Flag: `--days` (default 30) |
+| `waypoint scrape migrate` | Import legacy scrape-cache.json into the database |
 
 ## Boards
 
@@ -51,7 +58,7 @@ Company ATS boards (Greenhouse, Workday, Lever, BambooHR) — one company's care
 | `waypoint boards enable <name>` | Include a board in sweeps |
 | `waypoint boards disable <name>` | Skip a board in sweeps |
 | `waypoint boards verify [<name>]` | Re-probe one board (or all enabled) for liveness; exits non-zero on failure |
-| `waypoint boards sweep` | Fetch every enabled board, deduplicate against staging and tracked jobs, and stage new postings. Flags: `--jobage`, `--limit` (per board). The JSON meta block (`fetched`/`new`/`seen`/`failed` per board) is the completion contract for agents: `new==0` everywhere → done; any `failed` → verify/fix/disable that board |
+| `waypoint boards sweep` | Fetch every enabled board, deduplicate against staging and tracked jobs, and stage new postings. Flags: `--jobage` (default 90, same as `scrape run`), `--limit` (per board). JSON: per-board `fetched`/`new`/`seen`/`failed` plus the `jobs` array staged this sweep — the completion contract for agents: `new==0` everywhere → done; any `failed` → verify/fix/disable that board |
 
 ## Artifacts
 
