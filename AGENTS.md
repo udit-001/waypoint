@@ -55,7 +55,7 @@ The scraper registry is compile-time: each package self-registers in `init()`. P
 7. Optional `Detailer` interface (`Detail(ctx, id) (*Result, error)`) if the portal has a detail endpoint — the CLI type-asserts it.
 8. Test: a `mockFetcher` returning a `testHTML` const fixture, assert parsing. See `iisc_test.go:10-32`.
 
-**Done when:** `go test ./internal/scraper/<name>/` passes, `scraper.Get("<name>")` returns the scraper, and `waypoint scrape <name>` returns results against the live portal.
+**Done when:** `go test ./internal/scraper/<name>/` passes, `scraper.Get("<name>")` returns the scraper, and `waypoint scrape run <name>` returns results against the live portal.
 
 ## Adding a CLI command
 
