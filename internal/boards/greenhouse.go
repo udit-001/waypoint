@@ -1,0 +1,145 @@
+package boards
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/udit-001/waypoint/internal/scraper"
+)
+
+// greenhouseHosts is the SSRF allowlist for the Greenhouse provider.
+var greenhouseHosts = []string{
+	"boards-api.greenhouse.io",
+	"boards.greenhouse.io",
+	"job-boards.greenhouse.io",
+	"job-boards.eu.greenhouse.io",
+}
+
+// Greenhouse scrapes the public Greenhouse boards API.
+type Greenhouse struct {
+	Fetcher JSONFetcher
+}
+
+func init() {
+	Register(Greenhouse{})
+}
+
+func (Greenhouse) Name() string { return "greenhouse" }
+
+// Detect claims a Board whose careers URL (or API pin) is a Greenhouse host.
+func (g Greenhouse) Detect(b Board) (*DetectHit, error) {
+	raw := b.URL
+	if raw == "" {
+		return nil, nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, err
+	}
+	if !containsHost(greenhouseHosts, u.Hostname()) {
+		return nil, nil
+	}
+	// Host already checked; the board token is the first path segment.
+	board := strings.Split(strings.Trim(u.Path, "/"), "/")[0]
+	if board == "" || board == "embed" || strings.Contains(board, ".") {
+		return nil, nil
+	}
+	api := fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs", board)
+	return &DetectHit{API: api}, nil
+}
+
+type greenhouseResponse struct {
+	Jobs []struct {
+		ID          json.Number `json:"id"`
+		Title       string      `json:"title"`
+		AbsoluteURL string      `json:"absolute_url"`
+		Location    struct {
+			Name string `json:"name"`
+		} `json:"location"`
+		UpdatedAt string `json:"updated_at"`
+	} `json:"jobs"`
+}
+
+// policy returns the SSRF host policy for Greenhouse.
+func (Greenhouse) policy() HostPolicy {
+	allowed := map[string]bool{}
+	for _, h := range greenhouseHosts {
+		allowed[h] = true
+	}
+	return func(raw string) error {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return err
+		}
+		if u.Scheme != "https" {
+			return fmt.Errorf("greenhouse: URL must use https")
+		}
+		if !allowed[u.Hostname()] {
+			return fmt.Errorf("greenhouse: untrusted hostname %q", u.Hostname())
+		}
+		return nil
+	}
+}
+
+func (g Greenhouse) Fetch(ctx context.Context, b Board, hit DetectHit, opts FetchOpts) ([]scraper.Result, error) {
+	f := g.Fetcher
+	if f == nil {
+		f = &HTTPFetcher{}
+	}
+	raw, err := f.GetJSON(ctx, hit.API, g.policy())
+	if err != nil {
+		return nil, err
+	}
+	var resp greenhouseResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	results := make([]scraper.Result, 0, len(resp.Jobs))
+	for _, j := range resp.Jobs {
+		if strings.TrimSpace(j.Title) == "" || strings.TrimSpace(j.AbsoluteURL) == "" {
+			continue
+		}
+		r := scraper.Result{
+			ID:       j.ID.String(),
+			Title:    strings.TrimSpace(j.Title),
+			Company:  b.Company,
+			Location: strings.TrimSpace(j.Location.Name),
+			Date:     parseAPIDate(j.UpdatedAt),
+			URL:      strings.TrimSpace(j.AbsoluteURL),
+		}
+		if r.ID == "" {
+			r.ID = r.URL
+		}
+		results = append(results, r)
+	}
+	results = scraper.FilterByRecency(results, opts.JobAgeDays, time.Time{})
+	return scraper.Truncate(results, opts.Limit), nil
+}
+
+// parseAPIDate normalizes an RFC3339 timestamp to YYYY-MM-DD. Empty or
+// unparseable values return "". Boards that don't expose a date surface
+// yield a blank Date, which the recency filter treats conservatively.
+func parseAPIDate(s string) string {
+	if s == "" {
+		return ""
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return ""
+	}
+	return t.Format("2006-01-02")
+}
+
+// containsHost reports whether s lies within hosts.
+func containsHost(hosts []string, s string) bool {
+	for _, h := range hosts {
+		if h == s {
+			return true
+		}
+	}
+	return false
+}
