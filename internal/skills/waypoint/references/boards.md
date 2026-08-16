@@ -47,7 +47,7 @@ Sweep every enabled board: fetch, filter by `--jobage` (default 90 days, same as
 - `jobs` — **the postings this sweep staged. Present these to the user**, numbered, exactly like scrape results (title, company, location, date).
 - `failed` — the board errored. Report it; suggest `boards verify <name>`, a URL fix, or `boards disable <name>`.
 
-BambooHR boards expose no posting dates — their results pass `--jobage` unfiltered and may be stale; judge them against the curation brief before promoting.
+All four vendors expose posting dates, so `--jobage` filters every board. (BambooHR fetches a per-job detail request to get the date — sweep makes N+1 requests to a BambooHR board, so a large board sweeps slower.)
 
 **Done when**: every enabled board reports `new: 0`, or the user has reviewed everything the sweep staged. Any `failed: true` board is reported with a next step.
 

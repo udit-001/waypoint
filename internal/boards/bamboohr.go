@@ -12,9 +12,11 @@ import (
 	"github.com/udit-001/waypoint/internal/scraper"
 )
 
-// BambooHR scrapes the public per-tenant BambooHR careers list API.
-// Per-tenant subdomains are the variable part, so SSRF defense uses a regex
-// match on <safe-tenant>.bamboohr.com rather than a static allowlist.
+// BambooHR scrapes a per-tenant BambooHR careers board. The public list
+// endpoint carries only metadata (title, location); posting dates and
+// descriptions live on the per-job detail endpoint, so Fetch makes one
+// detail request per posting (N+1 total). Detail failures degrade to a
+// dateless result rather than failing the board.
 type BambooHR struct {
 	Fetcher JSONFetcher
 }
@@ -39,11 +41,10 @@ func (b BambooHR) Detect(bo Board) (*DetectHit, error) {
 // bambooOrigin returns the tenant origin (https://<tenant>.bamboohr.com)
 // when the board matches, else "".
 func bambooOrigin(b Board) (string, bool) {
-	raw := b.URL
-	if raw == "" {
+	if b.URL == "" {
 		return "", false
 	}
-	u, err := url.Parse(raw)
+	u, err := url.Parse(b.URL)
 	if err != nil {
 		return "", false
 	}
@@ -53,7 +54,7 @@ func bambooOrigin(b Board) (string, bool) {
 	return "https://" + u.Hostname(), true
 }
 
-type bambooHRResponse struct {
+type bambooHRListResponse struct {
 	Result []struct {
 		ID             string `json:"id"`
 		JobOpeningName string `json:"jobOpeningName"`
@@ -62,6 +63,25 @@ type bambooHRResponse struct {
 			State string `json:"state"`
 		} `json:"location"`
 		IsRemote *bool `json:"isRemote"`
+	} `json:"result"`
+}
+
+type bambooHRDetailResponse struct {
+	Result struct {
+		JobOpening struct {
+			JobOpeningName     string `json:"jobOpeningName"`
+			JobOpeningShareURL string `json:"jobOpeningShareUrl"`
+			DepartmentLabel    string `json:"departmentLabel"`
+			EmploymentLabel    string `json:"employmentStatusLabel"`
+			Description        string `json:"description"`
+			DatePosted         string `json:"datePosted"`
+			MinimumExperience  string `json:"minimumExperience"`
+			Compensation       string `json:"compensation"`
+			Location           struct {
+				City  string `json:"city"`
+				State string `json:"state"`
+			} `json:"location"`
+		} `json:"jobOpening"`
 	} `json:"result"`
 }
 
@@ -82,6 +102,10 @@ func (BambooHR) policy() HostPolicy {
 	}
 }
 
+// detailDelay spaces out per-job detail requests; BambooHR fronts boards
+// with Cloudflare, and bursts are the fastest way to lose access.
+const detailDelay = 150 * time.Millisecond
+
 func (b BambooHR) Fetch(ctx context.Context, bo Board, hit DetectHit, opts FetchOpts) ([]scraper.Result, error) {
 	f := b.Fetcher
 	if f == nil {
@@ -91,7 +115,7 @@ func (b BambooHR) Fetch(ctx context.Context, bo Board, hit DetectHit, opts Fetch
 	if err != nil {
 		return nil, err
 	}
-	var resp bambooHRResponse
+	var resp bambooHRListResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, err
 	}
@@ -108,14 +132,60 @@ func (b BambooHR) Fetch(ctx context.Context, bo Board, hit DetectHit, opts Fetch
 			}
 			loc += "Remote"
 		}
-		results = append(results, scraper.Result{
+		r := scraper.Result{
 			ID:       j.ID,
 			Title:    strings.TrimSpace(j.JobOpeningName),
 			Company:  bo.Company,
 			Location: loc,
 			URL:      origin + "/careers/" + strings.TrimSpace(j.ID),
-		})
+		}
+		// Detail enriches the result with date, description, and tags.
+		// Failure degrades the posting (no date), never the board.
+		if detail := b.fetchDetail(ctx, f, origin, j.ID); detail != nil {
+			d := detail.Result.JobOpening
+			if d.DatePosted != "" {
+				r.Date = d.DatePosted
+			}
+			if d.Description != "" {
+				r.Description = scraper.CleanHTML(d.Description)
+			}
+			meta := map[string]string{}
+			if d.MinimumExperience != "" {
+				meta["experience"] = d.MinimumExperience
+			}
+			if d.Compensation != "" {
+				meta["compensation"] = d.Compensation
+			}
+			if d.EmploymentLabel != "" {
+				meta["employmentType"] = d.EmploymentLabel
+			}
+			if d.DepartmentLabel != "" {
+				meta["department"] = d.DepartmentLabel
+			}
+			if len(meta) > 0 {
+				r.Metadata = meta
+			}
+		}
+		results = append(results, r)
+		select {
+		case <-time.After(detailDelay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 	results = scraper.FilterByRecency(results, opts.JobAgeDays, time.Time{})
 	return scraper.Truncate(results, opts.Limit), nil
+}
+
+// fetchDetail retrieves one posting's detail document, or nil on any error.
+func (b BambooHR) fetchDetail(ctx context.Context, f JSONFetcher, origin, id string) *bambooHRDetailResponse {
+	raw, err := f.GetJSON(ctx, origin+"/careers/"+id+"/detail", b.policy())
+	if err != nil {
+		return nil
+	}
+	var d bambooHRDetailResponse
+	if err := json.Unmarshal(raw, &d); err != nil {
+		return nil
+	}
+	return &d
 }

@@ -114,11 +114,15 @@ func TestLeverDetectAndFetch(t *testing.T) {
 	}
 }
 
-const bambooFixture = `{"result":[{"id":"42","jobOpeningName":"Woodworker","location":{"city":"Morrisville","state":"VT"},"isRemote":false}]}`
+const bambooListFixture = `{"result":[{"id":"42","jobOpeningName":"Woodworker","location":{"city":"Morrisville","state":"VT"},"isRemote":false},{"id":"43","jobOpeningName":"Rower","location":{"city":"Austin","state":"TX"},"isRemote":true}]}`
+
+const bambooDetailFixture = `{"meta":{},"result":{"jobOpening":{"jobOpeningName":"Woodworker","datePosted":"2026-08-01","description":"<p>Sand <b>wood</b>.</p>","minimumExperience":"Entry-level","compensation":"","employmentStatusLabel":"Full Time","departmentLabel":"Shop"}}}`
 
 func TestBambooDetectAndFetch(t *testing.T) {
 	bh := BambooHR{Fetcher: &fakeFetcher{responses: map[string]string{
-		"https://concept2.bamboohr.com/careers/list": bambooFixture,
+		"https://concept2.bamboohr.com/careers/list":      bambooListFixture,
+		"https://concept2.bamboohr.com/careers/42/detail": bambooDetailFixture,
+		// 43 has no canned detail → must degrade, not fail.
 	}}}
 	b := Board{Name: "concept2", Company: "Concept2", URL: "https://concept2.bamboohr.com/careers"}
 	p, hit, err := DetectProvider(b)
@@ -132,8 +136,23 @@ func TestBambooDetectAndFetch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if len(results) != 1 || results[0].Title != "Woodworker" || results[0].Location != "Morrisville VT" {
-		t.Fatalf("unexpected: %+v", results)
+	if len(results) != 2 {
+		t.Fatalf("results = %d", len(results))
+	}
+	// Job 42: detail enriched.
+	enriched := results[0]
+	if enriched.Date != "2026-08-01" {
+		t.Fatalf("date = %q, want 2026-08-01 from detail", enriched.Date)
+	}
+	if enriched.Description != "Sand wood ." {
+		t.Fatalf("description = %q, want HTML-stripped", enriched.Description)
+	}
+	if enriched.Metadata["experience"] != "Entry-level" || enriched.Metadata["employmentType"] != "Full Time" {
+		t.Fatalf("metadata = %v", enriched.Metadata)
+	}
+	// Job 43: detail fetch failed → posting survives dateless.
+	if results[1].Title != "Rower" || results[1].Date != "" {
+		t.Fatalf("degraded posting wrong: %+v", results[1])
 	}
 	if results[0].URL != "https://concept2.bamboohr.com/careers/42" {
 		t.Fatalf("url = %q", results[0].URL)
