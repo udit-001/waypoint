@@ -9,11 +9,17 @@ import { setPage } from '../stores/page.svelte.js';
   import TextInput from '../components/TextInput.svelte';
   import SelectInput from '../components/SelectInput.svelte';
   import EntryEditor from '../components/EntryEditor.svelte';
-  import { prettify } from '../lib/brief.js';
+  import { prettify, briefStatus } from '../lib/brief.js';
   import * as api from '../stores/api.svelte.js';
   import { getPage, setEditing } from '../stores/page.svelte.js';
+  import { getProfileTabs } from '../stores/profileTabs.svelte.js';
 
   const page = getPage();
+
+  // Two tabs on one route (/profile): the identity cards vs the job-search
+  // brief. The active tab persists to ?tab= + localStorage (lib/profileTabs).
+  const tabs = getProfileTabs();
+  const prefsStatus = $derived(briefStatus(briefData));
 
   // View-mode helpers (WP-117): clean read-only render. Empty fields hide;
   // each empty section shows one quiet line.
@@ -46,6 +52,90 @@ import { setPage } from '../stores/page.svelte.js';
 
   // Editable salary-floor rows (free-text inputs commit on blur).
   let salaryRows = $state([]);
+
+  // isEmpty drives the import card: an empty profile gets the full seed card
+  // (fetch is the first step); a populated one gets a collapsed "Update from
+  // LinkedIn" affordance, so the least-frequent action never dominates.
+  let isEmpty = $derived(
+    !(profileData?.name?.trim()) &&
+    !(profileData?.title?.trim()) &&
+    !(profileData?.skills?.length) &&
+    !(profileData?.experience?.length) &&
+    !(profileData?.education?.length),
+  );
+
+  // LinkedIn import (Exa MCP): fetch → preview → apply via the existing
+  // PATCH route. The import endpoint merges and never writes; Apply is the
+  // only writer. The preview is a {doc, summary} diff — added/updated/kept.
+  let linkedinUrl = $state('');
+  let importing = $state(false);
+  let importError = $state(null);
+  let importPreview = $state(null);
+  let importActive = $state(false);
+  let importApplied = $state(false);
+  let importAppliedSummary = $state(null);
+  let importAppliedTimer = null;
+
+  async function fetchLinkedIn() {
+    importing = true;
+    importError = null;
+    importApplied = false;
+    importAppliedSummary = null;
+    try {
+      importPreview = await api.importLinkedInProfile(linkedinUrl);
+      importActive = false;
+    } catch (e) {
+      importError = e.message || 'Could not fetch profile';
+    } finally {
+      importing = false;
+    }
+  }
+
+  function discardImport() {
+    importPreview = null;
+    importError = null;
+    importActive = false;
+  }
+
+  // One-line summary of what a merge changed, for post-apply feedback.
+  function importSummaryText(sum) {
+    const n = (a) => a?.length || 0;
+    const parts = [];
+    if (n(sum.experienceAdded)) parts.push(`${n(sum.experienceAdded)} role${n(sum.experienceAdded) === 1 ? '' : 's'} added`);
+    if (n(sum.experienceUpdated)) parts.push(`${n(sum.experienceUpdated)} role${n(sum.experienceUpdated) === 1 ? '' : 's'} updated`);
+    if (n(sum.educationAdded)) parts.push(`${n(sum.educationAdded)} education added`);
+    if (n(sum.educationUpdated)) parts.push(`${n(sum.educationUpdated)} education updated`);
+    if (n(sum.skillsAdded)) parts.push(`+${n(sum.skillsAdded)} skills`);
+    return parts.length ? parts.join(' · ') : 'no changes';
+  }
+
+  // Mirrors save() but surfaces failures inside the import card (save()
+  // swallows errors into a header-only indicator).
+  async function applyLinkedIn() {
+    saving = true;
+    importError = null;
+    importApplied = false;
+    importAppliedSummary = null;
+    try {
+      briefData = await api.updateBrief(importPreview.doc);
+      await api.profile.refresh();
+      profileData = api.profile.value;
+      importAppliedSummary = importSummaryText(importPreview.summary);
+      discardImport();
+      linkedinUrl = '';
+      importApplied = true;
+      clearTimeout(importAppliedTimer);
+      importAppliedTimer = setTimeout(() => {
+        importApplied = false;
+        importAppliedSummary = null;
+      }, 4000);
+    } catch (e) {
+      importError = e.message || 'Apply failed';
+    } finally {
+      saving = false;
+    }
+    syncSalaryRows();
+  }
 
   const REMOTE_OPTIONS = [
     { value: '', label: 'Any' },
@@ -87,12 +177,6 @@ import { setPage } from '../stores/page.svelte.js';
 
     // First-run (WP-117): an empty profile opens edit mode by itself; the
     // clean view resets on every visit, so edit mode never sticks.
-    const isEmpty =
-      !(profileData.name?.trim()) &&
-      !(profileData.title?.trim()) &&
-      !(profileData.skills?.length) &&
-      !(profileData.experience?.length) &&
-      !(profileData.education?.length);
     setEditing(isEmpty);
 
     return () => window.removeEventListener('keydown', onEsc);
@@ -168,7 +252,296 @@ import { setPage } from '../stores/page.svelte.js';
 </script>
 
 <div class="space-y-4">
-  <!-- Job Search Preferences -->
+  <!-- Tabs: profile (identity) vs job-search preferences (brief config).
+       The active tab persists via ?tab= + localStorage. -->
+  <div class="flex items-center gap-1">
+    <button
+      type="button"
+      class="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-medium transition-colors cursor-pointer {tabs.current === 'profile' ? 'bg-slate-700 dark:bg-slate-900 text-white' : 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600'}"
+      onclick={() => (tabs.current = 'profile')}
+    >{@html iconSvg('user', 15)} Profile</button>
+    <button
+      type="button"
+      class="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-medium transition-colors cursor-pointer {tabs.current === 'preferences' ? 'bg-slate-700 dark:bg-slate-900 text-white' : 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600'}"
+      onclick={() => (tabs.current = 'preferences')}
+    >{@html iconSvg('target', 15)} Job Search Preferences
+      {#if briefData && !prefsStatus.complete}
+        <span class="rounded-full px-1.5 text-[10px] font-semibold tabular-nums {tabs.current === 'preferences' ? 'bg-white/20 text-white' : 'bg-slate-700 dark:bg-slate-900 text-white'}">{prefsStatus.openCount}</span>
+      {/if}
+    </button>
+  </div>
+
+  {#if tabs.current === 'profile'}
+  <!-- Import from LinkedIn (Exa MCP): full seed card when the profile is
+       empty; a collapsed "Update from LinkedIn" affordance when populated.
+       The endpoint merges (never deletes) and never writes — Apply PATCHes
+       the merged doc through the existing route. -->
+  <Card hover={false}>
+    {#snippet fetchRow()}
+      <div class="mt-4 flex items-center gap-2">
+        <input
+          class="wp-input flex-1 min-w-0 placeholder:text-slate-400"
+          placeholder="https://www.linkedin.com/in/username"
+          aria-label="LinkedIn profile URL"
+          bind:value={linkedinUrl}
+          onkeydown={(e) => { if (e.key === 'Enter' && !importing && linkedinUrl.trim()) fetchLinkedIn(); }}
+        />
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 h-[38px] px-3 rounded-lg text-sm font-medium bg-slate-700 dark:bg-slate-900 text-white transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+          disabled={importing || !linkedinUrl.trim()}
+          onclick={fetchLinkedIn}
+        >{@html iconSvg('linkedin', 15)} {importing ? 'Fetching…' : 'Fetch profile'}</button>
+      </div>
+    {/snippet}
+
+    <div class="flex items-start justify-between">
+      <div>
+        <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200">
+          {@html iconSvg('linkedin', 18)} {isEmpty ? 'Import from LinkedIn' : 'Update from LinkedIn'}
+        </h3>
+        <p class="text-xs text-slate-400 mt-2">
+          {isEmpty
+            ? 'Fetch a public profile and prefill name, title, location, skills, experience, and education.'
+            : 'Sync roles, dates, skills, and education from your public LinkedIn profile.'}
+        </p>
+      </div>
+      {#if importApplied}
+        <span class="text-xs text-emerald-600 dark:text-emerald-400 shrink-0 text-right">
+          {importAppliedSummary ? `Updated ✓ ${importAppliedSummary}` : 'Applied ✓'}
+        </span>
+      {/if}
+    </div>
+
+    {#if importPreview}
+      <!-- Diff preview: exactly what Apply will write. -->
+      <div class="mt-4 space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
+          {#if importPreview.doc.name}
+            <div><label class="wp-label">Name</label><div class="text-sm text-slate-700 dark:text-slate-200 break-words">{importPreview.doc.name}</div></div>
+          {/if}
+          {#if importPreview.doc.title}
+            <div><label class="wp-label">Professional Title</label><div class="text-sm text-slate-700 dark:text-slate-200 break-words">{importPreview.doc.title}</div></div>
+          {/if}
+          {#if importPreview.doc.currentLocation}
+            <div><label class="wp-label">Current Location</label><div class="text-sm text-slate-700 dark:text-slate-200 break-words">{importPreview.doc.currentLocation}</div></div>
+          {/if}
+        </div>
+        {#if (importPreview.summary.skillsAdded ?? []).length}
+          <div>
+            <label class="wp-label">{isEmpty ? 'Skills' : 'New skills'}</label>
+            <div class="flex flex-wrap gap-1.5">
+              {#each importPreview.summary.skillsAdded as s}
+                <span class={PILL_CLS}>{s}</span>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if (importPreview.summary.experienceAdded ?? []).length}
+          <div>
+            <label class="wp-label">{isEmpty ? 'Experience' : 'New experience'}</label>
+            <EntryEditor entries={importPreview.summary.experienceAdded} primaryKey="title" secondaryKey="company" readonly />
+          </div>
+        {/if}
+        {#if (importPreview.summary.experienceUpdated ?? []).length}
+          <div>
+            <label class="wp-label">Updated experience</label>
+            <EntryEditor entries={importPreview.summary.experienceUpdated} primaryKey="title" secondaryKey="company" readonly />
+          </div>
+        {/if}
+        {#if importPreview.summary.experienceKept > 0}
+          <p class="text-xs text-slate-400">{importPreview.summary.experienceKept} existing role{importPreview.summary.experienceKept === 1 ? '' : 's'} unchanged.</p>
+        {/if}
+        {#if (importPreview.summary.educationAdded ?? []).length}
+          <div>
+            <label class="wp-label">{isEmpty ? 'Education' : 'New education'}</label>
+            <EntryEditor entries={importPreview.summary.educationAdded} primaryKey="degree" secondaryKey="institution" readonly />
+          </div>
+        {/if}
+        {#if (importPreview.summary.educationUpdated ?? []).length}
+          <div>
+            <label class="wp-label">Updated education</label>
+            <EntryEditor entries={importPreview.summary.educationUpdated} primaryKey="degree" secondaryKey="institution" readonly />
+          </div>
+        {/if}
+        {#if importPreview.summary.educationKept > 0}
+          <p class="text-xs text-slate-400">{importPreview.summary.educationKept} existing education entr{importPreview.summary.educationKept === 1 ? 'y' : 'ies'} unchanged.</p>
+        {/if}
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 h-[38px] px-3 rounded-lg text-sm font-medium bg-slate-700 dark:bg-slate-900 text-white transition-colors cursor-pointer disabled:opacity-50"
+            disabled={saving}
+            onclick={applyLinkedIn}
+          >{@html iconSvg('check', 15)} Apply to profile</button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer bg-transparent border-none p-0"
+            onclick={discardImport}
+          >Discard</button>
+          {#if saving}<span class="text-xs text-slate-400">Saving…</span>{/if}
+        </div>
+        <p class="text-xs text-slate-400">
+          {isEmpty
+            ? 'Applying replaces current name, title, location, skills, experience, and education.'
+            : 'Adds new roles and skills, updates matched ones, and keeps everything else. Nothing is removed.'}
+        </p>
+      </div>
+    {:else if isEmpty}
+      <!-- Seed: the fetch row is the first step. -->
+      {@render fetchRow()}
+      {#if importing}
+        <p class="text-xs text-slate-400 mt-2">Fetching profile — this usually takes 5–15 seconds.</p>
+      {:else}
+        <p class="text-xs text-slate-400 mt-2">The profile must be public — private profiles won't load.</p>
+      {/if}
+    {:else if importActive}
+      <!-- Update, expanded. -->
+      {@render fetchRow()}
+      {#if importing}
+        <p class="text-xs text-slate-400 mt-2">Fetching profile — this usually takes 5–15 seconds.</p>
+      {/if}
+    {:else}
+      <!-- Update, collapsed: one quiet affordance. -->
+      <button
+        type="button"
+        class="mt-4 inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer bg-transparent border-none p-0"
+        onclick={() => (importActive = true)}
+      >{@html iconSvg('linkedin', 15)} Update from LinkedIn</button>
+    {/if}
+    {#if importError}
+      <p class="text-xs text-red-600 dark:text-red-400 mt-2">{importError}</p>
+    {/if}
+  </Card>
+
+  {#if profileData}
+    <!-- Personal Info -->
+    <Card hover={false}>
+      <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-4">
+        {@html iconSvg("user", 18)} Personal Info
+      </h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
+        {#if page.editing}
+        <TextInput label="Full Name" value={profileData.name} placeholder="Jane Doe" oncommit={(v) => save({ name: v })} />
+        <TextInput label="Professional Title" value={profileData.title} placeholder="Senior Engineer" oncommit={(v) => save({ title: v })} />
+        <TextInput label="Email" type="email" value={profileData.email} placeholder="jane@example.com" oncommit={(v) => save({ email: v })} />
+        <TextInput label="Phone" value={profileData.phone} placeholder="+1-555-0123" oncommit={(v) => save({ phone: v })} />
+        <TextInput label="Industry" value={profileData.industry} placeholder="Biotech" oncommit={(v) => save({ industry: v })} />
+        <TextInput label="Current Location" value={profileData.currentLocation} placeholder="Bengaluru" oncommit={(v) => save({ currentLocation: v })} />
+        {#if briefData?.facts?.seniority}
+          <div>
+            <label class="wp-label">Seniority</label>
+            <div class="text-sm text-slate-700 dark:text-slate-200 capitalize">{briefData.facts.seniority}</div>
+          </div>
+        {:else}
+          <SelectInput
+            label="Seniority"
+            value={profileData.seniority || ''}
+            options={SENIORITY_OPTIONS}
+            onchange={(v) => save({ seniority: v })}
+          />
+        {/if}
+        {:else}
+        {#each PERSONAL_FIELDS as f}
+          {#if fieldSet(f)}
+            <div>
+              <label class="wp-label">{f.label}</label>
+              <div class="text-sm text-slate-700 dark:text-slate-200 break-words">{profileData[f.key]}</div>
+            </div>
+          {/if}
+        {/each}
+        {#if briefData?.facts?.seniority || (profileData.seniority || '').trim()}
+          <div>
+            <label class="wp-label">Seniority</label>
+            <div class="text-sm text-slate-700 dark:text-slate-200 capitalize">{briefData?.facts?.seniority || profileData.seniority}</div>
+          </div>
+        {/if}
+        {#if !PERSONAL_FIELDS.some(fieldSet) && !(briefData?.facts?.seniority || (profileData.seniority || '').trim())}
+          <p class="text-sm text-slate-400 dark:text-slate-500">No personal info yet.</p>
+        {/if}
+        {/if}
+      </div>
+    </Card>
+
+    <!-- Skills -->
+    <Card hover={false}>
+      <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-4">
+        {@html iconSvg('zap', 18)} Skills
+      </h3>
+      {#if page.editing}
+        <ChipInput value={profileData.skills} placeholder="e.g. Go, React, AWS" onchange={(v) => save({ skills: v })} />
+      {:else}
+        {#if (profileData.skills ?? []).length}
+          <div class="flex flex-wrap gap-1.5">
+            {#each profileData.skills as s}
+              <span class={PILL_CLS}>{s}</span>
+            {/each}
+          </div>
+        {:else}
+          <p class="text-sm text-slate-400 dark:text-slate-500">No skills yet.</p>
+        {/if}
+      {/if}
+    </Card>
+
+    <!-- Experience -->
+    <Card hover={false}>
+      <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-4">
+        {@html iconSvg('briefcase', 18)} Experience
+      </h3>
+      {#if page.editing}
+        <EntryEditor
+          entries={profileData.experience}
+          primaryKey="title"
+          primaryLabel="Title"
+          primaryPlaceholder="Senior Software Engineer"
+          secondaryKey="company"
+          secondaryLabel="Company"
+          secondaryPlaceholder="Acme Corp"
+          descriptionPlaceholder="Key achievements, scope, tech used…"
+          onchange={(v) => save({ experience: v })}
+        />
+      {:else}
+        {#if (profileData.experience ?? []).length}
+          <EntryEditor entries={profileData.experience} primaryKey="title" secondaryKey="company" readonly />
+        {:else}
+          <p class="text-sm text-slate-400 dark:text-slate-500">No experience yet.</p>
+        {/if}
+      {/if}
+    </Card>
+
+    <!-- Education -->
+    <Card hover={false}>
+      <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-4">
+        {@html iconSvg('grad', 18)} Education
+      </h3>
+      {#if page.editing}
+        <EntryEditor
+          entries={profileData.education}
+          primaryKey="institution"
+          primaryLabel="Institution"
+          primaryPlaceholder="MIT"
+          secondaryKey="degree"
+          secondaryLabel="Degree"
+          secondaryPlaceholder="BS Computer Science"
+          descriptionPlaceholder="Focus areas, GPA, thesis…"
+          onchange={(v) => save({ education: v })}
+        />
+      {:else}
+        {#if (profileData.education ?? []).length}
+          <EntryEditor entries={profileData.education} primaryKey="degree" secondaryKey="institution" readonly />
+        {:else}
+          <p class="text-sm text-slate-400 dark:text-slate-500">No education yet.</p>
+        {/if}
+      {/if}
+    </Card>
+  {:else if api.profile.loading}
+    <Spinner text="Loading profile..." />
+  {:else}
+    <p class="text-sm text-slate-400">Profile not loaded (server may be down).</p>
+  {/if}
+  {:else}
+  <!-- Job Search Preferences — the brief drives the agent's search; it is
+       configuration, so it lives on its own tab. -->
   {#if briefData}
     <Card hover={false}>
       {#snippet pills(label, items)}
@@ -189,11 +562,7 @@ import { setPage } from '../stores/page.svelte.js';
           <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200">
             {@html iconSvg('target', 18)} Job Search Preferences
           </h3>
-          <p class="text-xs text-slate-400 mt-2">
-            {briefData.complete
-              ? 'All set — ready to search.'
-              : `${briefData.open.length} preference${briefData.open.length === 1 ? '' : 's'} still to set.`}
-          </p>
+          <p class="text-xs text-slate-400 mt-2">{prefsStatus.label}</p>
         </div>
         <div class="flex items-center gap-2 text-xs shrink-0">
           {#if page.editing}
@@ -354,130 +723,5 @@ import { setPage } from '../stores/page.svelte.js';
   {:else if api.brief.loading}
     <Spinner text="Loading brief..." />
   {/if}
-
-  {#if profileData}
-    <!-- Personal Info -->
-    <Card hover={false}>
-      <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-4">
-        {@html iconSvg("user", 18)} Personal Info
-      </h3>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
-        {#if page.editing}
-        <TextInput label="Full Name" value={profileData.name} placeholder="Jane Doe" oncommit={(v) => save({ name: v })} />
-        <TextInput label="Professional Title" value={profileData.title} placeholder="Senior Engineer" oncommit={(v) => save({ title: v })} />
-        <TextInput label="Email" type="email" value={profileData.email} placeholder="jane@example.com" oncommit={(v) => save({ email: v })} />
-        <TextInput label="Phone" value={profileData.phone} placeholder="+1-555-0123" oncommit={(v) => save({ phone: v })} />
-        <TextInput label="Industry" value={profileData.industry} placeholder="Biotech" oncommit={(v) => save({ industry: v })} />
-        <TextInput label="Current Location" value={profileData.currentLocation} placeholder="Bengaluru" oncommit={(v) => save({ currentLocation: v })} />
-        {#if briefData?.facts?.seniority}
-          <div>
-            <label class="wp-label">Seniority</label>
-            <div class="text-sm text-slate-700 dark:text-slate-200 capitalize">{briefData.facts.seniority}</div>
-          </div>
-        {:else}
-          <SelectInput
-            label="Seniority"
-            value={profileData.seniority || ''}
-            options={SENIORITY_OPTIONS}
-            onchange={(v) => save({ seniority: v })}
-          />
-        {/if}
-        {:else}
-        {#each PERSONAL_FIELDS as f}
-          {#if fieldSet(f)}
-            <div>
-              <label class="wp-label">{f.label}</label>
-              <div class="text-sm text-slate-700 dark:text-slate-200 break-words">{profileData[f.key]}</div>
-            </div>
-          {/if}
-        {/each}
-        {#if briefData?.facts?.seniority || (profileData.seniority || '').trim()}
-          <div>
-            <label class="wp-label">Seniority</label>
-            <div class="text-sm text-slate-700 dark:text-slate-200 capitalize">{briefData?.facts?.seniority || profileData.seniority}</div>
-          </div>
-        {/if}
-        {#if !PERSONAL_FIELDS.some(fieldSet) && !(briefData?.facts?.seniority || (profileData.seniority || '').trim())}
-          <p class="text-sm text-slate-400 dark:text-slate-500">No personal info yet.</p>
-        {/if}
-        {/if}
-      </div>
-    </Card>
-
-    <!-- Skills -->
-    <Card hover={false}>
-      <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-4">
-        {@html iconSvg('zap', 18)} Skills
-      </h3>
-      {#if page.editing}
-        <ChipInput value={profileData.skills} placeholder="e.g. Go, React, AWS" onchange={(v) => save({ skills: v })} />
-      {:else}
-        {#if (profileData.skills ?? []).length}
-          <div class="flex flex-wrap gap-1.5">
-            {#each profileData.skills as s}
-              <span class={PILL_CLS}>{s}</span>
-            {/each}
-          </div>
-        {:else}
-          <p class="text-sm text-slate-400 dark:text-slate-500">No skills yet.</p>
-        {/if}
-      {/if}
-    </Card>
-
-    <!-- Experience -->
-    <Card hover={false}>
-      <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-4">
-        {@html iconSvg('briefcase', 18)} Experience
-      </h3>
-      {#if page.editing}
-        <EntryEditor
-          entries={profileData.experience}
-          primaryKey="title"
-          primaryLabel="Title"
-          primaryPlaceholder="Senior Software Engineer"
-          secondaryKey="company"
-          secondaryLabel="Company"
-          secondaryPlaceholder="Acme Corp"
-          descriptionPlaceholder="Key achievements, scope, tech used…"
-          onchange={(v) => save({ experience: v })}
-        />
-      {:else}
-        {#if (profileData.experience ?? []).length}
-          <EntryEditor entries={profileData.experience} primaryKey="title" secondaryKey="company" readonly />
-        {:else}
-          <p class="text-sm text-slate-400 dark:text-slate-500">No experience yet.</p>
-        {/if}
-      {/if}
-    </Card>
-
-    <!-- Education -->
-    <Card hover={false}>
-      <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-4">
-        {@html iconSvg('grad', 18)} Education
-      </h3>
-      {#if page.editing}
-        <EntryEditor
-          entries={profileData.education}
-          primaryKey="institution"
-          primaryLabel="Institution"
-          primaryPlaceholder="MIT"
-          secondaryKey="degree"
-          secondaryLabel="Degree"
-          secondaryPlaceholder="BS Computer Science"
-          descriptionPlaceholder="Focus areas, GPA, thesis…"
-          onchange={(v) => save({ education: v })}
-        />
-      {:else}
-        {#if (profileData.education ?? []).length}
-          <EntryEditor entries={profileData.education} primaryKey="degree" secondaryKey="institution" readonly />
-        {:else}
-          <p class="text-sm text-slate-400 dark:text-slate-500">No education yet.</p>
-        {/if}
-      {/if}
-    </Card>
-  {:else if api.profile.loading}
-    <Spinner text="Loading profile..." />
-  {:else}
-    <p class="text-sm text-slate-400">Profile not loaded (server may be down).</p>
   {/if}
 </div>

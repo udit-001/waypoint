@@ -15,3 +15,21 @@ export function prettifyList(values) {
   if (!values) return [];
   return values.map(prettify);
 }
+
+// briefStatus summarizes a brief's open-frontier state for the surface: the
+// Preferences tab badge and the preferences card header both render from it.
+// A complete brief is "ready"; an incomplete one shows how many preferences
+// are still open. Defensive about a missing `open` list (the brief always
+// has one in practice).
+export function briefStatus(brief) {
+  const open = brief?.open ?? [];
+  const complete = Boolean(brief?.complete);
+  const openCount = complete ? 0 : open.length;
+  return {
+    complete,
+    openCount,
+    label: complete
+      ? 'All set — ready to search.'
+      : `${openCount} preference${openCount === 1 ? '' : 's'} still to set.`,
+  };
+}

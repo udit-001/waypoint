@@ -118,6 +118,17 @@ export const profile = createStore(async () => {
   return p;
 });
 
+// ─── LinkedIn import ────────────────────────────────────
+
+/**
+ * Fetch a public LinkedIn profile via Exa MCP and return the parseable
+ * fields as a profile document (same keys as PATCH /api/profile). Nothing
+ * is written — the caller previews and then PATCHes on Apply.
+ */
+export async function importLinkedInProfile(url) {
+  return apiMutate('POST', '/profile/import-linkedin', { url });
+}
+
 // ─── Brief (job-search curation) ───────────────────────
 
 export const brief = createStore(async () => {
