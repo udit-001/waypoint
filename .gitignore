@@ -4,6 +4,14 @@ job tracker prompt.txt
 generated-content/
 user-profile/
 
+# Local notes / scratch
+research.md
+.scratch/
+screenshots/
+
+# Skills local to this machine (not product assets)
+.agents/
+
 # Trash
 .trash/
 
