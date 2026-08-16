@@ -16,10 +16,10 @@ build: frontend
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -o $(BIN) $(CMD)
 
-## Install via Go (compiles from source)
+## Install into GOBIN (compiles from source)
 install:
-	@echo "$(BLUE)→ Installing $(BIN) via go install...$(RESET)"
-	go install $(CMD)@latest
+	@printf "$(BLUE)→ Installing waypoint into %s...$(RESET)\n" "$${GOBIN:-$$(go env GOPATH)/bin}"
+	@CGO_ENABLED=0 go install $(CMD)
 
 ## Frontend: install deps + build
 frontend:
@@ -58,12 +58,12 @@ distclean: clean
 ## Run Go tests
 test:
 	@echo "$(BLUE)→ Running Go tests...$(RESET)"
-	go test ./...
+	CGO_ENABLED=0 go test ./...
 
 ## Run Go tests with the race detector (CI parity; slower than 'test')
 test-race:
 	@echo "$(BLUE)→ Running Go tests with -race...$(RESET)"
-	go test -race ./...
+	CGO_ENABLED=0 go test -race ./...
 
 ## Run frontend tests
 test-frontend:
@@ -75,7 +75,7 @@ check:
 	@echo "$(BLUE)→ Pre-commit gate...$(RESET)"
 	@test -z "$$(gofmt -l .)" || { echo "  gofmt needed — run 'make fmt'"; exit 1; }
 	go vet ./...
-	go test ./...
+	CGO_ENABLED=0 go test ./...
 	cd web && pnpm test
 
 ## Install git hooks (gofmt check on staged .go files)
