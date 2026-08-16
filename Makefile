@@ -2,11 +2,11 @@ BIN           = bin/waypoint
 CMD           = ./cmd/waypoint
 MODULE        = github.com/udit-001/waypoint
 
-# Colors for output
-BLUE  = \033[36m
-RESET = \033[0m
+# Colors for output (real escape bytes via printf — echo won't interpret \033)
+BLUE  = $(shell printf '\033[36m')
+RESET = $(shell printf '\033[0m')
 
-.PHONY: all build install dev frontend clean distclean fmt test test-race test-frontend check install-hooks
+.PHONY: all build install dev start stop frontend clean distclean fmt test test-race test-frontend check install-hooks
 
 all: frontend build
 
@@ -21,10 +21,21 @@ install:
 	@printf "$(BLUE)→ Installing waypoint into %s...$(RESET)\n" "$${GOBIN:-$$(go env GOPATH)/bin}"
 	@CGO_ENABLED=0 go install $(CMD)
 
-## Frontend: install deps + build
+## Frontend: install deps + build (quiet — vite logs only on failure)
 frontend:
 	@echo "$(BLUE)→ Building frontend...$(RESET)"
-	cd web && pnpm install --frozen-lockfile && pnpm build
+	@cd web && pnpm install --frozen-lockfile --silent && pnpm --silent run build --logLevel error
+
+## Start the web UI in the background (daemon). Stop with `make stop`.
+start: frontend
+	@echo "$(BLUE)→ Starting waypoint in background...$(RESET)"
+	@echo "$(BLUE)→ Use 'make stop' to stop it$(RESET)"
+	@CGO_ENABLED=0 go run $(CMD) start
+
+## Stop the background server.
+stop:
+	@echo "$(BLUE)→ Stopping waypoint...$(RESET)"
+	@CGO_ENABLED=0 go run $(CMD) stop
 
 ## Dev: run the backend with live frontend proxy
 dev:
