@@ -1,7 +1,7 @@
 # PDF Text Extraction
 
 `waypoint resume extract` is the single command for turning a resume PDF
-into model-ready text. It keeps the contact info out of anything the model
+into **model-safe text**. It keeps the contact info out of anything the model
 sees. Use it whenever resume text is bound for an LLM: profile seeds,
 resume-optimizer artifacts, cover letters, career summaries.
 
@@ -28,7 +28,7 @@ Output is always JSON on stdout:
 }
 ```
 
-- The `text` field is what you feed to the model. Emails and phone numbers
+- The `text` field is the model-safe text. Emails and phone numbers
   are already replaced with `[REDACTED]`.
 - The report fields are the proof: `redacted` must be `true` and the span
   list is the audit trail.
@@ -49,7 +49,7 @@ Output is always JSON on stdout:
    ```
    `<tmp>` is `/tmp` on Unix, `$TEMP` on Windows.
 4. **`--no-redact` is for the user's eyes only.** Raw text (name, email,
-   phone) must never reach the model. Only use it when the user asked to see
+   phone) is never model-safe. Only use it when the user asked to see
    the raw extraction.
 
 ## Backends — nothing to install
@@ -76,7 +76,9 @@ waypoint resume extract <tmp>/dl.pdf
 ## Done when
 
 - `ok: true` and `backend` is one of `pdf_oxide` / `poppler`
-- `redacted: true` (or the text is genuinely empty of contact info)
+- `redacted: true`, or `spans` is empty **and** the text shows no contact
+  info (no `@`, no phone-shaped run) — if you cannot confirm this, treat the
+  extraction as not done and stop
 - The `text` field is in a file (for `--notes-file` / `-f`) or held as JSON
 - Cross-check: the original PDF still holds the raw contact info; the
   extracted text does not
