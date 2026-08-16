@@ -66,8 +66,11 @@ shared by both surfaces.
 
 The Svelte frontend is pre-built into `web/dist/` and checked into git.
 At compile time, `web/web.go` uses `//go:embed dist` to include all
-assets in the binary. This makes `go install` produce a fully functional
-binary without requiring Node.js at install time.
+assets in the binary. Consequences:
+- `go install` downloads source + pre-built frontend from git → fully
+  functional binary, no Node.js at install time
+- No pre-built binaries to trust, no platform-specific download matrices
+- Frontend rebuild is only needed when UI code changes
 
 To rebuild the frontend during development:
 
@@ -76,6 +79,21 @@ cd web && pnpm install && pnpm build
 # or
 make frontend
 ```
+
+## Building from Source
+
+```bash
+git clone https://github.com/udit-001/waypoint.git
+cd waypoint
+make build     # frontend + Go binary → bin/waypoint
+make check     # pre-commit gate: gofmt, go vet, go + frontend tests
+make dev       # backend + Vite dev server with live proxy
+```
+
+`make start` / `make stop` run the web UI as a background daemon during
+development. `make test`, `make fmt`, `make tidy`, `make clean` also exist —
+see the Makefile. CGO is always disabled (`CGO_ENABLED=0`); the SQLite
+driver is pure Go and no CGO dependency may be introduced.
 
 ## API
 
