@@ -66,3 +66,10 @@ fi
 
 mv "$BIN_PATH" "$DEST/$BIN"
 echo "Installed $BIN $TAG to $DEST/$BIN"
+
+# Warn if the install destination isn't on PATH (common for ~/.local/bin)
+case ":$PATH:" in
+  *":$DEST:"*) ;;
+  *) echo "Note: $DEST is not on your PATH. Add it:"
+     echo "  export PATH=\"$DEST:\$PATH\"" ;;
+esac
