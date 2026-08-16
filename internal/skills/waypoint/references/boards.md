@@ -32,7 +32,7 @@ The URL is the ATS board URL, not the marketing careers page. Find it in this or
 2. Follow the company's own careers link — the ATS URL is where it lands.
 3. Give the URL to `boards add`; the provider detection accepts any of the four vendor URL shapes.
 
-Workday URLs may omit the instance (`https://tenant.myworkdayjobs.com/Site`) — the sweep probes instances automatically.
+- Workday URLs may omit the instance (`https://tenant.myworkdayjobs.com/Site`) — the sweep probes instances automatically.
 
 **Done when**: `meta.verified` is true for every named company, or the failure was reported to the user (wrong URL, unsupported vendor). `provider: null` means no vendor matched — re-find the URL, never guess slugs.
 
@@ -57,7 +57,7 @@ The sweep list is lean. Before you write a cover letter or judge fit, fetch the 
 ```bash
 waypoint boards detail <board> <id> --json
 ```
-Returns the full description (HTML→markdown), the absolute `date`, and any metadata each vendor exposes (department, employment type, experience for BambooHR; department for Greenhouse; time type, remote type, reqId, country for Workday; Lever already ships the full body in the list). `detail` merges into the staged entry via `EnrichStaging` — URL-indexed, so it persists for the promote step.
+Returns the full description (HTML→markdown), the absolute `date`, and any metadata each vendor exposes (department, employment type, experience for BambooHR; department for Greenhouse; time type, remote type, reqId, country for Workday; Lever already ships the full body in the list). `detail` merges the description and metadata into the staged entry so the promote step can pick them up — no extra flag needed.
 
 Don't `detail` every staged posting — only the ones the user is seriously considering. The sweep already gave you enough to triage; `detail` is the deep-read step.
 
@@ -85,6 +85,5 @@ Rejects: `waypoint scrape dismiss "<url>"` — same rule as scraping: unsure mea
 
 ## Notes
 
-- Boards live in `boards.toml` inside data_dir — they travel with the DB, and only the CLI writes them.
 - A first sweep of a large board stages its whole first window (subject to `--jobage`); later sweeps stage only what's new.
 - Workday instance auto-probe: if a Workday board starts failing after a tenant migration, re-verify it; probing usually heals the instance drift.
