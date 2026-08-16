@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/linkedin"
 	"github.com/udit-001/waypoint/web"
 )
 
@@ -29,7 +30,14 @@ type Config struct {
 // newMux creates the HTTP mux with API routes, PWA routes, and static file
 // serving. Extracted from Start for testability — tests can create a mux and
 // make requests against it via httptest without binding to a port.
+// newMux builds the mux with the default LinkedIn fetcher (hosted Exa MCP).
+// Tests that need to stub the fetch use newMuxWithLinkedIn.
 func newMux(store db.Store, staticFS fs.FS) http.Handler {
+	return newMuxWithLinkedIn(store, staticFS, linkedin.New())
+}
+
+// newMuxWithLinkedIn builds the mux with an injected LinkedIn fetcher.
+func newMuxWithLinkedIn(store db.Store, staticFS fs.FS, li *linkedin.Fetcher) http.Handler {
 	mux := http.NewServeMux()
 
 	// Read-only API
@@ -47,6 +55,7 @@ func newMux(store db.Store, staticFS fs.FS) http.Handler {
 	mux.HandleFunc("GET /api/profile", handleGetProfile(store))
 	mux.HandleFunc("GET /api/brief", handleGetBrief(store))
 	mux.HandleFunc("PATCH /api/profile", handleUpdateProfile(store))
+	mux.HandleFunc("POST /api/profile/import-linkedin", handleImportLinkedIn(store, li))
 	mux.HandleFunc("GET /api/settings", handleGetSettings(store))
 
 	// PWA routes with proper cache headers.
@@ -78,8 +87,11 @@ func Start(cfg Config) error {
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		// 60s (not 30s): the LinkedIn import route fetches through Exa MCP,
+		// which can take ~10–50s for a profile page. WriteTimeout covers the
+		// whole handler, so it must exceed the import timeout.
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Auto-open browser

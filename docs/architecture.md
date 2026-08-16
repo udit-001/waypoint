@@ -47,6 +47,8 @@ shared by both surfaces.
 │   ├── cli/                   # Cobra commands (jobs, artifacts, etc.)
 │   ├── db/                    # SQLite models, queries, FTS5
 │   ├── server/                # HTTP server, API handlers
+│   ├── mcp/                   # MCP Streamable HTTP client (JSON-RPC 2.0 + SSE) — same pattern as income-tracker
+│   ├── linkedin/              # LinkedIn profile fetch via Exa MCP + markdown parser (powers /api/profile/import-linkedin)
 │   ├── skills/                # AI skill definitions
 │   └── version/               # Build version
 ├── web/                       # Svelte frontend
@@ -94,5 +96,6 @@ same `db.Store` seam as the CLI — the web UI is read-only for everything else.
 | `GET /api/profile` | User profile |
 | `GET /api/brief` | Curation brief (facts/constraints/preferences + open frontier) |
 | `PATCH /api/profile` | Write any profile field as a patch document (camelCase keys matching `GET /api/profile` and the CLI's `profile set --file`; `waypoint profile schema` shows the writable surface); returns the updated brief |
+| `POST /api/profile/import-linkedin` | Fetch a public LinkedIn profile via Exa's hosted MCP server (`web_fetch_exa`) and **merge** it into the stored profile — **never writes**. Returns `{doc, summary}`: `doc` is the merged profile document (the same camelCase keys `PATCH /api/profile` accepts), `summary` is an Added/Updated/Kept diff (`experienceAdded/Updated`, `educationAdded/Updated`, `skillsAdded`, `*Kept` counts). The merge never deletes: entries match by (title, company) for experience and by institution for education; matched entries get dates/description updated from LinkedIn, unmatched fetched entries are appended, existing entries with no match are kept. An empty stored profile merges to the fetched profile (everything "added"), so seed and update share one code path. The web UI previews the diff and PATCHes `doc` on Apply. `{url}` in the body; 400 on a non-LinkedIn/`/in/` URL, 502 on fetch failure, 422 when the page yielded nothing parseable (login wall / private profile) |
 | `GET /api/settings` | App settings |
 | `GET /api/search?q=` | Unified search across jobs and artifacts |
