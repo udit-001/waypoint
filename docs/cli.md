@@ -39,6 +39,20 @@ Alias: `waypoint cat`
 |---------|-------------|
 | `waypoint scrape run <name>` | Run a job scraper. Flags: `--query`, `--location`, `--limit`, `--jobage`, `--remote`, `--page`, `--today <YYYY-MM-DD>` (reference date for recency) |
 
+## Boards
+
+Company ATS boards (Greenhouse, Workday, Lever, BambooHR) — one company's careers site per board. Boards live in `boards.toml` inside `data_dir`, so they travel with the database in backups. The flow: find the company's careers URL (any search tool), `add` it (detect + verify + save), then `sweep` to stage postings.
+
+| Command | Description |
+|---------|-------------|
+| `waypoint boards add <name> --url <url>` | Detect the provider for a careers URL, verify the board is live (first-page fetch), and save it enabled. Flag: `--company` (display name, defaults to `<name>`) |
+| `waypoint boards list` | List saved boards |
+| `waypoint boards remove <name>` | Remove a board |
+| `waypoint boards enable <name>` | Include a board in sweeps |
+| `waypoint boards disable <name>` | Skip a board in sweeps |
+| `waypoint boards verify [<name>]` | Re-probe one board (or all enabled) for liveness; exits non-zero on failure |
+| `waypoint boards sweep` | Fetch every enabled board, deduplicate against staging and tracked jobs, and stage new postings. Flags: `--jobage`, `--limit` (per board). The JSON meta block (`fetched`/`new`/`seen`/`failed` per board) is the completion contract for agents: `new==0` everywhere → done; any `failed` → verify/fix/disable that board |
+
 ## Artifacts
 
 Alias: `waypoint artifact`
