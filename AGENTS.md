@@ -79,6 +79,7 @@ Pattern (see `internal/cli/stats.go` for a canonical read command, `internal/cli
 - `internal/scraper/scraper.go` — the `Scraper`/`Detailer` interfaces, `Register`, and filter helpers.
 - `internal/version/version.go` — version var (bumped in sync on release; overridden by ldflags at build time).
 - `internal/skills/waypoint/SKILL.md` — product-usage skill for end-users (the `enroll → enrich → generate → save` pipeline), embedded into the binary via `internal/skills/embed.go`. Read this only if working on the job-search flow, not on the codebase.
+- `internal/resume/` — deep module for `waypoint resume extract|doctor`: pdf_oxide lib download (`lib.go`), backend selection + poppler fallback (`extract.go`), deterministic email/phone redaction (`redact.go`). Interfaces and report types are the seam; internal function-variable seams serve package tests. `resume` commands output **always-JSON** (deliberate divergence from the `--json` convention: the flag is accepted as a no-op) since agents parse them directly.
 
 ## Before you commit
 

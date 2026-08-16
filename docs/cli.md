@@ -58,6 +58,13 @@ waypoint artifacts add --skill cover-letter --title "Cover for Google" -f /tmp/c
 waypoint artifacts add --skill email-generator --title "Follow-up" --variants-file /tmp/variants.json --job 3
 ```
 
+## Resume
+
+| Command | Description |
+|---------|-------------|
+| `waypoint resume extract <file.pdf>` | Extract redacted resume text for model use. Always JSON. Flag: `--no-redact` (raw, user's eyes only) |
+| `waypoint resume doctor` | Report extraction backend availability (pdf_oxide / poppler). Always JSON |
+
 ## System
 
 | Command | Description |
@@ -72,4 +79,4 @@ waypoint artifacts add --skill email-generator --title "Follow-up" --variants-fi
 
 Every command accepts:
 
-- `--json` — Output as JSON (for scripting)
+- `--json` — Output as JSON (for scripting). `waypoint resume` commands are always JSON — the flag is accepted as a no-op for uniformity.
