@@ -10,11 +10,8 @@ import (
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the waypoint version",
-	Long: `Print the waypoint version, commit, and build date.
-
-Same information as 'waypoint --version'/'waypoint -v', as a subcommand —
-for agents and scripts that reach for the conventional '<tool> version' form.`,
-	Args: cobra.NoArgs,
+	Long:  `Print the waypoint version, commit, and build date.`,
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		printVersion()
 		return nil

@@ -64,8 +64,8 @@ func legacyStagingHint() {
 
 var scrapeCmd = &cobra.Command{
 	Use:   "scrape",
-	Short: "Search job portals for new postings",
-	Long: `Search job portals for new postings, stage them for review, and
+	Short: "Scrape job portals for new postings",
+	Long: `Scrape job portals for new postings, stage them for review, and
 promote relevant ones into the tracked jobs table.
 
 Examples:
@@ -412,7 +412,9 @@ var scrapeDetailCmd = &cobra.Command{
 	Long: `Fetch the full description, seniority, employment type, job function,
 and industries for a job posting. Enriches the staged result if found.
 
-Currently only LinkedIn supports detail fetching.
+Currently only LinkedIn supports detail fetching. For board postings
+(Greenhouse, Workday, Lever, BambooHR) use 'waypoint boards detail
+<board> <id>' instead — that path enriches the staged board entry.
 
 Examples:
   waypoint scrape detail linkedin 4439995582

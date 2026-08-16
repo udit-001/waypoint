@@ -25,9 +25,7 @@ var addFlags struct {
 var addCmd = &cobra.Command{
 	Use:   "add <company> <position>",
 	Short: "Add a new job application",
-	Long: `Add a new job application to track.
-
-Required arguments:
+	Long: `Required arguments:
   company   Company or institution name
   position  Job title or position
 

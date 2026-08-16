@@ -20,9 +20,6 @@ A config file is created in your OS config directory
 (~/.config/waypoint/config.toml on Linux) storing the data
 directory and port, so you don't need to pass --port every time.
 
-After creating the database, you'll be offered the option to
-install the waypoint skill for your AI coding agent.
-
 Examples:
   waypoint init
   waypoint init --force
