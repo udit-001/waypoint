@@ -112,7 +112,7 @@ Suggest a natural next step:
 ## Data sources
 
 - **Exa MCP** → `read` [data/exa-search](references/data/exa-search.md). Discovery fallback (eligibility per the scraping reference's Entry condition) + research/enrichment on tracked jobs via `jobs update --contact` / `--notes-file`. If exa not connected, offer setup — see [data/exa-setup](references/data/exa-setup.md)
-- **PDFs** → `read` [data/pdf-extract](references/data/pdf-extract.md). Missing `pdftotext`? Install it — see the reference for each OS.
+- **PDFs** → `read` [data/pdf-extract](references/data/pdf-extract.md). Extract model-safe resume text — the pdf_oxide library downloads itself on first use, nothing to install. `resume doctor` explains the backend.
 - **Job parsing** → `read` [data/job-extract](references/data/job-extract.md)
 
 ## References
@@ -135,7 +135,7 @@ Suggest a natural next step:
 | [data/profile](references/data/profile.md) | profile read/write surface: `show --json` · `schema` template · `set --file` patch |
 | [data/job-extract](references/data/job-extract.md) | parse job from URL/PDF/text → jobs add |
 | [data/exa-search](references/data/exa-search.md) | discovery fallback + company/people/news research on tracked jobs |
-| [data/pdf-extract](references/data/pdf-extract.md) | extract text from PDFs (if pdftotext) |
+| [data/pdf-extract](references/data/pdf-extract.md) | extract model-safe resume text (pdf_oxide auto, poppler fallback) |
 
 Skill IDs: `email-generator` `cover-letter` `resume-optimizer` `interview-prep` `career-summary` `statement-of-purpose`
 
