@@ -64,6 +64,13 @@ import { setPage } from '../stores/page.svelte.js';
     !(profileData?.education?.length),
   );
 
+  // Skills wall: an imported profile can carry dozens of noisy pills. Show
+  // the first 10 in read-only view with a +N more expand, so the card stays
+  // scannable (surface discipline: prominence reflects importance).
+  const SKILLS_CAP = 10;
+  let skillsExpanded = $state(false);
+  let visibleSkills = $derived(skillsExpanded ? (profileData?.skills ?? []) : (profileData?.skills ?? []).slice(0, SKILLS_CAP));
+
   // LinkedIn import (Exa MCP): fetch → preview → apply via the existing
   // PATCH route. The import endpoint merges and never writes; Apply is the
   // only writer. The preview is a {doc, summary} diff — added/updated/kept.
@@ -253,29 +260,32 @@ import { setPage } from '../stores/page.svelte.js';
 
 <div class="space-y-4">
   <!-- Tabs: profile (identity) vs job-search preferences (brief config).
-       The active tab persists via ?tab= + localStorage. -->
-  <div class="flex items-center gap-1">
+       The active tab persists via ?tab= + localStorage. Pill styling matches
+       the Applications view's List/Kanban toggle (TopBar). -->
+  <div class="flex items-center gap-0.5 p-0.5 rounded-md bg-slate-100 dark:bg-slate-700 shadow-[inset_0_1px_2px_rgba(0,0,0,0.10)] w-fit">
     <button
       type="button"
-      class="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-medium transition-colors cursor-pointer {tabs.current === 'profile' ? 'bg-slate-700 dark:bg-slate-900 text-white' : 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600'}"
-      onclick={() => (tabs.current = 'profile')}
+      class="px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors cursor-pointer {tabs.current === 'profile' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
+      onclick={() => tabs.set('profile')}
     >{@html iconSvg('user', 15)} Profile</button>
     <button
       type="button"
-      class="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-medium transition-colors cursor-pointer {tabs.current === 'preferences' ? 'bg-slate-700 dark:bg-slate-900 text-white' : 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600'}"
-      onclick={() => (tabs.current = 'preferences')}
+      class="px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors cursor-pointer {tabs.current === 'preferences' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
+      onclick={() => tabs.set('preferences')}
     >{@html iconSvg('target', 15)} Job Search Preferences
       {#if briefData && !prefsStatus.complete}
-        <span class="rounded-full px-1.5 text-[10px] font-semibold tabular-nums {tabs.current === 'preferences' ? 'bg-white/20 text-white' : 'bg-slate-700 dark:bg-slate-900 text-white'}">{prefsStatus.openCount}</span>
+        <span class="rounded-full px-1.5 text-[10px] font-semibold tabular-nums bg-slate-700 dark:bg-slate-900 text-white">{prefsStatus.openCount}</span>
       {/if}
     </button>
   </div>
 
   {#if tabs.current === 'profile'}
-  <!-- Import from LinkedIn (Exa MCP): full seed card when the profile is
-       empty; a collapsed "Update from LinkedIn" affordance when populated.
-       The endpoint merges (never deletes) and never writes — Apply PATCHes
-       the merged doc through the existing route. -->
+  <!-- Import from LinkedIn (Exa MCP): the full card shows when the profile is
+       empty (seed) or a fetch/preview flow is active; when populated and
+       idle, one quiet "Update from LinkedIn" button lives in the Personal
+       Info header. The endpoint merges (never deletes) and never writes —
+       Apply PATCHes the merged doc through the existing route. -->
+  {#if isEmpty || importActive || importing || importError || importPreview || importApplied}
   <Card hover={false}>
     {#snippet fetchRow()}
       <div class="mt-4 flex items-center gap-2">
@@ -387,39 +397,37 @@ import { setPage } from '../stores/page.svelte.js';
             : 'Adds new roles and skills, updates matched ones, and keeps everything else. Nothing is removed.'}
         </p>
       </div>
-    {:else if isEmpty}
-      <!-- Seed: the fetch row is the first step. -->
+    {:else if isEmpty || importActive}
+      <!-- Seed / update, expanded: the fetch row is the step. -->
       {@render fetchRow()}
       {#if importing}
         <p class="text-xs text-slate-400 mt-2">Fetching profile — this usually takes 5–15 seconds.</p>
-      {:else}
+      {:else if isEmpty}
         <p class="text-xs text-slate-400 mt-2">The profile must be public — private profiles won't load.</p>
       {/if}
-    {:else if importActive}
-      <!-- Update, expanded. -->
-      {@render fetchRow()}
-      {#if importing}
-        <p class="text-xs text-slate-400 mt-2">Fetching profile — this usually takes 5–15 seconds.</p>
-      {/if}
-    {:else}
-      <!-- Update, collapsed: one quiet affordance. -->
-      <button
-        type="button"
-        class="mt-4 inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer bg-transparent border-none p-0"
-        onclick={() => (importActive = true)}
-      >{@html iconSvg('linkedin', 15)} Update from LinkedIn</button>
     {/if}
     {#if importError}
       <p class="text-xs text-red-600 dark:text-red-400 mt-2">{importError}</p>
     {/if}
   </Card>
+  {/if}
 
   {#if profileData}
     <!-- Personal Info -->
     <Card hover={false}>
-      <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-4">
-        {@html iconSvg("user", 18)} Personal Info
-      </h3>
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200">
+          {@html iconSvg("user", 18)} Personal Info
+        </h3>
+        {#if !isEmpty && !importActive && !importing && !importError && !importPreview && !importApplied}
+          <!-- Update, collapsed: one quiet affordance in the header. -->
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer bg-transparent border-none p-0 shrink-0"
+            onclick={() => (importActive = true)}
+          >{@html iconSvg('linkedin', 14)} Update from LinkedIn</button>
+        {/if}
+      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
         {#if page.editing}
         <TextInput label="Full Name" value={profileData.name} placeholder="Jane Doe" oncommit={(v) => save({ name: v })} />
@@ -473,10 +481,17 @@ import { setPage } from '../stores/page.svelte.js';
       {:else}
         {#if (profileData.skills ?? []).length}
           <div class="flex flex-wrap gap-1.5">
-            {#each profileData.skills as s}
+            {#each visibleSkills as s}
               <span class={PILL_CLS}>{s}</span>
             {/each}
           </div>
+          {#if !skillsExpanded && (profileData.skills ?? []).length > SKILLS_CAP}
+            <button
+              type="button"
+              class="mt-2.5 inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer bg-transparent border-none p-0"
+              onclick={() => (skillsExpanded = true)}
+            >+{(profileData.skills ?? []).length - SKILLS_CAP} more</button>
+          {/if}
         {:else}
           <p class="text-sm text-slate-400 dark:text-slate-500">No skills yet.</p>
         {/if}
