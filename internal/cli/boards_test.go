@@ -144,3 +144,11 @@ func TestBoardsSweepNoBoards(t *testing.T) {
 		t.Fatalf("out = %q", out)
 	}
 }
+
+func TestBoardsDetailUnknownBoard(t *testing.T) {
+	setupBoardsTest(t)
+	_, err := runCmd(t, "boards", "detail", "nope", "42")
+	if err == nil || !strings.Contains(err.Error(), "no board named") {
+		t.Fatalf("err = %v, want no-board failure", err)
+	}
+}

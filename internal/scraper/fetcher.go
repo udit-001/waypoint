@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	htmltomd "github.com/JohannesKaufmann/html-to-markdown/v2"
 )
 
 // Fetcher retrieves HTML from a URL. The default adapter (HTTPFetcher)
@@ -30,10 +32,30 @@ var (
 // CleanHTML strips tags, decodes entities, and collapses whitespace.
 // Shared across all HTML-parsing scrapers.
 func CleanHTML(s string) string {
-	s = sharedTagRE.ReplaceAllString(s, " ")
+	// Unescape HTML entities FIRST, so HTML-encoded tags (e.g. Greenhouse
+	// ships job content with `<p>`) become real tags before the strip
+	// pass runs. For literal-HTML inputs (most scrapers) this is a no-op.
 	s = html.UnescapeString(s)
+	s = sharedTagRE.ReplaceAllString(s, " ")
 	s = sharedSpaceRE.ReplaceAllString(s, " ")
 	return strings.TrimSpace(s)
+}
+
+// HTMLToMarkdown converts a posting-body HTML fragment to Markdown. The
+// structure (headings, links, bullets, bold) is preserved so an agent can
+// read sections and weigh them. Empty input returns "". On parse failure
+// (or to keep the seam robust for off-spec pages), HTMLToMarkdown falls back
+// to CleanHTML — never propagate a conversion error from a posting body.
+func HTMLToMarkdown(s string) string {
+	s = html.UnescapeString(s)
+	if strings.TrimSpace(s) == "" {
+		return ""
+	}
+	md, err := htmltomd.ConvertString(s)
+	if err != nil || strings.TrimSpace(md) == "" {
+		return CleanHTML(s)
+	}
+	return strings.TrimSpace(md)
 }
 
 // HTTPFetcher is the default Fetcher adapter.

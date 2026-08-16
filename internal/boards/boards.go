@@ -39,17 +39,25 @@ type DetectHit struct {
 	API string
 }
 
-// Provider is the seam: detect a board's API URL from its careers URL and
-// fetch postings for it. Implementations live in this package; the
-// interface keeps verification and sweep code blind to vendor specifics.
+// Provider is the seam: detect a board's API URL from its careers URL,
+// fetch postings for it, and enrich one posting with its full body.
+// Implementations live in this package; the interface keeps verification,
+// sweep, and detail code blind to vendor specifics.
 type Provider interface {
 	// Name is the provider id, unique across registered providers.
 	Name() string
 	// Detect claims the board. Returns a DetectHit when the board matches,
 	// or (nil, nil) when it does not.
 	Detect(b Board) (*DetectHit, error)
-	// Fetch fetches and normalizes postings from a claimed board.
+	// Fetch fetches and normalizes postings from a claimed board. The
+	// list is lean (title, location, date if the list exposes one), no
+	// descriptions. Descriptions and richer metadata come from Detail.
 	Fetch(ctx context.Context, b Board, hit DetectHit, opts FetchOpts) ([]scraper.Result, error)
+	// Detail fetches the full body for one posting. The id is the
+	// scraper.Result.ID returned by Fetch. Detail enrichment is a
+	// deliberate, on-demand step the agent runs on the few postings it's
+	// seriously considering — not an automatic part of sweep.
+	Detail(ctx context.Context, b Board, id string) (scraper.Result, error)
 }
 
 // ErrNotMatched is returned by DetectProvider when no registered provider

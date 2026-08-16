@@ -47,9 +47,21 @@ Sweep every enabled board: fetch, filter by `--jobage` (default 90 days, same as
 - `jobs` — **the postings this sweep staged. Present these to the user**, numbered, exactly like scrape results (title, company, location, date).
 - `failed` — the board errored. Report it; suggest `boards verify <name>`, a URL fix, or `boards disable <name>`.
 
-All four vendors expose posting dates, so `--jobage` filters every board. (BambooHR fetches a per-job detail request to get the date — sweep makes N+1 requests to a BambooHR board, so a large board sweeps slower.)
+All four vendors expose posting dates in the list response, so `--jobage` filters every board without extra requests. The list payload is lean (title, location, date); the full description and extra metadata (department, employment type, experience, compensation) live behind `boards detail` — fetch them on demand only for postings you're seriously considering.
 
 **Done when**: every enabled board reports `new: 0`, or the user has reviewed everything the sweep staged. Any `failed: true` board is reported with a next step.
+
+## Step 2½ — Enrich the few you're seriously considering
+
+The sweep list is lean. Before you write a cover letter or judge fit, fetch the full posting:
+```bash
+waypoint boards detail <board> <id> --json
+```
+Returns the full description (HTML→markdown), the absolute `date`, and any metadata each vendor exposes (department, employment type, experience for BambooHR; department for Greenhouse; time type, remote type, reqId, country for Workday; Lever already ships the full body in the list). `detail` merges into the staged entry via `EnrichStaging` — URL-indexed, so it persists for the promote step.
+
+Don't `detail` every staged posting — only the ones the user is seriously considering. The sweep already gave you enough to triage; `detail` is the deep-read step.
+
+**Done when**: every posting you intend to promote has a full description.
 
 ## Step 3 — Promote picks
 
@@ -69,6 +81,7 @@ Rejects: `waypoint scrape dismiss "<url>"` — same rule as scraping: unsure mea
 | `boards enable/disable <name>` | Include/skip in sweeps |
 | `boards verify [<name>] [--json]` | Re-probe one or all boards; non-zero exit on failure |
 | `boards sweep [--jobage N] [--limit N] [--json]` | Fetch all enabled boards, stage new postings |
+| `boards detail <board> <id> [--json]` | Fetch full description + metadata for one posting; enriches staged entry |
 
 ## Notes
 

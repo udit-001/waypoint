@@ -106,6 +106,13 @@ func (c workdayCoord) cxsURL(instance string) string {
 		c.tenant, instance, c.tenant, c.site)
 }
 
+// cxsJobURL builds the CXS detail endpoint for a posting slug. The slug is
+// the tail of externalPath, e.g. "Sr-Staff-Software-Engineer--Android_JR355162".
+func (c workdayCoord) cxsJobURL(instance, slug string) string {
+	return fmt.Sprintf("https://%s.%s.myworkdayjobs.com/wday/cxs/%s/%s/job/%s",
+		c.tenant, instance, c.tenant, c.site, slug)
+}
+
 // policy returns the SSRF host policy for Workday.
 func (Workday) policy() HostPolicy {
 	return func(raw string) error {
@@ -137,11 +144,15 @@ type workdayResponse struct {
 	JobPostings []workdayJob `json:"jobPostings"`
 }
 
+// workdayJob is one posting row in the CXS list response. The list carries
+// a relative-date label and a slug; the full description and an absolute
+// startDate live on the detail endpoint.
 type workdayJob struct {
-	Title        string `json:"title"`
-	BulletOne    string `json:"bulletOne"` // "Posted N Days Ago" lives here
-	BulletTwo    string `json:"bulletTwo"` // often the location
-	ExternalPath string `json:"externalPath"`
+	Title         string   `json:"title"`
+	PostedOn      string   `json:"postedOn"`      // "Posted N Days Ago" / "Posted Today"
+	LocationsText string   `json:"locationsText"` // single string, may be "N Locations"
+	BulletFields  []string `json:"bulletFields"`  // bulletFields[0] is the job req id
+	ExternalPath  string   `json:"externalPath"`  // "/job/.../<postingSlug>_JR<n>"
 }
 
 // postedAgoRE parses "Posted N Days Ago" / "Posted Today".
@@ -160,6 +171,17 @@ func parsePostedAgo(label string, now time.Time) string {
 		return now.AddDate(0, 0, -n).Format("2006-01-02")
 	}
 	return ""
+}
+
+// slugFromPath extracts the detail slug (the JSON Detail endpoint key) from
+// an externalPath like "/job/SF/Sr-Staff-Software-Engineer--Android_JR355162".
+// The slug is the last path segment.
+func slugFromPath(externalPath string) string {
+	segs := strings.Split(strings.Trim(externalPath, "/"), "/")
+	if len(segs) == 0 {
+		return ""
+	}
+	return segs[len(segs)-1]
 }
 
 const (
@@ -228,15 +250,24 @@ func (w Workday) Fetch(ctx context.Context, b Board, hit DetectHit, opts FetchOp
 			if strings.TrimSpace(j.Title) == "" || strings.TrimSpace(j.ExternalPath) == "" {
 				continue
 			}
-			boardURL := fmt.Sprintf("https://%s.%s.myworkdayjobs.com/en-US/%s%s",
+			slug := slugFromPath(j.ExternalPath)
+			if slug == "" {
+				continue
+			}
+			boardURL := fmt.Sprintf("https://%s.%s.myworkdayjobs.com/%s%s",
 				c.tenant, instance, c.site, j.ExternalPath)
+			meta := map[string]string{}
+			if len(j.BulletFields) > 0 && j.BulletFields[0] != "" {
+				meta["reqId"] = j.BulletFields[0]
+			}
 			results = append(results, scraper.Result{
-				ID:       c.tenant + ":" + j.ExternalPath,
+				ID:       slug, // detail endpoint key
 				Title:    strings.TrimSpace(j.Title),
 				Company:  b.Company,
-				Location: strings.TrimSpace(j.BulletTwo),
-				Date:     parsePostedAgo(j.BulletOne, now),
+				Location: strings.TrimSpace(j.LocationsText),
+				Date:     parsePostedAgo(j.PostedOn, now),
 				URL:      boardURL,
+				Metadata: meta,
 			})
 		}
 		offset += len(jobs)
@@ -274,4 +305,99 @@ func (w Workday) page(ctx context.Context, f JSONFetcher, c workdayCoord, instan
 		return nil, err
 	}
 	return resp.JobPostings, nil
+}
+
+// workdayDetailResponse is the GET /wday/cxs/{tenant}/{site}/job/{slug}
+// payload. jobPostingInfo carries the full description, an absolute
+// startDate, and structured fields.
+type workdayDetailResponse struct {
+	JobPostingInfo struct {
+		ID             string `json:"id"`
+		Title          string `json:"title"`
+		JobDescription string `json:"jobDescription"`
+		Location       string `json:"location"`
+		PostedOn       string `json:"postedOn"`
+		StartDate      string `json:"startDate"` // actual ISO date (2026-08-13)
+		TimeType       string `json:"timeType"`
+		JobReqID       string `json:"jobReqId"`
+		JobPostingID   string `json:"jobPostingId"`
+		RemoteType     string `json:"remoteType"`
+		ExternalURL    string `json:"externalUrl"`
+		Country        struct {
+			Descriptor string `json:"descriptor"`
+		} `json:"country"`
+	} `json:"jobPostingInfo"`
+}
+
+// Detail fetches /wday/cxs/{tenant}/{site}/job/{slug} and returns the full
+// posting body. The slug is the scraper.Result.ID returned by Fetch. When
+// the board URL pins no instance, the known-instance probe runs once here
+// to satisfy the detail URL.
+func (w Workday) Detail(ctx context.Context, b Board, id string) (scraper.Result, error) {
+	f := w.Fetcher
+	if f == nil {
+		f = &HTTPFetcher{}
+	}
+	c, ok := workdayCoordFromBoard(b)
+	if !ok {
+		return scraper.Result{}, fmt.Errorf("workday: board URL lost its coordinates")
+	}
+	instance := c.instance
+	if instance == "" {
+		for _, inst := range workdayInstances {
+			if _, err := w.page(ctx, f, c, inst, 0); err == nil {
+				instance = inst
+				break
+			}
+		}
+		if instance == "" {
+			return scraper.Result{}, fmt.Errorf("workday: no live instance found for tenant %q", c.tenant)
+		}
+	}
+	origin := fmt.Sprintf("https://%s.%s.myworkdayjobs.com", c.tenant, instance)
+	raw, err := f.GetJSON(ctx, c.cxsJobURL(instance, id), w.policy())
+	if err != nil {
+		return scraper.Result{}, err
+	}
+	var resp workdayDetailResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return scraper.Result{}, err
+	}
+	d := resp.JobPostingInfo
+	r := scraper.Result{
+		ID:          id,
+		Title:       strings.TrimSpace(d.Title),
+		Company:     b.Company,
+		Location:    strings.TrimSpace(d.Location),
+		Description: strings.TrimSpace(scraper.HTMLToMarkdown(d.JobDescription)),
+	}
+	if d.ExternalURL != "" {
+		r.URL = d.ExternalURL
+	} else {
+		r.URL = origin + "/" + c.site + "/details/" + id
+	}
+	// Prefer the absolute startDate ("2026-08-13"); fall back to parsing
+	// the relative "Posted N Days Ago" label.
+	if d.StartDate != "" {
+		r.Date = d.StartDate
+	} else if d.PostedOn != "" {
+		r.Date = parsePostedAgo(d.PostedOn, time.Now().UTC())
+	}
+	meta := map[string]string{}
+	if d.JobReqID != "" {
+		meta["reqId"] = d.JobReqID
+	}
+	if d.TimeType != "" {
+		meta["employmentType"] = d.TimeType
+	}
+	if d.RemoteType != "" {
+		meta["remoteType"] = d.RemoteType
+	}
+	if d.Country.Descriptor != "" {
+		meta["country"] = d.Country.Descriptor
+	}
+	if len(meta) > 0 {
+		r.Metadata = meta
+	}
+	return r, nil
 }
