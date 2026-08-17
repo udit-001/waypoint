@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
-
-	pdfoxide "github.com/yfedoseev/pdf_oxide/go"
 )
 
 // Result is the full extract outcome: which backend produced the text,
@@ -27,24 +26,6 @@ type DoctorReport struct {
 	LibPath    string `json:"lib_path"`
 	Backend    string `json:"backend"` // "pdf_oxide" | "poppler" | "none"
 	Next       string `json:"next"`
-}
-
-// extractPDFoxide is the internal seam for the purego pdf_oxide backend.
-var extractPDFoxide = func(path string) (text string, pages int, err error) {
-	doc, err := pdfoxide.Open(path)
-	if err != nil {
-		return "", 0, fmt.Errorf("pdf_oxide open: %w", err)
-	}
-	defer doc.Close()
-	text, err = doc.ExtractAllText()
-	if err != nil {
-		return "", 0, fmt.Errorf("pdf_oxide extract: %w", err)
-	}
-	pages, err = doc.PageCount()
-	if err != nil {
-		return "", 0, fmt.Errorf("pdf_oxide page count: %w", err)
-	}
-	return strings.TrimSpace(text), pages, nil
 }
 
 // extractPoppler is the internal seam for the pdftotext fallback backend.
@@ -132,6 +113,15 @@ func Doctor() DoctorReport {
 	backend := "none"
 	next := "run 'waypoint resume extract <file.pdf>' to install the pdf_oxide library automatically; or install poppler-utils for the fallback backend"
 	switch {
+	case runtime.GOOS == "windows":
+		// pdf_oxide's Go bindings need purego.Dlopen (unix-only), so the
+		// backend cannot run here; poppler is the only option.
+		if popplerErr == nil {
+			backend = "poppler"
+			next = "pdf_oxide is not supported on Windows; poppler-utils fallback ready"
+		} else {
+			next = "pdf_oxide is not supported on Windows; install poppler-utils for the fallback backend"
+		}
 	case statErr == nil:
 		backend = "pdf_oxide"
 		next = "all backends ready"
