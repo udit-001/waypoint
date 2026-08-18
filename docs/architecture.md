@@ -49,6 +49,7 @@ shared by both surfaces.
 │   ├── server/                # HTTP server, API handlers
 │   ├── mcp/                   # MCP Streamable HTTP client (JSON-RPC 2.0 + SSE) — same pattern as income-tracker
 │   ├── linkedin/              # LinkedIn profile fetch via Exa MCP + markdown parser (powers /api/profile/import-linkedin)
+│   ├── zen/                   # OpenAI-compatible curation client: session history, curate_posting tool calls, retry→fallback→drop-turn (autopilot curate stage)
 │   ├── skills/                # AI skill definitions
 │   └── version/               # Build version
 ├── web/                       # Svelte frontend
