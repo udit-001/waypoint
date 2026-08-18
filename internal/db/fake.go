@@ -23,7 +23,7 @@ type FakeStore struct {
 	History    []HistoryEntry
 	Profile    Profile
 	Settings   Settings
-	Staging    map[string]scraper.StagedResult
+	Postings   map[string]Posting
 
 	nextJobID  int64
 	nextCatID  int64
@@ -38,7 +38,7 @@ func NewFakeStore() *FakeStore {
 		Artifacts:  make(map[int64]Artifact),
 		History:    []HistoryEntry{},
 		Settings:   defaultSettings,
-		Staging:    make(map[string]scraper.StagedResult),
+		Postings:   make(map[string]Posting),
 	}
 }
 
@@ -568,35 +568,35 @@ func (f *FakeStore) UpsertSettings(updates map[string]any) error {
 func (f *FakeStore) RunMigrations(dbPath string) error { return nil }
 func (f *FakeStore) Close() error                      { return nil }
 
-// --- Staging ---
+// --- Postings ledger ---
 
-func (f *FakeStore) IsSeen(url string) (bool, error) {
-	_, ok := f.Staging[url]
+func (f *FakeStore) HasPosting(url string) (bool, error) {
+	_, ok := f.Postings[url]
 	return ok, nil
 }
 
-func (f *FakeStore) AddStaging(results []scraper.Result) error {
+func (f *FakeStore) AddPostings(results []scraper.Result) error {
 	now := time.Now().UTC().Format("2006-01-02")
 	for _, r := range results {
-		if _, ok := f.Staging[r.URL]; ok {
+		if _, ok := f.Postings[r.URL]; ok {
 			continue
 		}
-		f.Staging[r.URL] = scraper.StagedResult{
+		f.Postings[r.URL] = Posting{
 			FirstSeen: now,
-			Status:    "new",
+			Status:    StatusNew,
 			Result:    r,
 		}
 	}
 	return nil
 }
 
-func (f *FakeStore) ListStaging(status string) ([]scraper.StagedResult, error) {
-	var out []scraper.StagedResult
-	for _, sr := range f.Staging {
-		if status != "" && sr.Status != status {
+func (f *FakeStore) ListPostings(status string) ([]Posting, error) {
+	var out []Posting
+	for _, p := range f.Postings {
+		if status != "" && p.Status != status {
 			continue
 		}
-		out = append(out, sr)
+		out = append(out, p)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].FirstSeen > out[j].FirstSeen
@@ -604,71 +604,74 @@ func (f *FakeStore) ListStaging(status string) ([]scraper.StagedResult, error) {
 	return out, nil
 }
 
-func (f *FakeStore) GetStaged(url string) (scraper.StagedResult, bool, error) {
-	sr, ok := f.Staging[url]
-	return sr, ok, nil
+func (f *FakeStore) GetPosting(url string) (Posting, bool, error) {
+	p, ok := f.Postings[url]
+	return p, ok, nil
 }
 
-func (f *FakeStore) SetStagingStatus(url, status string) error {
-	sr, ok := f.Staging[url]
+func (f *FakeStore) SetPostingStatus(url, status string) error {
+	p, ok := f.Postings[url]
 	if !ok {
-		return fmt.Errorf("no staged result with URL %q", url)
+		return fmt.Errorf("no posting with URL %q", url)
 	}
-	sr.Status = status
-	f.Staging[url] = sr
+	p.Status = status
+	f.Postings[url] = p
 	return nil
 }
 
-func (f *FakeStore) PruneStaging(days int) (int, error) {
+func (f *FakeStore) PrunePostings(days int) (int, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
 	removed := 0
-	for url, sr := range f.Staging {
-		if sr.FirstSeen < cutoff {
-			delete(f.Staging, url)
+	for url, p := range f.Postings {
+		if p.FirstSeen < cutoff {
+			delete(f.Postings, url)
 			removed++
 		}
 	}
 	return removed, nil
 }
 
-func (f *FakeStore) EnrichStaging(url, desc string, meta map[string]string) error {
-	sr, ok := f.Staging[url]
+func (f *FakeStore) EnrichPosting(url, desc string, meta map[string]string) error {
+	p, ok := f.Postings[url]
 	if !ok {
 		return nil
 	}
 	if desc != "" {
-		sr.Result.Description = desc
+		p.Result.Description = desc
 	}
 	if len(meta) > 0 {
-		if sr.Result.Metadata == nil {
-			sr.Result.Metadata = map[string]string{}
+		if p.Result.Metadata == nil {
+			p.Result.Metadata = map[string]string{}
 		}
 		for k, v := range meta {
-			sr.Result.Metadata[k] = v
+			p.Result.Metadata[k] = v
 		}
 	}
-	f.Staging[url] = sr
+	f.Postings[url] = p
 	return nil
 }
 
-func (f *FakeStore) MigrateStaging(entries []scraper.StagedResult) (int, error) {
+func (f *FakeStore) MigratePostings(entries []Posting) (int, error) {
 	imported := 0
-	for _, sr := range entries {
-		if _, ok := f.Staging[sr.Result.URL]; ok {
+	for _, p := range entries {
+		if _, ok := f.Postings[p.Result.URL]; ok {
 			continue
 		}
-		status := sr.Status
+		status := p.Status
 		if status == "" {
-			status = "new"
+			status = StatusNew
 		}
-		firstSeen := sr.FirstSeen
+		if status == "imported" { // pre-ledger vocabulary from the JSON-file era
+			status = StatusPromoted
+		}
+		firstSeen := p.FirstSeen
 		if firstSeen == "" {
 			firstSeen = time.Now().UTC().Format("2006-01-02")
 		}
-		f.Staging[sr.Result.URL] = scraper.StagedResult{
+		f.Postings[p.Result.URL] = Posting{
 			FirstSeen: firstSeen,
 			Status:    status,
-			Result:    sr.Result,
+			Result:    p.Result,
 		}
 		imported++
 	}
@@ -676,12 +679,12 @@ func (f *FakeStore) MigrateStaging(entries []scraper.StagedResult) (int, error) 
 }
 
 func (f *FakeStore) Promote(url string) (Job, error) {
-	sr, ok, err := f.GetStaged(url)
+	p, ok, err := f.GetPosting(url)
 	if err != nil {
 		return Job{}, err
 	}
 	if !ok {
-		return Job{}, fmt.Errorf("no staged result with URL %q", url)
+		return Job{}, fmt.Errorf("no posting with URL %q", url)
 	}
 
 	// Check idempotency — skip if URL already in jobs.
@@ -694,11 +697,11 @@ func (f *FakeStore) Promote(url string) (Job, error) {
 	if !exists {
 		// Create the job via IntakeAddJob (defaults, timestamps, history).
 		job = Job{
-			Company:  sr.Result.Company,
-			Position: sr.Result.Title,
-			URL:      sr.Result.URL,
-			Location: sr.Result.Location,
-			Date:     dates.NormalizeDate(sr.Result.Date),
+			Company:  p.Result.Company,
+			Position: p.Result.Title,
+			URL:      p.Result.URL,
+			Location: p.Result.Location,
+			Date:     dates.NormalizeDate(p.Result.Date),
 		}
 		job, err = IntakeAddJob(f, job)
 		if err != nil {
@@ -706,8 +709,8 @@ func (f *FakeStore) Promote(url string) (Job, error) {
 		}
 	}
 
-	// Mark staging entry as imported.
-	if err := f.SetStagingStatus(url, "imported"); err != nil {
+	// Mark the posting as promoted.
+	if err := f.SetPostingStatus(url, StatusPromoted); err != nil {
 		return Job{}, err
 	}
 

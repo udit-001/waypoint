@@ -6,12 +6,12 @@ import (
 	"github.com/udit-001/waypoint/internal/scraper"
 )
 
-// --- MigrateStaging tests ---
+// --- MigratePostings tests ---
 
-func TestMigrateStaging_basic(t *testing.T) {
+func TestMigratePostings_basic(t *testing.T) {
 	f := NewFakeStore()
 
-	entries := []scraper.StagedResult{
+	entries := []Posting{
 		{
 			FirstSeen: "2026-06-01",
 			Status:    "new",
@@ -34,16 +34,16 @@ func TestMigrateStaging_basic(t *testing.T) {
 		},
 	}
 
-	imported, err := f.MigrateStaging(entries)
+	imported, err := f.MigratePostings(entries)
 	if err != nil {
-		t.Fatalf("MigrateStaging failed: %v", err)
+		t.Fatalf("MigratePostings failed: %v", err)
 	}
 	if imported != 2 {
 		t.Errorf("expected 2 imported, got %d", imported)
 	}
 
 	// Verify entry 1 — status "new" preserved
-	sr, ok, _ := f.GetStaged("https://example.com/1")
+	sr, ok, _ := f.GetPosting("https://example.com/1")
 	if !ok {
 		t.Fatal("entry 1 not found")
 	}
@@ -58,7 +58,7 @@ func TestMigrateStaging_basic(t *testing.T) {
 	}
 
 	// Verify entry 2 — status "dismissed" preserved
-	sr, ok, _ = f.GetStaged("https://example.com/2")
+	sr, ok, _ = f.GetPosting("https://example.com/2")
 	if !ok {
 		t.Fatal("entry 2 not found")
 	}
@@ -67,10 +67,10 @@ func TestMigrateStaging_basic(t *testing.T) {
 	}
 }
 
-func TestMigrateStaging_idempotent(t *testing.T) {
+func TestMigratePostings_idempotent(t *testing.T) {
 	f := NewFakeStore()
 
-	entries := []scraper.StagedResult{
+	entries := []Posting{
 		{
 			FirstSeen: "2026-06-01",
 			Status:    "new",
@@ -78,37 +78,37 @@ func TestMigrateStaging_idempotent(t *testing.T) {
 		},
 	}
 
-	imported, _ := f.MigrateStaging(entries)
+	imported, _ := f.MigratePostings(entries)
 	if imported != 1 {
 		t.Fatalf("first migration: expected 1 imported, got %d", imported)
 	}
 
 	// Re-migrate — should skip existing URLs
-	imported, err := f.MigrateStaging(entries)
+	imported, err := f.MigratePostings(entries)
 	if err != nil {
-		t.Fatalf("second MigrateStaging failed: %v", err)
+		t.Fatalf("second MigratePostings failed: %v", err)
 	}
 	if imported != 0 {
 		t.Errorf("second migration: expected 0 imported, got %d", imported)
 	}
 }
 
-func TestMigrateStaging_empty(t *testing.T) {
+func TestMigratePostings_empty(t *testing.T) {
 	f := NewFakeStore()
 
-	imported, err := f.MigrateStaging(nil)
+	imported, err := f.MigratePostings(nil)
 	if err != nil {
-		t.Fatalf("MigrateStaging empty failed: %v", err)
+		t.Fatalf("MigratePostings empty failed: %v", err)
 	}
 	if imported != 0 {
 		t.Errorf("expected 0 imported, got %d", imported)
 	}
 }
 
-func TestMigrateStaging_preservesMetadata(t *testing.T) {
+func TestMigratePostings_preservesMetadata(t *testing.T) {
 	f := NewFakeStore()
 
-	entries := []scraper.StagedResult{
+	entries := []Posting{
 		{
 			FirstSeen: "2026-06-01",
 			Status:    "new",
@@ -122,11 +122,11 @@ func TestMigrateStaging_preservesMetadata(t *testing.T) {
 		},
 	}
 
-	if _, err := f.MigrateStaging(entries); err != nil {
-		t.Fatalf("MigrateStaging failed: %v", err)
+	if _, err := f.MigratePostings(entries); err != nil {
+		t.Fatalf("MigratePostings failed: %v", err)
 	}
 
-	sr, _, _ := f.GetStaged("https://example.com/1")
+	sr, _, _ := f.GetPosting("https://example.com/1")
 	if sr.Result.Description != "A great role" {
 		t.Errorf("expected description, got %q", sr.Result.Description)
 	}
@@ -138,21 +138,21 @@ func TestMigrateStaging_preservesMetadata(t *testing.T) {
 	}
 }
 
-func TestMigrateStaging_defaultsEmptyFields(t *testing.T) {
+func TestMigratePostings_defaultsEmptyFields(t *testing.T) {
 	f := NewFakeStore()
 
-	entries := []scraper.StagedResult{
+	entries := []Posting{
 		{
 			// FirstSeen and Status left empty
 			Result: scraper.Result{ID: "1", Title: "Job A", URL: "https://example.com/1"},
 		},
 	}
 
-	if _, err := f.MigrateStaging(entries); err != nil {
-		t.Fatalf("MigrateStaging failed: %v", err)
+	if _, err := f.MigratePostings(entries); err != nil {
+		t.Fatalf("MigratePostings failed: %v", err)
 	}
 
-	sr, _, _ := f.GetStaged("https://example.com/1")
+	sr, _, _ := f.GetPosting("https://example.com/1")
 	if sr.Status != "new" {
 		t.Errorf("expected default status 'new', got %q", sr.Status)
 	}
@@ -166,7 +166,7 @@ func TestMigrateStaging_defaultsEmptyFields(t *testing.T) {
 func TestPromote_single(t *testing.T) {
 	f := NewFakeStore()
 
-	f.AddStaging([]scraper.Result{
+	f.AddPostings([]scraper.Result{
 		{
 			ID:       "1",
 			Title:    "Senior Engineer",
@@ -201,10 +201,10 @@ func TestPromote_single(t *testing.T) {
 		t.Errorf("expected status 'Not Applied', got %q", job.Status)
 	}
 
-	// Staging entry should be marked "imported"
-	sr, _, _ := f.GetStaged("https://example.com/job/1")
-	if sr.Status != "imported" {
-		t.Errorf("expected staging status 'imported', got %q", sr.Status)
+	// Posting should be marked "promoted"
+	sr, _, _ := f.GetPosting("https://example.com/job/1")
+	if sr.Status != StatusPromoted {
+		t.Errorf("expected posting status %q, got %q", StatusPromoted, sr.Status)
 	}
 
 	// History should be recorded
@@ -220,7 +220,7 @@ func TestPromote_single(t *testing.T) {
 func TestPromote_dateNormalization(t *testing.T) {
 	f := NewFakeStore()
 
-	f.AddStaging([]scraper.Result{
+	f.AddPostings([]scraper.Result{
 		{
 			ID:    "1",
 			Title: "Job A",
@@ -241,7 +241,7 @@ func TestPromote_dateNormalization(t *testing.T) {
 func TestPromote_rollingDeadline(t *testing.T) {
 	f := NewFakeStore()
 
-	f.AddStaging([]scraper.Result{
+	f.AddPostings([]scraper.Result{
 		{
 			ID:    "1",
 			Title: "Job A",
@@ -262,7 +262,7 @@ func TestPromote_rollingDeadline(t *testing.T) {
 func TestPromote_idempotent(t *testing.T) {
 	f := NewFakeStore()
 
-	f.AddStaging([]scraper.Result{
+	f.AddPostings([]scraper.Result{
 		{ID: "1", Title: "Job A", URL: "https://example.com/1"},
 	})
 
@@ -290,10 +290,10 @@ func TestPromote_idempotent(t *testing.T) {
 		t.Errorf("expected 1 job, got %d", count)
 	}
 
-	// Staging still marked imported
-	sr, _, _ := f.GetStaged("https://example.com/1")
-	if sr.Status != "imported" {
-		t.Errorf("expected staging status 'imported', got %q", sr.Status)
+	// Posting still marked promoted
+	sr, _, _ := f.GetPosting("https://example.com/1")
+	if sr.Status != StatusPromoted {
+		t.Errorf("expected posting status %q, got %q", StatusPromoted, sr.Status)
 	}
 }
 
@@ -309,7 +309,7 @@ func TestPromote_unknownURL(t *testing.T) {
 func TestPromote_preservesResultFields(t *testing.T) {
 	f := NewFakeStore()
 
-	f.AddStaging([]scraper.Result{
+	f.AddPostings([]scraper.Result{
 		{
 			ID:          "42",
 			Title:       "Senior Engineer",
@@ -349,26 +349,26 @@ func TestPromote_allBatch(t *testing.T) {
 	f := NewFakeStore()
 
 	// Three "new" results
-	f.AddStaging([]scraper.Result{
+	f.AddPostings([]scraper.Result{
 		{ID: "1", Title: "Job A", URL: "https://example.com/1"},
 		{ID: "2", Title: "Job B", URL: "https://example.com/2"},
 		{ID: "3", Title: "Job C", URL: "https://example.com/3"},
 	})
 
 	// One dismissed — should be skipped by --all
-	f.AddStaging([]scraper.Result{
+	f.AddPostings([]scraper.Result{
 		{ID: "4", Title: "Job D", URL: "https://example.com/4"},
 	})
-	f.SetStagingStatus("https://example.com/4", "dismissed")
+	f.SetPostingStatus("https://example.com/4", "dismissed")
 
-	// One already imported — should be skipped by --all
-	f.AddStaging([]scraper.Result{
+	// One already promoted — should be skipped by --all
+	f.AddPostings([]scraper.Result{
 		{ID: "5", Title: "Job E", URL: "https://example.com/5"},
 	})
-	f.SetStagingStatus("https://example.com/5", "imported")
+	f.SetPostingStatus("https://example.com/5", StatusPromoted)
 
 	// Promote all "new" results
-	newResults, _ := f.ListStaging("new")
+	newResults, _ := f.ListPostings("new")
 	promoted, skipped := 0, 0
 	for _, r := range newResults {
 		job, err := f.Promote(r.Result.URL)
@@ -389,20 +389,20 @@ func TestPromote_allBatch(t *testing.T) {
 		t.Errorf("expected 0 skipped, got %d", skipped)
 	}
 
-	// All "new" entries should now be "imported"
-	newAfter, _ := f.ListStaging("new")
+	// All "new" entries should now be "promoted"
+	newAfter, _ := f.ListPostings("new")
 	if len(newAfter) != 0 {
 		t.Errorf("expected 0 new after --all, got %d", len(newAfter))
 	}
 
-	// Dismissed and imported entries should be unchanged
-	sr, _, _ := f.GetStaged("https://example.com/4")
+	// Dismissed and promoted entries should be unchanged
+	sr, _, _ := f.GetPosting("https://example.com/4")
 	if sr.Status != "dismissed" {
 		t.Errorf("dismissed entry should stay dismissed, got %q", sr.Status)
 	}
-	sr, _, _ = f.GetStaged("https://example.com/5")
-	if sr.Status != "imported" {
-		t.Errorf("imported entry should stay imported, got %q", sr.Status)
+	sr, _, _ = f.GetPosting("https://example.com/5")
+	if sr.Status != StatusPromoted {
+		t.Errorf("promoted entry should stay promoted, got %q", sr.Status)
 	}
 
 	// 3 jobs in the table
@@ -416,7 +416,7 @@ func TestPromote_allWithExistingJob(t *testing.T) {
 	f := NewFakeStore()
 
 	// Stage a result
-	f.AddStaging([]scraper.Result{
+	f.AddPostings([]scraper.Result{
 		{ID: "1", Title: "Job A", URL: "https://example.com/1"},
 	})
 
@@ -426,7 +426,7 @@ func TestPromote_allWithExistingJob(t *testing.T) {
 		Status: "Not Applied", CreatedAt: "2026-01-01", UpdatedAt: "2026-01-01",
 	})
 
-	// Promote — should skip (URL already in jobs) but mark staging as imported
+	// Promote — should skip (URL already in jobs) but mark the posting as promoted
 	job, err := f.Promote("https://example.com/1")
 	if err != nil {
 		t.Fatalf("Promote failed: %v", err)
@@ -435,10 +435,10 @@ func TestPromote_allWithExistingJob(t *testing.T) {
 		t.Errorf("expected ID=0 (skipped), got %d", job.ID)
 	}
 
-	// Staging should be imported
-	sr, _, _ := f.GetStaged("https://example.com/1")
-	if sr.Status != "imported" {
-		t.Errorf("expected staging status 'imported', got %q", sr.Status)
+	// Posting should be promoted
+	sr, _, _ := f.GetPosting("https://example.com/1")
+	if sr.Status != StatusPromoted {
+		t.Errorf("expected posting status %q, got %q", StatusPromoted, sr.Status)
 	}
 
 	// Still only 1 job

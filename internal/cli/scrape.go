@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/scraper"
 	_ "github.com/udit-001/waypoint/internal/scraper/bitspilani"      // activate BITS Pilani scraper
 	_ "github.com/udit-001/waypoint/internal/scraper/ccmb"            // activate CCMB scraper
@@ -52,20 +53,21 @@ func legacyStagingHint() {
 	if err != nil {
 		return // no legacy file
 	}
-	var data map[string]scraper.StagedResult
+	var data map[string]db.Posting
 	if err := json.Unmarshal(raw, &data); err != nil {
 		return // corrupt — skip hint
 	}
 	if len(data) == 0 {
 		return
 	}
-	fmt.Printf("  Found legacy scrape-cache.json — run 'waypoint scrape migrate' to import %d staged results.\n", len(data))
+	fmt.Printf("  Found legacy scrape-cache.json — run 'waypoint scrape migrate' to import %d postings.\n", len(data))
 }
 
 var scrapeCmd = &cobra.Command{
 	Use:   "scrape",
 	Short: "Scrape job portals for new postings",
-	Long: `Scrape job portals for new postings, stage them for review, and
+	Long: `Scrape job portals for new postings, add them to the postings
+ledger for review, and
 promote relevant ones into the tracked jobs table.
 
 Examples:
@@ -141,8 +143,9 @@ var scrapeRunFlags struct {
 var scrapeRunCmd = &cobra.Command{
 	Use:   "run <name>",
 	Short: "Run a job scraper and print results",
-	Long: `Fetch job postings from a portal, stage them to the database,
-and print only new results (deduplicated against staging and the jobs table).
+	Long: `Fetch job postings from a portal, add them to the postings ledger,
+and print only new results (deduplicated against the postings ledger
+and the jobs table).
 
 Examples:
   waypoint scrape run ncbs -q "research"
@@ -182,12 +185,12 @@ Examples:
 
 		results = scraper.Truncate(results, scrapeRunFlags.limit)
 
-		// Dedup: filter out results already in staging or already tracked as jobs
+		// Dedup: filter out results already in the postings ledger or tracked as jobs
 		var newResults []scraper.Result
 		for _, r := range results {
-			seen, err := store.IsSeen(r.URL)
+			seen, err := store.HasPosting(r.URL)
 			if err != nil {
-				return formatError("check staging", err)
+				return formatError("check postings", err)
 			}
 			if seen {
 				continue
@@ -204,8 +207,8 @@ Examples:
 
 		// Stage all new results before printing
 		if len(newResults) > 0 {
-			if err := store.AddStaging(newResults); err != nil {
-				return formatError("stage results", err)
+			if err := store.AddPostings(newResults); err != nil {
+				return formatError("add postings", err)
 			}
 		}
 
@@ -253,8 +256,8 @@ var scrapeStagedFlags struct {
 
 var scrapeStagedCmd = &cobra.Command{
 	Use:   "staged",
-	Short: "View staged scrape results",
-	Long: `List results that have been scraped and staged to the database.
+	Short: "View postings in the review queue",
+	Long: `List postings that have been scraped into the postings ledger.
 Optionally filter by status.
 
 Examples:
@@ -265,25 +268,25 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		legacyStagingHint()
 
-		results, err := store.ListStaging(scrapeStagedFlags.status)
+		results, err := store.ListPostings(scrapeStagedFlags.status)
 		if err != nil {
-			return formatError("list staging", err)
+			return formatError("list postings", err)
 		}
 
 		if jsonOut {
 			if results == nil {
-				results = []scraper.StagedResult{}
+				results = []db.Posting{}
 			}
 			printJSON(results)
 			return nil
 		}
 
 		if len(results) == 0 {
-			fmt.Println("  No staged results. Run 'waypoint scrape run <name>' to search.")
+			fmt.Println("  No postings. Run 'waypoint scrape run <name>' to search.")
 			return nil
 		}
 
-		fmt.Printf("  %d staged result(s)\n\n", len(results))
+		fmt.Printf("  %d posting(s)\n\n", len(results))
 
 		rows := make([][]string, 0, len(results))
 		for _, r := range results {
@@ -310,12 +313,12 @@ var scrapeDismissFlags struct {
 
 var scrapeDismissCmd = &cobra.Command{
 	Use:   "dismiss [<url>...]",
-	Short: "Dismiss staged results",
-	Long: `Mark staged scrape results as dismissed so they don't reappear
+	Short: "Dismiss postings",
+	Long: `Mark postings as dismissed so they don't reappear
 on future scrape runs.
 
 --all dismisses every "new" status result. Entries that are "dismissed"
-or "imported" are skipped.
+or "promoted" are skipped.
 
 Examples:
   waypoint scrape dismiss "https://www.ncbs.res.in/jobportal/node/142669"
@@ -325,14 +328,14 @@ Examples:
 		legacyStagingHint()
 
 		if scrapeDismissFlags.all {
-			results, err := store.ListStaging("new")
+			results, err := store.ListPostings("new")
 			if err != nil {
-				return formatError("list staging", err)
+				return formatError("list postings", err)
 			}
 
 			dismissed := 0
 			for _, r := range results {
-				if err := store.SetStagingStatus(r.Result.URL, "dismissed"); err != nil {
+				if err := store.SetPostingStatus(r.Result.URL, "dismissed"); err != nil {
 					return formatError("dismiss "+r.Result.URL, err)
 				}
 				dismissed++
@@ -355,15 +358,15 @@ Examples:
 		if len(args) == 1 {
 			url := args[0]
 
-			_, ok, err := store.GetStaged(url)
+			_, ok, err := store.GetPosting(url)
 			if err != nil {
-				return formatError("check staging", err)
+				return formatError("check postings", err)
 			}
 			if !ok {
-				return fmt.Errorf("no staged result with URL %q", url)
+				return fmt.Errorf("no posting with URL %q", url)
 			}
 
-			if err := store.SetStagingStatus(url, "dismissed"); err != nil {
+			if err := store.SetPostingStatus(url, "dismissed"); err != nil {
 				return formatError("dismiss", err)
 			}
 
@@ -380,15 +383,15 @@ Examples:
 		// are reported to stderr but processing continues.
 		dismissed := 0
 		for _, url := range args {
-			_, ok, err := store.GetStaged(url)
+			_, ok, err := store.GetPosting(url)
 			if err != nil {
-				return formatError("check staging", err)
+				return formatError("check postings", err)
 			}
 			if !ok {
-				fmt.Fprintf(os.Stderr, "  ✗ no staged result with URL %q\n", url)
+				fmt.Fprintf(os.Stderr, "  ✗ no posting with URL %q\n", url)
 				continue
 			}
-			if err := store.SetStagingStatus(url, "dismissed"); err != nil {
+			if err := store.SetPostingStatus(url, "dismissed"); err != nil {
 				return formatError("dismiss", err)
 			}
 			dismissed++
@@ -410,11 +413,11 @@ var scrapeDetailCmd = &cobra.Command{
 	Use:   "detail <name> <id>",
 	Short: "Fetch full details for a job posting",
 	Long: `Fetch the full description, seniority, employment type, job function,
-and industries for a job posting. Enriches the staged result if found.
+and industries for a job posting. Enriches the posting if found.
 
 Currently only LinkedIn supports detail fetching. For board postings
 (Greenhouse, Workday, Lever, BambooHR) use 'waypoint boards detail
-<board> <id>' instead — that path enriches the staged board entry.
+<board> <id>' instead — that path enriches the posting.
 
 Examples:
   waypoint scrape detail linkedin 4439995582
@@ -441,8 +444,8 @@ Examples:
 			return formatError("fetch detail", err)
 		}
 
-		if err := store.EnrichStaging(result.URL, result.Description, result.Metadata); err != nil {
-			return formatError("enrich staging", err)
+		if err := store.EnrichPosting(result.URL, result.Description, result.Metadata); err != nil {
+			return formatError("enrich posting", err)
 		}
 
 		if jsonOut {
@@ -506,8 +509,8 @@ var scrapePruneFlags struct {
 
 var scrapePruneCmd = &cobra.Command{
 	Use:   "prune",
-	Short: "Remove old staged entries",
-	Long: `Remove staged results older than N days.
+	Short: "Remove old postings",
+	Long: `Remove postings older than N days.
 Default: 30 days. Only removes entries — does not affect tracked jobs.
 
 Examples:
@@ -517,7 +520,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		legacyStagingHint()
 
-		removed, err := store.PruneStaging(scrapePruneFlags.days)
+		removed, err := store.PrunePostings(scrapePruneFlags.days)
 		if err != nil {
 			return formatError("prune", err)
 		}
@@ -543,7 +546,7 @@ var scrapeMigrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Import legacy scrape-cache.json into the database",
 	Long: `Reads the legacy ~/.waypoint/scrape-cache.json file and imports
-each entry into the scrape_staging table. The JSON file is renamed to
+each entry into the postings table. The JSON file is renamed to
 scrape-cache.json.migrated after import.
 
 This is a one-time migration — safe to re-run (idempotent).`,
@@ -561,19 +564,19 @@ This is a one-time migration — safe to re-run (idempotent).`,
 			return formatError("read legacy file", err)
 		}
 
-		var data map[string]scraper.StagedResult
+		var data map[string]db.Posting
 		if err := json.Unmarshal(raw, &data); err != nil {
 			return formatError("parse legacy file", err)
 		}
 
-		entries := make([]scraper.StagedResult, 0, len(data))
+		entries := make([]db.Posting, 0, len(data))
 		for _, sr := range data {
 			entries = append(entries, sr)
 		}
 
-		imported, err := store.MigrateStaging(entries)
+		imported, err := store.MigratePostings(entries)
 		if err != nil {
-			return formatError("migrate staging", err)
+			return formatError("migrate postings", err)
 		}
 
 		if err := os.Rename(path, migrated); err != nil {
@@ -585,7 +588,7 @@ This is a one-time migration — safe to re-run (idempotent).`,
 			return nil
 		}
 
-		fmt.Printf("  ✓ Imported %d staged result(s).\n", imported)
+		fmt.Printf("  ✓ Imported %d posting(s).\n", imported)
 		return nil
 	},
 }
@@ -598,12 +601,12 @@ var scrapePromoteFlags struct {
 
 var scrapePromoteCmd = &cobra.Command{
 	Use:   "promote [<url>]",
-	Short: "Promote staged results into the tracked jobs table",
-	Long: `Move staged scrape results into the tracked jobs table.
+	Short: "Promote postings into the tracked jobs table",
+	Long: `Move postings into the tracked jobs table.
 
---all promotes every "new" status result. Entries that are "dismissed"
-or "imported" are skipped. If a URL already exists in the jobs table,
-the result is skipped but still marked "imported" so it won't reappear.
+--all promotes every "new" status posting. Entries that are "dismissed"
+or "promoted" are skipped. If a URL already exists in the jobs table,
+the posting is skipped but still marked "promoted" so it won't reappear.
 
 Examples:
   waypoint scrape promote "https://www.ncbs.res.in/jobportal/node/142669"
@@ -613,9 +616,9 @@ Examples:
 		legacyStagingHint()
 
 		if scrapePromoteFlags.all {
-			results, err := store.ListStaging("new")
+			results, err := store.ListPostings("new")
 			if err != nil {
-				return formatError("list staging", err)
+				return formatError("list postings", err)
 			}
 
 			promoted, skipped := 0, 0
@@ -639,7 +642,7 @@ Examples:
 				return nil
 			}
 
-			fmt.Printf("  Promoted %d, skipped %d (already imported).\n", promoted, skipped)
+			fmt.Printf("  Promoted %d, skipped %d (already tracked).\n", promoted, skipped)
 			return nil
 		}
 
@@ -686,7 +689,7 @@ func init() {
 	scrapeRunCmd.Flags().IntVar(&scrapeRunFlags.page, "page", 1, "Page number, 1-indexed (LinkedIn/Indeed only)")
 	scrapeRunCmd.Flags().StringVar(&scrapeRunFlags.today, "today", "", "Reference date YYYY-MM-DD for recency filtering (default: machine clock)")
 
-	scrapeStagedCmd.Flags().StringVar(&scrapeStagedFlags.status, "status", "", "Filter by status (new|dismissed|imported)")
+	scrapeStagedCmd.Flags().StringVar(&scrapeStagedFlags.status, "status", "", "Filter by status (new|shortlisted|dismissed|promoted)")
 
 	scrapePruneCmd.Flags().IntVar(&scrapePruneFlags.days, "days", 30, "Remove entries older than N days")
 

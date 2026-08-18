@@ -130,7 +130,7 @@ func (l Lever) Fetch(ctx context.Context, b Board, hit DetectHit, opts FetchOpts
 // Detail fetches /v0/postings/{slug}/{id}. The Lever postings API returns
 // the full body in the list, so Detail is mostly a single-posting lookup
 // (refresh from the live API); on detail-only fields (categories, plain
-// description) the live fetch is authoritative when the staged copy is stale.
+// description) the live fetch is authoritative when the ledger copy is stale.
 func (l Lever) Detail(ctx context.Context, b Board, id string) (scraper.Result, error) {
 	raw := b.URL
 	if raw == "" {

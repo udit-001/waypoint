@@ -57,16 +57,17 @@ type Store interface {
 	RunMigrations(dbPath string) error
 	Close() error
 
-	// Staging — scraped results persisted before promotion to jobs.
-	IsSeen(url string) (bool, error)
-	AddStaging(results []scraper.Result) error
-	ListStaging(status string) ([]scraper.StagedResult, error)
-	GetStaged(url string) (scraper.StagedResult, bool, error)
-	SetStagingStatus(url, status string) error
-	PruneStaging(days int) (int, error)
-	EnrichStaging(url, desc string, meta map[string]string) error
-	MigrateStaging(entries []scraper.StagedResult) (int, error)
+	// Postings ledger — the world's scraped data, one row per URL,
+	// awaiting review (promote or dismiss).
+	HasPosting(url string) (bool, error)
+	AddPostings(results []scraper.Result) error
+	ListPostings(status string) ([]Posting, error)
+	GetPosting(url string) (Posting, bool, error)
+	SetPostingStatus(url, status string) error
+	PrunePostings(days int) (int, error)
+	EnrichPosting(url, desc string, meta map[string]string) error
+	MigratePostings(entries []Posting) (int, error)
 
-	// Promote — moves a staged result into the tracked jobs table.
+	// Promote — moves a posting into the applications (jobs) table.
 	Promote(url string) (Job, error)
 }

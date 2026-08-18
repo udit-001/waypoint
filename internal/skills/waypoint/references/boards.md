@@ -42,14 +42,14 @@ The URL is the ATS board URL, not the marketing careers page. Find it in this or
 waypoint boards sweep --json
 ```
 
-Sweep every enabled board: fetch, filter by `--jobage` (default 90 days, same as `scrape run`), deduplicate against staging and tracked jobs, stage the rest. Each board's entry in `results` carries:
+Sweep every enabled board: fetch, filter by `--jobage` (default 90 days, same as `scrape run`), deduplicate against the postings ledger and tracked jobs, add the rest. Each board's entry in `results` carries:
 
-- `jobs` — **the postings this sweep staged. Present these to the user**, numbered, exactly like scrape results (title, company, location, date).
+- `jobs` — **the postings this sweep added to the ledger. Present these to the user**, numbered, exactly like scrape results (title, company, location, date).
 - `failed` — the board errored. Report it; suggest `boards verify <name>`, a URL fix, or `boards disable <name>`.
 
 All four vendors expose posting dates in the list response, so `--jobage` filters every board without extra requests. The list payload is lean (title, location, date); the full description and extra metadata (department, employment type, experience, compensation) live behind `boards detail` — fetch them on demand only for postings you're seriously considering.
 
-**Done when**: every enabled board reports `new: 0`, or the user has reviewed everything the sweep staged. Any `failed: true` board is reported with a next step.
+**Done when**: every enabled board reports `new: 0`, or the user has reviewed everything the sweep added. Any `failed: true` board is reported with a next step.
 
 ## Step 2½ — Enrich the few you're seriously considering
 
@@ -57,17 +57,17 @@ The sweep list is lean. Before you write a cover letter or judge fit, fetch the 
 ```bash
 waypoint boards detail <board> <id> --json
 ```
-Returns the full description (HTML→markdown), the absolute `date`, and any metadata each vendor exposes (department, employment type, experience for BambooHR; department for Greenhouse; time type, remote type, reqId, country for Workday; Lever already ships the full body in the list). `detail` merges the description and metadata into the staged entry so the promote step can pick them up — no extra flag needed.
+Returns the full description (HTML→markdown), the absolute `date`, and any metadata each vendor exposes (department, employment type, experience for BambooHR; department for Greenhouse; time type, remote type, reqId, country for Workday; Lever already ships the full body in the list). `detail` merges the description and metadata into the posting so the promote step can pick them up — no extra flag needed.
 
-Don't `detail` every staged posting — only the ones the user is seriously considering. The sweep already gave you enough to triage; `detail` is the deep-read step.
+Don't `detail` every posting — only the ones the user is seriously considering. The sweep already gave you enough to triage; `detail` is the deep-read step.
 
 **Done when**: every posting you intend to promote has a full description.
 
 ## Step 3 — Promote picks
 
-Promotion is **not board-specific** — staged postings from a sweep flow through the same staging review as scraped ones. `read` [scraping](scraping.md) Step 3 (present) and Step 4 (extract + `jobs add`) and follow them verbatim; the extraction table there covers PDF, LinkedIn, and web-page URLs, which is all a board result can be.
+Promotion is **not board-specific** — postings from a sweep flow through the same ledger review as scraped ones. `read` [scraping](scraping.md) Step 3 (present) and Step 4 (extract + `jobs add`) and follow them verbatim; the extraction table there covers PDF, LinkedIn, and web-page URLs, which is all a board result can be.
 
-Rejects: `waypoint scrape dismiss "<url>"` — same rule as scraping: unsure means skip, it stays staged.
+Rejects: `waypoint scrape dismiss "<url>"` — same rule as scraping: unsure means skip, it stays in the ledger.
 
 **Done when**: same as scraping Steps 3–4 — every promoted result enriched with real extracted data, every explicit reject dismissed.
 
@@ -81,7 +81,7 @@ Rejects: `waypoint scrape dismiss "<url>"` — same rule as scraping: unsure mea
 | `boards enable/disable <name>` | Include/skip in sweeps |
 | `boards verify [<name>] [--json]` | Re-probe one or all boards; non-zero exit on failure |
 | `boards sweep [--jobage N] [--limit N] [--json]` | Fetch all enabled boards, stage new postings |
-| `boards detail <board> <id> [--json]` | Fetch full description + metadata for one posting; enriches staged entry |
+| `boards detail <board> <id> [--json]` | Fetch full description + metadata for one posting; enriches the ledger entry |
 
 ## Notes
 

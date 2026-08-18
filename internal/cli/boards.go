@@ -14,7 +14,7 @@ import (
 var boardsCmd = &cobra.Command{
 	Use:   "boards",
 	Short: "Manage company ATS boards (Greenhouse, Workday, Lever, BambooHR)",
-	Long: `Manage the list of company ATS boards and sweep them into staging.
+	Long: `Manage the list of company ATS boards and sweep them into the postings ledger.
 
 A board is one company's careers site behind one vendor (Greenhouse,
 Workday, Lever, BambooHR). Boards live in boards.toml inside data_dir,
@@ -25,7 +25,8 @@ The flow: find the company's careers URL (any search tool), then
 which detects the provider, verifies the board is live, and saves it.
 Then:
   waypoint boards sweep
-fetches every enabled board and stages new postings for review.
+fetches every enabled board and adds new postings to the ledger
+for review.
 
 Examples:
   waypoint boards add slack --url https://salesforce.wd12.myworkdayjobs.com/Slack/
@@ -350,17 +351,17 @@ var boardsSweepFlags struct {
 
 var boardsSweepCmd = &cobra.Command{
 	Use:   "sweep",
-	Short: "Fetch all enabled boards and stage new postings",
-	Long: `Sweep every enabled board, deduplicate against staging and tracked
-jobs, stage the new postings, and print a per-board summary.
+	Short: "Fetch all enabled boards and add new postings",
+	Long: `Sweep every enabled board, deduplicate against the postings ledger
+and tracked jobs, add the new postings, and print a per-board summary.
 
 The JSON meta block is the completion contract for agents:
   fetched  jobs returned by the board
-  new      staged this sweep (listed in that board's jobs array)
-  seen     already staged or tracked (skipped)
+  new      added to the ledger this sweep (listed in that board's jobs array)
+  seen     already in the ledger or tracked (skipped)
   failed   this board errored — verify it, fix its URL, or disable it
 Sweep is done when every enabled board reports new==0 or the user has
-reviewed the staged jobs; any failed board needs attention.`,
+reviewed the new postings; any failed board needs attention.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		bf, _, err := loadBoardsStore()
 		if err != nil {
@@ -393,7 +394,7 @@ reviewed the staged jobs; any failed board needs attention.`,
 			Seen     int              `json:"seen"`
 			Failed   bool             `json:"failed"`
 			Error    string           `json:"error,omitempty"`
-			Jobs     []scraper.Result `json:"jobs,omitempty"` // staged this sweep — present these to the user
+			Jobs     []scraper.Result `json:"jobs,omitempty"` // added this sweep — present these to the user
 		}
 		var out []sweepResult
 		totalNew, failed := 0, 0
@@ -422,9 +423,9 @@ reviewed the staged jobs; any failed board needs attention.`,
 
 			var fresh []scraper.Result
 			for _, r := range results {
-				seen, err := store.IsSeen(r.URL)
+				seen, err := store.HasPosting(r.URL)
 				if err != nil {
-					return formatError("check staging", err)
+					return formatError("check postings", err)
 				}
 				if seen {
 					sr.Seen++
@@ -441,8 +442,8 @@ reviewed the staged jobs; any failed board needs attention.`,
 				fresh = append(fresh, r)
 			}
 			if len(fresh) > 0 {
-				if err := store.AddStaging(fresh); err != nil {
-					return formatError("stage results", err)
+				if err := store.AddPostings(fresh); err != nil {
+					return formatError("add postings", err)
 				}
 			}
 			sr.New = len(fresh)
@@ -460,7 +461,7 @@ reviewed the staged jobs; any failed board needs attention.`,
 			})
 			return nil
 		}
-		fmt.Printf("\n  %d new posting(s) staged across %d board(s)\n\n", totalNew, len(enabled))
+		fmt.Printf("\n  %d new posting(s) added across %d board(s)\n\n", totalNew, len(enabled))
 		rows := make([][]string, 0, len(out))
 		for _, s := range out {
 			status := fmt.Sprintf("fetched=%d new=%d seen=%d", s.Fetched, s.New, s.Seen)
@@ -488,7 +489,7 @@ per-job detail endpoint.
 The swept list carried only title, location, and the list's date. Detail
 is the on-demand enrichment step for postings you're seriously
 considering — for cover-letter generation or final fit judgment. The
-result is merged into the staged entry when one exists (description and
+result is merged into the posting when one exists (description and
 metadata; the list's structured fields are kept).
 
 Examples:
@@ -517,10 +518,10 @@ Examples:
 		if err != nil {
 			return formatError("detail failed", err)
 		}
-		// Merge description + metadata into any staged entry (no-op if absent).
+		// Merge description + metadata into any posting (no-op if absent).
 		if r.URL != "" {
-			if err := store.EnrichStaging(r.URL, r.Description, r.Metadata); err != nil {
-				return formatError("enrich staging", err)
+			if err := store.EnrichPosting(r.URL, r.Description, r.Metadata); err != nil {
+				return formatError("enrich posting", err)
 			}
 		}
 		if jsonOut {

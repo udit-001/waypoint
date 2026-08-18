@@ -1,6 +1,6 @@
 # Scraping job postings
 
-Scrape job portals, review new results in **staging**, then promote picks to tracked jobs or dismiss rejects.
+Scrape job portals, review new results in the **postings ledger**, then promote picks to tracked jobs or dismiss rejects.
 
 ## Entry condition
 
@@ -65,8 +65,8 @@ Read **`meta.today`** from the response, then drop any result whose `date` is ol
 
 Results are already filtered by query — no need to filter again.
 
-Results are staged automatically — the CLI deduplicates against the staging
-file and the jobs table by URL, so only new postings appear.
+Results are added to the postings ledger automatically — the CLI deduplicates
+against the ledger and the jobs table by URL, so only new postings appear.
 
 If `meta.count` is `0`, no new postings since the last run. Skip to the next
 scraper — don't present an empty list.
@@ -133,7 +133,7 @@ waypoint scrape dismiss "<url>"
 ```
 
 Dismissed results don't reappear on the next scrape. If the user is unsure
-about a result, skip dismissal — it stays in staging as "new" and won't
+about a result, skip dismissal — it stays in the ledger as "new" and won't
 reappear until pruned.
 
 **Done when**: every explicit reject dismissed.
@@ -143,15 +143,15 @@ reappear until pruned.
 | Command | What it does |
 |---------|-------------|
 | `scrape list [--json]` | List registered scrapers with categories |
-| `scrape run <name> [flags]` | Fetch, stage, print new results (see Step 2; add `--today <YYYY-MM-DD>` to anchor recency) |
-| `scrape staged [--status new\|dismissed] [--json]` | Review staged backlog |
-| `scrape dismiss <url>` | Mark a staged result as dismissed |
-| `scrape detail <name> <id> [--json]` | Fetch full description + metadata for a staged result (LinkedIn only) |
-| `scrape prune [--days 30]` | Remove old staged entries |
+| `scrape run <name> [flags]` | Fetch, add to the ledger, print new results (see Step 2; add `--today <YYYY-MM-DD>` to anchor recency) |
+| `scrape staged [--status new\|shortlisted\|dismissed\|promoted] [--json]` | Review the postings backlog |
+| `scrape dismiss <url>` | Mark a posting as dismissed |
+| `scrape detail <name> <id> [--json]` | Fetch full description + metadata for a posting (LinkedIn only) |
+| `scrape prune [--days 30]` | Remove old postings |
 
 ## Notes
 
-- `scrape run` writes to staging before printing. If interrupted, results are
+- `scrape run` writes to the postings ledger before printing. If interrupted, results are
   preserved — the next run deduplicates correctly.
 - Results already tracked as jobs (via `jobs add --url`) are automatically
   filtered out by `scrape run` — no need to dismiss them.
