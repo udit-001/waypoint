@@ -21,7 +21,7 @@ function parsePath(pathname) {
 
   // Named routes — only the living ones. Old view paths
   // (/dashboard, /kanban, /table, /search) intentionally absent.
-  const routes = ['applications', 'categories', 'profile', 'skills', 'artifacts', 'settings'];
+  const routes = ['applications', 'found', 'categories', 'profile', 'skills', 'artifacts', 'settings'];
   const top = clean.split('?')[0];
   if (routes.includes(top)) return { route: top, params: {} };
 

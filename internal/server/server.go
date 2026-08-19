@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -21,10 +22,11 @@ import (
 
 // Config holds the server configuration.
 type Config struct {
-	Port   int
-	DB     db.Store
-	NoOpen bool // don't auto-open browser
-	Silent bool // suppress terminal output (daemon mode)
+	Port      int
+	DB        db.Store
+	NoOpen    bool // don't auto-open browser
+	Silent    bool // suppress terminal output (daemon mode)
+	Autopilot bool // start autopilot ticker (daemon mode only)
 }
 
 // newMux creates the HTTP mux with API routes, PWA routes, and static file
@@ -57,6 +59,15 @@ func newMuxWithLinkedIn(store db.Store, staticFS fs.FS, li *linkedin.Fetcher) ht
 	mux.HandleFunc("PATCH /api/profile", handleUpdateProfile(store))
 	mux.HandleFunc("POST /api/profile/import-linkedin", handleImportLinkedIn(store, li))
 	mux.HandleFunc("GET /api/settings", handleGetSettings(store))
+	mux.HandleFunc("PATCH /api/settings", handleUpdateSettings(store))
+
+	// Postings review queue
+	mux.HandleFunc("GET /api/postings", handleListPostings(store))
+	mux.HandleFunc("POST /api/postings/{url}/promote", handlePromotePosting(store))
+	mux.HandleFunc("POST /api/postings/{url}/dismiss", handleDismissPosting(store))
+
+	// Autopilot
+	mux.HandleFunc("GET /api/autopilot", handleGetAutopilot(store))
 
 	// PWA routes with proper cache headers.
 	// sw.js must always revalidate (no-cache) or updates won't propagate.
@@ -404,5 +415,86 @@ func handleSearch(store db.Store) http.HandlerFunc {
 			results = []db.SearchResultItem{}
 		}
 		jsonResponse(w, results)
+	}
+}
+
+// --- Postings review queue ---
+
+func handleListPostings(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		status := r.URL.Query().Get("status")
+
+		postings, err := store.ListPostings(status)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if postings == nil {
+			postings = []db.Posting{}
+		}
+		jsonResponse(w, postings)
+	}
+}
+
+func handlePromotePosting(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rawURL, err := url.PathUnescape(r.PathValue("url"))
+		if err != nil || rawURL == "" {
+			jsonError(w, "invalid posting URL", http.StatusBadRequest)
+			return
+		}
+
+		job, err := store.Promote(rawURL)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		jsonResponse(w, job)
+	}
+}
+
+func handleDismissPosting(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rawURL, err := url.PathUnescape(r.PathValue("url"))
+		if err != nil || rawURL == "" {
+			jsonError(w, "invalid posting URL", http.StatusBadRequest)
+			return
+		}
+
+		if err := store.SetPostingStatus(rawURL, db.StatusDismissed); err != nil {
+			jsonError(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		jsonResponse(w, map[string]string{"status": "dismissed", "url": rawURL})
+	}
+}
+
+// --- Autopilot ---
+
+func handleGetAutopilot(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		settings, err := store.GetSettings()
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		lastRun, hasRun, _ := store.GetLastRun()
+
+		cadence := settings.AutopilotCadence
+		if cadence <= 0 {
+			cadence = 6
+		}
+
+		resp := map[string]any{
+			"enabled": settings.AutopilotEnabled == 1,
+			"cadence": cadence,
+			"lastRun": nil,
+		}
+		if hasRun {
+			resp["lastRun"] = lastRun
+		}
+
+		jsonResponse(w, resp)
 	}
 }

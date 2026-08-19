@@ -181,3 +181,24 @@ export async function searchAll(query) {
   const data = await api('/search?q=' + encodeURIComponent(query));
   return data || [];
 }
+
+// ─── Postings (review queue) ───────────────────────────
+
+export const postings = createStore(async () => {
+  const data = await api('/postings?status=shortlisted');
+  return Array.isArray(data) ? data : [];
+});
+
+export async function promotePosting(url) {
+  return apiMutate('POST', '/postings/' + encodeURIComponent(url) + '/promote');
+}
+
+export async function dismissPosting(url) {
+  return apiMutate('POST', '/postings/' + encodeURIComponent(url) + '/dismiss');
+}
+
+// ─── Autopilot ─────────────────────────────────────────
+
+export const autopilot = createStore(async () => {
+  return api('/autopilot');
+});

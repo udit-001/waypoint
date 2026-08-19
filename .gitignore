@@ -45,3 +45,4 @@ web/.vite/
 
 # lific project association (per-clone)
 .lific.json
+.env

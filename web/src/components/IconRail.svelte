@@ -7,6 +7,7 @@
   // touch users tap to navigate, the icon is its own affordance).
   // Logo navigates home (/applications) with a 200ms spin when already there.
 
+  import { onMount } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
   import { iconSvg } from '../lib/icons.js';
 
@@ -24,10 +25,22 @@
     }
   }
 
+  import * as api from '../stores/api.svelte.js';
+
   const PRIMARY = [
     { view: 'applications', label: 'Applications', icon: 'briefcase' },
+    { view: 'found', label: 'Found Jobs', icon: 'sparkles', badge: true },
     { view: 'artifacts', label: 'Artifacts', icon: 'file-text' },
   ];
+
+  let unreviewedCount = $state(0);
+
+  onMount(async () => {
+    try {
+      await api.postings.ensure();
+      unreviewedCount = (api.postings.value || []).filter(p => p.status === 'shortlisted').length;
+    } catch {}
+  });
   const SECONDARY = [
     { view: 'categories', label: 'Categories', icon: 'box' },
     { view: 'profile', label: 'Profile', icon: 'user' },
@@ -84,7 +97,14 @@
         aria-label={item.label}
         aria-current={isActive(item.view) ? 'page' : undefined}
       >
-        <span class="flex items-center justify-center">{@html iconSvg(item.icon, 20, { duotone: false })}</span>
+        <span class="flex items-center justify-center relative">
+          {@html iconSvg(item.icon, 20, { duotone: false })}
+          {#if item.badge && unreviewedCount > 0}
+            <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+              {unreviewedCount > 9 ? '9+' : unreviewedCount}
+            </span>
+          {/if}
+        </span>
         <span class="tooltip">{item.label}</span>
       </a>
     {/each}

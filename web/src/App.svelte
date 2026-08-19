@@ -3,6 +3,7 @@
   import TopBar from './components/TopBar.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
   import Applications from './views/Applications.svelte';
+  import FoundJobs from './views/FoundJobs.svelte';
   import Categories from './views/Categories.svelte';
   import Profile from './views/Profile.svelte';
   import Skills from './views/Skills.svelte';
@@ -18,9 +19,9 @@
 
   // Set correct page title immediately — before any view mounts
   const routeTitles = {
-    applications: 'Applications', categories: 'Categories', profile: 'Profile',
-    skills: 'AI Integration', artifacts: 'Artifacts', settings: 'Settings',
-    job: 'Job Detail', artifact: 'Artifact',
+    applications: 'Applications', found: 'Found Jobs', categories: 'Categories',
+    profile: 'Profile', skills: 'AI Integration', artifacts: 'Artifacts',
+    settings: 'Settings', job: 'Job Detail', artifact: 'Artifact',
   };
   setPage({ title: routeTitles[router.current.route] || 'Applications' });
 </script>
@@ -35,6 +36,8 @@
     <div class="flex-1 p-6 overflow-y-auto">
       {#if router.current.route === 'applications'}
         <Applications />
+      {:else if router.current.route === 'found'}
+        <FoundJobs />
       {:else if router.current.route === 'categories'}
         <Categories />
       {:else if router.current.route === 'profile'}

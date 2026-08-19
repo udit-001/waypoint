@@ -10,6 +10,10 @@ import { setPage } from '../stores/page.svelte.js';
   let currentFont = $state('sans');
   let cliPre = $state(null);
   let copiedCli = $state(false);
+  let autopilotEnabled = $state(null);
+  let autopilotCadence = $state(6);
+  let lastRun = $state(null);
+  let autopilotError = $state(null);
 
   onMount(async () => {
     setPage({ title: 'Settings' });
@@ -17,7 +21,39 @@ import { setPage } from '../stores/page.svelte.js';
     await api.settings.ensure();
     settingsData = api.settings.value;
     currentFont = document.documentElement.dataset.font || localStorage.getItem('waypoint_font') || 'sans';
+
+    // Load autopilot data.
+    try {
+      const res = await fetch('/api/autopilot');
+      if (res.ok) {
+        const data = await res.json();
+        autopilotEnabled = data.enabled;
+        autopilotCadence = data.cadence || 6;
+        lastRun = data.lastRun;
+      }
+    } catch {}
   });
+
+  async function toggleAutopilot() {
+    autopilotError = null;
+    const newState = !autopilotEnabled;
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autopilot_enabled: newState ? 1 : 0 }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        autopilotError = data.error || 'Failed to toggle';
+        return;
+      }
+      const updated = await res.json();
+      autopilotEnabled = updated.autopilotEnabled === 1;
+    } catch (e) {
+      autopilotError = e.message;
+    }
+  }
 
   function setFont(font) {
     currentFont = font;
@@ -90,6 +126,46 @@ import { setPage } from '../stores/page.svelte.js';
         <div class="text-xs opacity-50 mt-0.5">Serif</div>
       </button>
     </div>
+  </Card>
+
+  <!-- Autopilot -->
+  <Card hover={false}>
+    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
+      {@html iconSvg('zap', 20)} Autopilot
+    </h3>
+    <p class="text-sm text-slate-400 mb-4">Run your job search automatically in the background.</p>
+    {#if autopilotEnabled !== null}
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-slate-700">Enabled</span>
+          <button
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer {autopilotEnabled ? 'bg-slate-800' : 'bg-slate-300'}"
+            onclick={toggleAutopilot}
+          >
+            <span
+              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {autopilotEnabled ? 'translate-x-6' : 'translate-x-1'}"
+            />
+          </button>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-slate-700">Cadence</span>
+          <span class="text-sm text-slate-500">Every {autopilotCadence}h</span>
+        </div>
+        {#if lastRun}
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-slate-700">Last run</span>
+            <span class="text-sm text-slate-500">
+              {new Date(lastRun.startedAt).toLocaleString()}
+            </span>
+          </div>
+        {/if}
+        {#if autopilotError}
+          <p class="text-xs text-red-600 mt-2">{autopilotError}</p>
+        {/if}
+      </div>
+    {:else}
+      <p class="text-sm text-slate-400">Loading...</p>
+    {/if}
   </Card>
 
   <!-- CLI Reference -->
