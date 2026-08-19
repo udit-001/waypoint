@@ -310,7 +310,7 @@
       </span>
       <div class="flex items-center gap-1.5">
         {#if selected.size > 0}
-          <button class="px-2.5 py-1 text-[11px] font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700 cursor-pointer disabled:opacity-50" disabled={batchBusy} onclick={addSelected}>Add {selected.size}</button>
+          <button class="px-2.5 py-1 text-[11px] font-medium bg-emerald-700 dark:bg-emerald-700 text-white rounded-md hover:bg-emerald-800 dark:hover:bg-emerald-800 cursor-pointer disabled:opacity-50" disabled={batchBusy} onclick={addSelected}>Add {selected.size}</button>
           <button class="px-2.5 py-1 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer disabled:opacity-50" disabled={batchBusy} onclick={dismissSelected}>Dismiss {selected.size}</button>
         {:else}
           <button class="px-2.5 py-1 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer disabled:opacity-50" disabled={batchBusy} onclick={() => { for (const p of [...queue]) addOne(p); }}>Add all</button>
@@ -443,7 +443,7 @@
                     View job posting
                   </a>
                   <button
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-800 dark:hover:text-emerald-200 transition-colors cursor-pointer"
                     onclick={(e) => { e.stopPropagation(); addOne(p); }}
                   >
                     {@html iconSvg('check', 12)}
