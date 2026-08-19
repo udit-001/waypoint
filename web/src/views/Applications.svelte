@@ -157,8 +157,8 @@
     {
       id: 'review',
       title: 'Review your first matches',
-      why: 'Autopilot puts scored matches in Found Jobs — you Add or Dismiss.',
-      cta: 'Open Found Jobs',
+      why: 'Autopilot puts scored matches in Matches — you Add or Dismiss.',
+      cta: 'Open Matches',
       href: '/found',
       done: allJobs.length > 0,
     },

@@ -1,5 +1,5 @@
 <script>
-  // Found Jobs — the autopilot review queue, WP-134.
+  // Matches — the autopilot review queue, WP-134.
   //
   // Surfaces shortlisted postings (score + reasons from zen curation)
   // for a keep/discard decision: Add → promoted into Applications,
@@ -115,7 +115,7 @@
     return parts.join(' · ');
   });
 
-  $effect(() => { setPage({ title: 'Found Jobs', byline }); });
+  $effect(() => { setPage({ title: 'Matches', byline }); });
 
   function nextCadence() {
     if (!autopilotData?.cadence) return 'a few hours';

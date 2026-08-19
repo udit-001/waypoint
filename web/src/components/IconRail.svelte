@@ -29,7 +29,7 @@
 
   const PRIMARY = [
     { view: 'applications', label: 'Applications', icon: 'briefcase' },
-    { view: 'found', label: 'Found Jobs', icon: 'target', badge: true },
+    { view: 'found', label: 'Matches', icon: 'target', badge: true },
     { view: 'artifacts', label: 'Artifacts', icon: 'file-text' },
   ];
 
