@@ -3,7 +3,10 @@
 // sanitizing — posting descriptions are scraped from arbitrary web
 // pages, so hostile HTML smuggled into a description must never
 // reach {@html} unsanitized. Links open in a new tab (they point at
-// external sites).
+// external sites). Images are stripped: career-page markdown is full
+// of logos/decorative assets that render as broken or noisy, and an
+// <img> src is also a tracking pixel vector — text-only is the right
+// default for scraped content.
 
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -22,10 +25,12 @@ export function renderMarkdown(text) {
         'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
         'p', 'br', 'hr', 'strong', 'em', 'b', 'i', 'u', 's', 'del',
         'ul', 'ol', 'li', 'blockquote', 'code', 'pre',
-        'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
         'sup', 'sub',
       ],
       ALLOWED_ATTR: ['href', 'title', 'alt', 'src'],
+      FORBID_TAGS: ['img', 'style', 'iframe', 'form', 'input', 'script'],
+      FORBID_ATTR: ['style'],
     });
     return clean.replace(/<a\s/g, '<a target="_blank" rel="noopener noreferrer" ');
   } catch {

@@ -518,7 +518,6 @@
     font-size: 0.75rem;
   }
   :global(.dark) .description-content :global(code) { background: var(--color-slate-800); }
-  .description-content :global(img) { max-width: 100%; height: auto; }
   .description-content :global(table) { border-collapse: collapse; margin: 6px 0; font-size: 0.7rem; }
   .description-content :global(th),
   .description-content :global(td) { text-align: left; border-bottom: 1px solid var(--color-slate-200); padding: 4px 8px; }
