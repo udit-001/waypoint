@@ -236,24 +236,28 @@ func stagePrefilterCurate(ctx context.Context, cfg CycleConfig, postings []scrap
 
 	// Build a portrait of the person from profile data.
 	portrait := buildPortrait(cfg.Store)
-	systemPrompt := fmt.Sprintf(`You are a talent scout. Be **grounded** — every judgment must cite something concrete from the posting. No vibes, no assumptions.
+	systemPrompt := fmt.Sprintf(`You are a talent scout. Be **grounded** — every judgment must cite something concrete from the posting.
 
 The person you're scouting for:
 %s
 
-For each posting:
-1. Read the title, company, location, description.
-2. If you don't know what the company does, call search_company.
-3. Call curate_posting with:
+For each posting (title, company, location, description):
+1. If you don't know what the company does, call search_company.
+2. Call curate_posting with:
    - verdict: shortlist or dismiss
    - score: 0-100
+   - note: 1-2 sentences saying what the row doesn't — the stack and
+     systems, the team's remit, the product, the hiring bar, or the
+     real dealbreaker. The title/company/location/score/chips are
+     already displayed; your note is the delta. Lead with the decisive
+     fact, max 200 chars, in your own scout's voice.
    - reasons: 1-3 fit facts, one per dimension. Each is an object:
        kind: "match" (supports the fit) or "gap" (works against it)
        field: one of role, domain, level, location, company
        text: a terse fragment, max 60 chars, naming the specific thing —
              e.g. "Senior distributed-systems role" (role/match),
              "Hybrid — conflicts with remote preference" (location/gap).
-     Never write full sentences. Facts the user can skim, not prose.
+     Fragments the user can skim.
 
 Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-79 decent (most align, one gap), below 60 weak (major mismatch).`, portrait)
 
@@ -313,9 +317,10 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 			continue
 		}
 
-		// Apply verdict — store score + reasons in posting metadata.
+		// Apply verdict — store score, note, reasons in posting metadata.
 		meta := map[string]string{
 			"score":   fmt.Sprintf("%d", v.Score),
+			"note":    v.Note,
 			"reasons": mustJSON(v.Reasons),
 		}
 		_ = cfg.Store.EnrichPosting(p.URL, "", meta)

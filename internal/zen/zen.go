@@ -129,8 +129,9 @@ type Posting struct {
 // Verdict is the locked curation output.
 type Verdict struct {
 	Decision string   `json:"verdict"` // shortlist | dismiss
-	Score    int      `json:"score"`    // 0-100, ranks the queue (never gates)
-	Reasons  []Reason `json:"reasons"`  // 1-3 tagged facts, one per fit dimension
+	Score    int      `json:"score"`   // 0-100, ranks the queue (never gates)
+	Note     string   `json:"note"`    // scout's note: 1-2 sentences to the user, the skim layer
+	Reasons  []Reason `json:"reasons"` // 1-3 tagged facts, one per fit dimension
 }
 
 // Reason is one skimmable fit fact. Kind says whether it supports the
@@ -197,7 +198,11 @@ var curateTool = map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"verdict": map[string]any{"type": "string", "enum": []string{DecisionShortlist, DecisionDismiss}},
-				"score":   map[string]any{"type": "integer", "description": "0-100 fit score"},
+				"score": map[string]any{"type": "integer", "description": "0-100 fit score"},
+				"note": map[string]any{
+					"type": "string",
+					"description": "1-2 sentences the row doesn't already tell the user. The title, company, location, score, and reason chips are displayed elsewhere — surface what they can't: the stack and systems, the team's remit, the product it touches, the hiring bar, or the real dealbreaker behind a gap chip. Lead with the decisive fact. Max 200 chars.",
+				},
 				"reasons": map[string]any{
 					"type":  "array",
 					"items": map[string]any{
@@ -212,7 +217,7 @@ var curateTool = map[string]any{
 					"description":       "1-3 fit facts: one per dimension (role, domain, level, location, company), each tagged match or gap",
 					},
 			},
-			"required": []string{"verdict", "score", "reasons"},
+			"required": []string{"verdict", "score", "note", "reasons"},
 		},
 	},
 }
@@ -433,6 +438,9 @@ func (c *Client) call(ctx context.Context, model string, msgs []message) (messag
 		// Normalize: clamp text, default unknown kinds/fields so a
 		// sloppy verdict still renders (legacy string reasons from older
 		// cycles arrive as gaps with the raw sentence as text).
+		if len(v.Note) > 240 {
+			v.Note = v.Note[:240]
+		}
 		for i := range v.Reasons {
 			r := &v.Reasons[i]
 			if r.Kind != "match" && r.Kind != "gap" {

@@ -426,6 +426,12 @@
             <!-- Expanded detail: reasons, description, meta, actions. -->
             {#if isExpanded}
               <div class="px-6 pb-4 pt-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/40">
+                {#if p.result.metadata?.note}
+                  <!-- Scout's note: the delta the row can't show (stack,
+                       remit, dealbreaker). Rendered as prose above the
+                       chips — it's the one thing to read before deciding. -->
+                  <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-2">{p.result.metadata.note}</p>
+                {/if}
                 {#if reasons.length > 0}
                   <div class="flex flex-wrap gap-1.5 mb-3">
                     {#each reasons as r}
