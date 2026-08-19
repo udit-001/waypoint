@@ -85,6 +85,9 @@ Examples:
 			offerSkillInstall()
 		}
 
+		// Step 4: Offer service installation.
+		offerServiceInstall()
+
 		fmt.Println()
 		fmt.Println("  Next steps:")
 		fmt.Println("    waypoint jobs add \"Company Name\" \"Position Title\"")

@@ -1,15 +1,22 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/autopilot"
 	"github.com/udit-001/waypoint/internal/config"
+	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/exa"
+	"github.com/udit-001/waypoint/internal/scraper"
 	"github.com/udit-001/waypoint/internal/server"
+	"github.com/udit-001/waypoint/internal/zen"
 )
 
 var startFlags struct {
@@ -112,6 +119,14 @@ Examples:
 			return fmt.Errorf("database migration failed: %w", err)
 		}
 
+		// Start autopilot ticker if enabled (daemon mode only).
+		if startFlags.daemon {
+			settings, _ := store.GetSettings()
+			if settings.AutopilotEnabled == 1 {
+				go startAutopilotTicker(store)
+			}
+		}
+
 		return server.Start(server.Config{
 			Port:   startFlags.port,
 			DB:     store,
@@ -141,4 +156,73 @@ func init() {
 	startCmd.Flags().BoolVarP(&startFlags.background, "background", "b", true, "Run server in background")
 	startCmd.Flags().BoolVar(&startFlags.daemon, "daemon", false, "")
 	startCmd.Flags().MarkHidden("daemon")
+}
+
+// startAutopilotTicker runs the autopilot cycle on a ticker. It blocks
+// until the process exits. Called from the daemon goroutine.
+func startAutopilotTicker(store db.Store) {
+	settings, _ := store.GetSettings()
+	cadence := time.Duration(settings.AutopilotCadence) * time.Hour
+	if cadence <= 0 {
+		cadence = 6 * time.Hour
+	}
+
+	ticker := time.NewTicker(cadence)
+	defer ticker.Stop()
+
+	log.Printf("autopilot: ticker started (cadence: %s)", cadence)
+
+	// Shared anonymous Exa client (one budget + cache for the daemon
+	// lifetime; each cycle resets the budget). Created once, outside the
+	// tick loop, so the cache survives across cycles. No Bearer — see
+	// internal/exa/client.go.
+	exaClient := exa.New("", nil)
+
+	for range ticker.C {
+		// Re-read settings in case cadence changed.
+		settings, _ = store.GetSettings()
+		if settings.AutopilotEnabled == 0 {
+			continue
+		}
+
+		newCadence := time.Duration(settings.AutopilotCadence) * time.Hour
+		if newCadence <= 0 {
+			newCadence = 6 * time.Hour
+		}
+		if newCadence != cadence {
+			ticker.Reset(newCadence)
+			cadence = newCadence
+			log.Printf("autopilot: cadence changed to %s", cadence)
+		}
+
+		// Run one cycle.
+		log.Println("autopilot: starting cycle")
+
+		// Build zen client from stored or env API key.
+		var zc *zen.Client
+		if key := zen.ResolveKey(settings.ZenAPIKey); key != "" {
+			zcfg := zen.DefaultConfig()
+			zcfg.APIKey = key
+			zc = zen.New(zcfg)
+			zc.SetCompanySearcher(exaClient)
+		}
+
+		entry := autopilot.Run(context.Background(), autopilot.CycleConfig{
+			Store:     store,
+			ZenClient: zc,
+			Scrapers:  scraper.All(),
+			ExaCap:    10,
+			Recency:   14,
+		})
+
+		// Store run log.
+		id, err := store.AddRunLog(entry)
+		if err != nil {
+			log.Printf("autopilot: failed to log run: %v", err)
+		}
+
+		log.Printf("autopilot: cycle complete (id=%d, new=%d, shortlisted=%d, dismissed=%d, errored=%d, duration=%dms)",
+			id, entry.PostingsNew, entry.PostingsShortlisted,
+			entry.PostingsDismissed, entry.PostingsErrored, entry.DurationMs)
+	}
 }
