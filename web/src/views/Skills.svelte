@@ -48,7 +48,7 @@
       <button
         class="px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}"
         onclick={copyInstallCmd}
-      >{copied ? '✓ Copied' : 'Copy'}</button>
+      >{#if copied}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 12)}Copied</span>{:else}Copy{/if}</button>
     </div>
     <div class="flex flex-wrap items-center gap-1.5">
       {#each agents as agent}

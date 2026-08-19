@@ -97,7 +97,7 @@ import { setPage } from '../stores/page.svelte.js';
                       onclick={() => copyCmd(`waypoint categories rename ${cat.id} "New Name"`, 'rename-' + cat.id)}
                       title="Copy rename command"
                     >
-                      {copiedCmd === 'rename-' + cat.id ? '✓ Copied' : 'rename'}
+                      {#if copiedCmd === 'rename-' + cat.id}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 10)}copied</span>{:else}rename{/if}
                     </button>
                     {#if cat.id !== 1}
                       <button
@@ -105,7 +105,7 @@ import { setPage } from '../stores/page.svelte.js';
                         onclick={() => copyCmd(`waypoint categories delete ${cat.id}`, 'delete-' + cat.id)}
                         title="Copy delete command"
                       >
-                        {copiedCmd === 'delete-' + cat.id ? '✓ Copied' : 'delete'}
+                        {#if copiedCmd === 'delete-' + cat.id}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 10)}copied</span>{:else}delete{/if}
                       </button>
                     {/if}
                   </div>

@@ -42,6 +42,14 @@
   let copiedPrompt = $state(false);
   let collapsedGroups = $state(new Set());
 
+  // Getting-started signals: the app already knows how far setup has
+  // come — profile saved, autopilot has run, first match promoted. The
+  // checklist reads those live instead of trusting a stored "completed"
+  // flag, so finishing a step elsewhere (CLI, assistant) checks off
+  // here on the next visit.
+  let profileName = $state('');
+  let autopilotRan = $state(false);
+
   // First-run onboarding (WP-119): the assistant drives the pipeline, so the
   // welcome card hands the HUMAN a prompt for their assistant — never CLI
   // commands. Dismissal is respected and never re-shown; once jobs exist the
@@ -115,11 +123,48 @@
   onMount(async () => {
     setPage({ title: 'Applications', byline: byline });
     filter.sync();
-    await api.jobs.ensure();
+    try {
+      await Promise.all([
+        api.jobs.ensure(),
+        api.profile.ensure().then(() => { profileName = api.profile.value?.name || ''; }),
+        api.autopilot.ensure().then(() => { autopilotRan = !!api.autopilot.value?.lastRun; }),
+      ]);
+    } catch { /* checklist signals degrade to unchecked */ }
     allJobs = api.jobs.value || [];
     loaded = true;
     firstRender = false;
   });
+
+  // Checklist: three steps to the aha moment (first scored matches).
+  // Each step's done-state reads a live signal, not a stored flag.
+  let setupSteps = $derived([
+    {
+      id: 'profile',
+      title: 'Save your profile',
+      why: 'The first thing your assistant reads — it drives matching.',
+      cta: 'Open Profile',
+      href: '/profile',
+      done: profileName !== '',
+    },
+    {
+      id: 'assistant',
+      title: 'Hand the setup prompt to your assistant',
+      why: 'Your assistant installs the skill and starts the search.',
+      cta: 'Copy prompt',
+      copy: true,
+      done: autopilotRan,
+    },
+    {
+      id: 'review',
+      title: 'Review your first matches',
+      why: 'Autopilot puts scored matches in Found Jobs — you Add or Dismiss.',
+      cta: 'Open Found Jobs',
+      href: '/found',
+      done: allJobs.length > 0,
+    },
+  ]);
+  let setupDone = $derived(setupSteps.filter(s => s.done).length);
+  let setupComplete = $derived(setupDone === setupSteps.length);
 
   // Re-sync the page header as data loads / the byline shifts.
   $effect(() => { setPage({ title: 'Applications', byline: byline }); });
@@ -185,32 +230,52 @@
     </div>
   {/if}
 {:else if allJobs.length === 0}
-  {#if !onboardingDismissed}
-    <!-- First-run welcome (WP-119): agent-driven onboarding. The assistant
-         does the work — the web is the review surface. No CLI for humans. -->
-    <div class="max-w-xl mx-auto py-14 text-center px-4">
-      <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">Welcome to Waypoint</h3>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Your assistant does the legwork — you stay in control.</p>
+  {#if !onboardingDismissed && !setupComplete}
+    <!-- First-run: getting-started checklist (WP-119, revised). Three
+         steps to the aha moment, each with a live completion signal —
+         steps finished elsewhere (CLI, assistant) check off here.
+         Auto-hides once all three read done. -->
+    <div class="max-w-md mx-auto py-12 px-4">
+      <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-1">Set up your job search</h3>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Three steps — then Waypoint runs itself. Your assistant does the legwork.</p>
 
-      <p class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Copy this into your assistant</p>
-      <div class="relative inline-block max-w-full">
+      <div class="bg-white dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-xl divide-y divide-slate-100 dark:divide-slate-600">
+        {#each setupSteps as step, i (step.id)}
+          {@const isNext = !step.done && setupSteps.slice(0, i).every(s => s.done)}
+          <div class="flex items-start gap-3 px-4 py-3.5 {step.done || isNext ? '' : 'opacity-50'}">
+            {#if step.done}
+              <span class="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400">{@html iconSvg('check-circle', 18)}</span>
+            {:else}
+              <span class="shrink-0 mt-0.5 size-[18px] rounded-full border-2 {isNext ? 'border-slate-400 dark:border-slate-400' : 'border-slate-200 dark:border-slate-600'} flex items-center justify-center text-[10px] font-semibold text-slate-400">{i + 1}</span>
+            {/if}
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium {step.done ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'}">{step.title}</p>
+              <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{step.why}</p>
+            </div>
+            {#if !step.done && isNext}
+              {#if step.copy}
+                <button
+                  class="shrink-0 mt-0.5 px-3 py-1.5 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer {copiedPrompt ? 'emerald-check' : ''}"
+                  onclick={copyPrompt}
+                >{#if copiedPrompt}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 12)}Copied</span>{:else}{step.cta}{/if}</button>
+              {:else}
+                <a
+                  href={step.href}
+                  class="shrink-0 mt-0.5 px-3 py-1.5 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors"
+                >{step.cta}</a>
+              {/if}
+            {/if}
+          </div>
+        {/each}
+      </div>
+
+      <div class="flex items-center justify-between mt-4">
+        <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums">{setupDone} of 3 done</span>
         <button
-          class="absolute top-2 right-2 p-2 rounded-md bg-white text-slate-500 hover:text-slate-700 border border-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer {copiedPrompt ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500' : ''}"
-          onclick={copyPrompt}
-          title="Copy prompt"
-          aria-label="Copy prompt"
-        >{@html iconSvg(copiedPrompt ? 'check' : 'copy', 14)}</button>
-        <pre class="text-left bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-5 pr-14 py-3 rounded-lg text-sm font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap max-w-lg">{WELCOME_PROMPT}</pre>
+          class="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer bg-transparent border-none p-0"
+          onclick={dismissOnboarding}
+        >Skip — I'll explore on my own.</button>
       </div>
-
-      <div class="mt-6">
-        <a href="/profile" class="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 underline cursor-pointer">Or start with your profile — it's the first thing your assistant reads.</a>
-      </div>
-
-      <button
-        class="mt-6 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer bg-transparent border-none p-0"
-        onclick={dismissOnboarding}
-      >Skip — I'll explore on my own.</button>
     </div>
   {:else}
     <!-- Dismissed (WP-119): quiet line, no card, no CLI. -->

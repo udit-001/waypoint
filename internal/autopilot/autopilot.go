@@ -464,6 +464,27 @@ func addError(errorsJSON, msg string) string {
 	return string(b)
 }
 
+// RunLogged executes one cycle with a live run ledger: the RunLog row
+// is inserted before the cycle starts, so the unfinished row
+// (finished_at empty) is the "running now" signal surfaced by
+// GET /api/autopilot while the cycle is in flight. It is updated with
+// the result when the cycle ends. Falls back to append-at-end if the
+// seed insert fails — a missing in-flight signal beats a lost result.
+func RunLogged(ctx context.Context, cfg CycleConfig) db.RunLog {
+	entry := db.RunLog{StartedAt: time.Now().UTC().Format(time.RFC3339)}
+	id, err := cfg.Store.AddRunLog(entry)
+	if err != nil {
+		log.Printf("autopilot: failed to open run log: %v", err)
+		return Run(ctx, cfg)
+	}
+	entry = Run(ctx, cfg)
+	if err := cfg.Store.UpdateRunLog(id, entry); err != nil {
+		log.Printf("autopilot: failed to close run log: %v", err)
+	}
+	entry.ID = id
+	return entry
+}
+
 // Ticker runs the autopilot cycle on a ticker. It blocks until ctx is done.
 func Ticker(ctx context.Context, cfg CycleConfig, store db.Store) {
 	// Get initial settings.
@@ -502,16 +523,10 @@ func Ticker(ctx context.Context, cfg CycleConfig, store db.Store) {
 
 			// Run one cycle.
 			log.Println("autopilot: starting cycle")
-			entry := Run(ctx, cfg)
-
-			// Store run log.
-			id, err := store.AddRunLog(entry)
-			if err != nil {
-				log.Printf("autopilot: failed to log run: %v", err)
-			}
+			entry := RunLogged(ctx, cfg)
 
 			log.Printf("autopilot: cycle complete (id=%d, new=%d, shortlisted=%d, dismissed=%d, errored=%d, duration=%dms)",
-				id, entry.PostingsNew, entry.PostingsShortlisted,
+				entry.ID, entry.PostingsNew, entry.PostingsShortlisted,
 				entry.PostingsDismissed, entry.PostingsErrored, entry.DurationMs)
 		}
 	}

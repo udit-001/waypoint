@@ -27,6 +27,7 @@
 
   const NAV = [
     { title: 'Applications', route: '/applications', icon: 'briefcase' },
+    { title: 'Found Jobs', route: '/found', icon: 'target' },
     { title: 'Artifacts', route: '/artifacts', icon: 'file-text' },
     { title: 'Categories', route: '/categories', icon: 'box' },
     { title: 'Profile', route: '/profile', icon: 'user' },

@@ -55,7 +55,7 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 		fmt.Println("  Starting autopilot cycle...")
 		started := time.Now()
 
-		entry := autopilot.Run(ctx, autopilot.CycleConfig{
+		entry := autopilot.RunLogged(ctx, autopilot.CycleConfig{
 			Store:     store,
 			ZenClient: zc,
 			ExaClient: exaClient,
@@ -65,17 +65,11 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 			Limit:     autopilotRunFlags.limit,
 		})
 
-		// Store run log.
-		id, err := store.AddRunLog(entry)
-		if err != nil {
-			return formatError("store run log", err)
-		}
-
 		elapsed := time.Since(started)
 
 		if jsonOut {
 			printJSON(map[string]any{
-				"run_id":      id,
+				"run_id":      entry.ID,
 				"new":         entry.PostingsNew,
 				"shortlisted": entry.PostingsShortlisted,
 				"dismissed":   entry.PostingsDismissed,
@@ -86,7 +80,7 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 			return nil
 		}
 
-		fmt.Printf("\n  ✓ Cycle complete (run #%d)\n\n", id)
+		fmt.Printf("\n  ✓ Cycle complete (run #%d)\n\n", entry.ID)
 		fmt.Printf("    New postings:     %d\n", entry.PostingsNew)
 		fmt.Printf("    Shortlisted:      %d\n", entry.PostingsShortlisted)
 		fmt.Printf("    Dismissed:        %d\n", entry.PostingsDismissed)

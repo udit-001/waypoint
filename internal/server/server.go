@@ -487,9 +487,10 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 		}
 
 		resp := map[string]any{
-			"enabled": settings.AutopilotEnabled == 1,
-			"cadence": cadence,
-			"lastRun": nil,
+			"enabled":   settings.AutopilotEnabled == 1,
+			"cadence":   cadence,
+			"zenKeySet": settings.ZenAPIKey != "",
+			"lastRun":   nil,
 		}
 		if hasRun {
 			resp["lastRun"] = lastRun

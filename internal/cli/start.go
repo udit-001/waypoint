@@ -207,7 +207,7 @@ func startAutopilotTicker(store db.Store) {
 			zc.SetCompanySearcher(exaClient)
 		}
 
-		entry := autopilot.Run(context.Background(), autopilot.CycleConfig{
+		entry := autopilot.RunLogged(context.Background(), autopilot.CycleConfig{
 			Store:     store,
 			ZenClient: zc,
 			Scrapers:  scraper.All(),
@@ -215,14 +215,8 @@ func startAutopilotTicker(store db.Store) {
 			Recency:   14,
 		})
 
-		// Store run log.
-		id, err := store.AddRunLog(entry)
-		if err != nil {
-			log.Printf("autopilot: failed to log run: %v", err)
-		}
-
 		log.Printf("autopilot: cycle complete (id=%d, new=%d, shortlisted=%d, dismissed=%d, errored=%d, duration=%dms)",
-			id, entry.PostingsNew, entry.PostingsShortlisted,
+			entry.ID, entry.PostingsNew, entry.PostingsShortlisted,
 			entry.PostingsDismissed, entry.PostingsErrored, entry.DurationMs)
 	}
 }

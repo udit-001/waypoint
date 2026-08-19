@@ -318,7 +318,7 @@ import { setPage } from '../stores/page.svelte.js';
       </div>
       {#if importApplied}
         <span class="text-xs text-emerald-600 dark:text-emerald-400 shrink-0 text-right">
-          {importAppliedSummary ? `Updated ✓ ${importAppliedSummary}` : 'Applied ✓'}
+          {importAppliedSummary ? `Updated — ${importAppliedSummary}` : 'Applied'}
         </span>
       {/if}
     </div>
@@ -584,7 +584,7 @@ import { setPage } from '../stores/page.svelte.js';
             {#if saving}
               <span class="text-slate-400">Saving…</span>
             {:else if saveOk}
-              <span class="text-emerald-600 dark:text-emerald-400">Saved ✓</span>
+              <span class="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">{@html iconSvg('check', 12)}Saved</span>
             {/if}
             {#if saveError}
               <span class="text-red-600 dark:text-red-400">{saveError}</span>

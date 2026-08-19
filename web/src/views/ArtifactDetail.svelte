@@ -8,6 +8,7 @@
   import Spinner from '../components/Spinner.svelte';
   import Card from '../components/Card.svelte';
   import { formatDateFull } from '../lib/format.js';
+  import { iconSvg } from '../lib/icons.js';
 
   let { id } = $props();
 
@@ -84,7 +85,7 @@
       <button
         class="px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
         onclick={copyContent}
-      >{copied ? '✓ Copied' : 'Copy'}</button>
+      >{#if copied}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 12)}Copied</span>{:else}Copy{/if}</button>
     </div>
 
     <!-- Variant tabs -->
@@ -113,7 +114,7 @@
         <button
           class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedCli ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
           onclick={copyCli}
-        >{copiedCli ? '✓ Copied' : 'Copy'}</button>
+        >{#if copiedCli}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 12)}Copied</span>{:else}Copy{/if}</button>
         <pre bind:this={cliPre} class="bg-slate-50 p-4 pr-20 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint artifacts get {art.id}
 waypoint artifacts archive {art.id}
 waypoint artifacts delete {art.id}</pre>

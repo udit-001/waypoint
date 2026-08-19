@@ -14,6 +14,11 @@ import { setPage } from '../stores/page.svelte.js';
   let autopilotCadence = $state(6);
   let lastRun = $state(null);
   let autopilotError = $state(null);
+  let zenKeySet = $state(false);
+  let zenKeyValue = $state('');
+  let zenKeySaving = $state(false);
+  let zenKeySaved = $state(false);
+  let zenKeyError = $state(null);
 
   onMount(async () => {
     setPage({ title: 'Settings' });
@@ -30,6 +35,7 @@ import { setPage } from '../stores/page.svelte.js';
         autopilotEnabled = data.enabled;
         autopilotCadence = data.cadence || 6;
         lastRun = data.lastRun;
+        zenKeySet = !!data.zenKeySet;
       }
     } catch {}
   });
@@ -53,6 +59,50 @@ import { setPage } from '../stores/page.svelte.js';
     } catch (e) {
       autopilotError = e.message;
     }
+  }
+
+  async function saveZenKey() {
+    zenKeyError = null;
+    if (!zenKeyValue.trim()) {
+      zenKeyError = 'Paste a key first — it starts with oc_.';
+      return;
+    }
+    zenKeySaving = true;
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zen_api_key: zenKeyValue.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        zenKeyError = data.error || 'Failed to save key';
+        return;
+      }
+      zenKeySet = true;
+      zenKeyValue = '';
+      zenKeySaved = true;
+      setTimeout(() => { zenKeySaved = false; }, 2000);
+    } catch (e) {
+      zenKeyError = e.message;
+    } finally {
+      zenKeySaving = false;
+    }
+  }
+
+  function runErrors(run) {
+    if (!run?.errors) return [];
+    try {
+      const parsed = JSON.parse(run.errors);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  }
+
+  function formatDuration(ms) {
+    if (!ms) return '';
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${Math.round(ms / 100) / 10}s`;
+    return `${Math.round(ms / 60000)}m`;
   }
 
   function setFont(font) {
@@ -158,6 +208,30 @@ import { setPage } from '../stores/page.svelte.js';
               {new Date(lastRun.startedAt).toLocaleString()}
             </span>
           </div>
+          {#if lastRun.finishedAt}
+            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-600 grid grid-cols-2 gap-y-1.5 text-xs">
+              <span class="text-slate-400">Found</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{lastRun.postingsNew}</span>
+              <span class="text-slate-400">Shortlisted</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{lastRun.postingsShortlisted}</span>
+              <span class="text-slate-400">Dismissed</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{lastRun.postingsDismissed}</span>
+              <span class="text-slate-400">Errored</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{lastRun.postingsErrored}</span>
+              <span class="text-slate-400">Duration</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{formatDuration(lastRun.durationMs)}</span>
+            </div>
+            {#if lastRun.postingsErrored > 0 && runErrors(lastRun).length > 0}
+              <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-600">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-red-500 mb-1.5">Last run errors</p>
+                <ul class="space-y-1">
+                  {#each runErrors(lastRun).slice(0, 5) as err}
+                    <li class="text-xs text-red-500 dark:text-red-400 break-words">{err}</li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+          {:else}
+            <p class="text-xs text-slate-400 mt-2 flex items-center gap-1.5">
+              <span class="inline-block size-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Running now — this page updates when it finishes.
+            </p>
+          {/if}
         {/if}
         {#if autopilotError}
           <p class="text-xs text-red-600 mt-2">{autopilotError}</p>
@@ -166,6 +240,40 @@ import { setPage } from '../stores/page.svelte.js';
     {:else}
       <p class="text-sm text-slate-400">Loading...</p>
     {/if}
+  </Card>
+
+  <!-- Zen API key -->
+  <Card hover={false}>
+    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
+      {@html iconSvg('zap', 20)} Zen API key
+    </h3>
+    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Powers match scoring. Without it, autopilot runs on rules only — matches land unscored.</p>
+    {#if zenKeySet}
+      <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
+        {@html iconSvg('check-circle', 14)}
+        Key saved — scoring is active.
+      </p>
+    {/if}
+    <div class="flex gap-2">
+      <input
+        type="password"
+        bind:value={zenKeyValue}
+        placeholder={zenKeySet ? 'Replace saved key…' : 'oc_…'}
+        autocomplete="off"
+        class="flex-1 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-slate-400"
+      />
+      <button
+        class="px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"
+        disabled={zenKeySaving}
+        onclick={saveZenKey}
+      >{zenKeySaving ? 'Saving…' : zenKeySaved ? 'Saved' : 'Save'}</button>
+    </div>
+    {#if zenKeyError}
+      <p class="text-xs text-red-600 mt-2">{zenKeyError}</p>
+    {/if}
+    <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">
+      Get one at <a href="https://opencode.ai/auth" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 underline">opencode.ai/auth</a> → Billing → copy the key (starts with <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">oc_</code>). Prepaid credits, pay per request.
+    </p>
   </Card>
 
   <!-- CLI Reference -->
@@ -177,7 +285,7 @@ import { setPage } from '../stores/page.svelte.js';
       <button
         class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedCli ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
         onclick={copyCli}
-      >{copiedCli ? '✓ Copied' : 'Copy'}</button>
+      >{#if copiedCli}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 12)}Copied</span>{:else}Copy{/if}</button>
       <pre bind:this={cliPre} class="bg-slate-50 p-4 pr-20 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint jobs add "Company" "Position" --status Applied --category Tech
 waypoint jobs list --status Applied
 waypoint jobs update 42 --status Offer --notes "Got the offer!"

@@ -155,7 +155,7 @@
         <button
           class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedCli ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
           onclick={copyCli}
-        >{copiedCli ? '✓ Copied' : 'Copy'}</button>
+        >{#if copiedCli}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 12)}Copied</span>{:else}Copy{/if}</button>
         <pre bind:this={cliPre} class="bg-slate-50 p-4 pr-20 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint jobs update {job.id} --status "Offer" --notes "New status"
 waypoint jobs update {job.id} --notes "Add a note here"
 waypoint jobs delete {job.id}</pre>

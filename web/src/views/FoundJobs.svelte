@@ -79,13 +79,32 @@
   }
 
   // Byline (carried to TopBar via setPage): queue size + autopilot
-  // status. The enable/disable toggle itself lives in Settings.
+  // state, in priority order — running > interrupted > scoring-off >
+  // next run. The unfinished lastRun row (finished_at empty) is the
+  // in-flight signal; older than 2h means the cycle died without
+  // closing its ledger row.
   let byline = $derived.by(() => {
     const parts = [];
     if (queue.length > 0) parts.push(queue.length === 1 ? '1 match' : `${queue.length} matches`);
     if (autopilotData) {
-      if (!autopilotData.enabled) parts.push('autopilot off');
-      else parts.push(`next run ~${nextCadence()}`);
+      const run = autopilotData.lastRun;
+      if (!autopilotData.enabled) {
+        parts.push('autopilot off');
+      } else if (run && !run.finishedAt) {
+        const ageMs = Date.now() - new Date(run.startedAt).getTime();
+        parts.push(ageMs < 2 * 3600e3 ? 'running now' : 'last run interrupted');
+      } else if (!autopilotData.zenKeySet) {
+        parts.push('scoring off — add Zen key in Settings');
+      } else {
+        let s = `next run ~${nextCadence()}`;
+        if (run && run.finishedAt) {
+          const bits = [];
+          if (run.postingsNew > 0) bits.push(`${run.postingsNew} new`);
+          if (run.postingsErrored > 0) bits.push(`${run.postingsErrored} errored`);
+          if (bits.length > 0) s += ` · last run ${bits.join(', ')}`;
+        }
+        parts.push(s);
+      }
     }
     return parts.join(' · ');
   });
@@ -253,8 +272,13 @@
   </div>
 {:else if queue.length === 0}
   <div class="text-center py-20 text-slate-400 dark:text-slate-500">
-    <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('sparkles', 48)}</div>
+    <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('target', 48)}</div>
     <p class="text-sm">No matches yet — autopilot puts new matches here for review.</p>
+    {#if autopilotData?.enabled && !autopilotData.zenKeySet && autopilotData.lastRun?.finishedAt !== ''}
+      <p class="text-xs mt-2 text-amber-600 dark:text-amber-400">
+        Scoring is off — <a href="/settings" class="underline">add your Zen API key in Settings</a> so matches arrive scored.
+      </p>
+    {/if}
     <p class="text-xs mt-2 text-slate-400 dark:text-slate-600">Ask your assistant to run <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">waypoint autopilot run</code> for an immediate pass.</p>
   </div>
 {:else}
