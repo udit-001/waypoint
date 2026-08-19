@@ -214,12 +214,20 @@ func TestCurate_sendsLockedWireShape(t *testing.T) {
 		t.Error("tool_choice must NOT be sent (mimo rejects it)")
 	}
 	tools, _ := req.body["tools"].([]any)
-	if len(tools) != 1 {
-		t.Fatalf("tools = %v, want exactly curate_posting", req.body["tools"])
+	if len(tools) != 3 {
+		t.Fatalf("tools = %v, want curate_posting + search_company + fetch_posting", req.body["tools"])
 	}
-	fn := tools[0].(map[string]any)["function"].(map[string]any)
-	if fn["name"] != "curate_posting" {
-		t.Errorf("tool name = %v", fn["name"])
+	fn0 := tools[0].(map[string]any)["function"].(map[string]any)
+	if fn0["name"] != "curate_posting" {
+		t.Errorf("tool[0] name = %v", fn0["name"])
+	}
+	fn1 := tools[1].(map[string]any)["function"].(map[string]any)
+	if fn1["name"] != "search_company" {
+		t.Errorf("tool[1] name = %v", fn1["name"])
+	}
+	fn2 := tools[2].(map[string]any)["function"].(map[string]any)
+	if fn2["name"] != "fetch_posting" {
+		t.Errorf("tool[2] name = %v", fn2["name"])
 	}
 
 	// Messages: system prompt verbatim, then the posting turn.
@@ -239,7 +247,7 @@ func TestCurate_sendsLockedWireShape(t *testing.T) {
 	}
 }
 
-func TestCurate_historyGrowsAcrossTurns(t *testing.T) {
+func TestCurate_freshConversationPerPosting(t *testing.T) {
 	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "dismiss", score: 20, reasons: []string{"wrong location"}}}}
 	c := f.start(t)
 
@@ -251,23 +259,19 @@ func TestCurate_historyGrowsAcrossTurns(t *testing.T) {
 		t.Fatalf("second Curate: %v", err)
 	}
 
-	// Second request carries the whole client-side conversation:
-	// system + user1 + assistant tool call + user2.
+	// Session-per-posting: the second request must start clean — system
+	// + its own turn only. No inherited tool_calls (which 400 on the
+	// follow-up when left unanswered), no prior posting text.
 	msgs, _ := f.last().body["messages"].([]any)
-	if len(msgs) != 4 {
-		t.Fatalf("second request messages = %d, want 4", len(msgs))
+	if len(msgs) != 2 {
+		t.Fatalf("second request messages = %d, want 2 (fresh conversation)", len(msgs))
 	}
-	assistant := msgs[2].(map[string]any)
-	if assistant["role"] != "assistant" {
-		t.Fatalf("messages[2].role = %v, want assistant tool call", assistant["role"])
+	if strings.Contains(f.last().rawBody, "example.com/1") {
+		t.Error("first posting leaked into second posting's conversation")
 	}
-	tcs, _ := assistant["tool_calls"].([]any)
-	if len(tcs) != 1 {
-		t.Fatalf("assistant tool_calls = %v", tcs)
-	}
-	user2 := msgs[3].(map[string]any)
-	if !strings.Contains(user2["content"].(string), "https://example.com/2") {
-		t.Errorf("messages[3] = %v, want posting 2 turn", user2)
+	user := msgs[1].(map[string]any)
+	if !strings.Contains(user["content"].(string), "https://example.com/2") {
+		t.Errorf("messages[1] = %v, want posting 2 turn", user)
 	}
 }
 
@@ -489,7 +493,7 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.BaseURL != "https://opencode.ai/zen" {
 		t.Errorf("BaseURL = %q", cfg.BaseURL)
 	}
-	if cfg.Model != "mimo-v2.5-free" {
+	if cfg.Model != "deepseek-v4-flash-free" {
 		t.Errorf("Model = %q (default must be the free tier)", cfg.Model)
 	}
 	if cfg.FallbackModel != "" {
@@ -614,5 +618,69 @@ func TestCurate_cancelledContextStopsEarly(t *testing.T) {
 	}
 	if n := f.reqCount(); n > 1 {
 		t.Errorf("requests = %d, want <= 1 (cancel noticed after first failure)", n)
+	}
+}
+
+// TestCurate_parallelToolCallsAllAnswered: deepseek batches research +
+// verdict calls in one assistant message (live 2026-08-19). Every
+// tool_call_id must get a tool response or the follow-up request 400s.
+// curate_posting batched alongside search_company still yields the verdict.
+func TestCurate_parallelToolCallsAllAnswered(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		msgs, _ := body["messages"].([]any)
+
+		var resp map[string]any
+		if len(msgs) == 2 { // first round: batch both calls
+			resp = map[string]any{
+				"id": "chatcmpl-parallel",
+				"choices": []map[string]any{{
+					"index":         0,
+					"finish_reason": "tool_calls",
+					"message": map[string]any{
+						"role": "assistant",
+						"tool_calls": []map[string]any{
+							{"id": "call-1", "type": "function", "function": map[string]any{
+								"name": "search_company", "arguments": `{"company":"Algolia"}`}},
+							{"id": "call-2", "type": "function", "function": map[string]any{
+								"name": "curate_posting", "arguments": `{"verdict":"shortlist","score":72,"reasons":["search API backend role — matches Go/backend skills"]}`}},
+						},
+					},
+				}},
+			}
+		} else { // second round: model closes out
+			resp = toolCallBody("test-model", "shortlist", 72, []string{"search API backend role — matches Go/backend skills"})
+			// verify the previous assistant message was fully answered
+			assistant, _ := msgs[len(msgs)-2].(map[string]any)
+			tcs, _ := assistant["tool_calls"].([]any)
+			if len(tcs) == 2 {
+				toolMsgs := 0
+				for _, m := range msgs {
+					if mm, ok := m.(map[string]any); ok && mm["role"] == "tool" {
+						toolMsgs++
+					}
+				}
+				if toolMsgs < 2 {
+					t.Errorf("parallel tool_calls not all answered: %d tool messages", toolMsgs)
+				}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	c := New(Config{BaseURL: ts.URL, APIKey: "k", Model: "m", UserAgent: "opencode/test"})
+	sess := c.NewSession(briefPrompt)
+	v, err := sess.Curate(context.Background(), Posting{URL: "https://example.com/1", Markdown: "md"})
+	if err != nil {
+		t.Fatalf("Curate with parallel tool calls: %v", err)
+	}
+	if v.Decision != DecisionShortlist || v.Score != 72 {
+		t.Errorf("verdict = %+v", v)
 	}
 }

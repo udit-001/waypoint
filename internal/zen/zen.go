@@ -41,9 +41,12 @@ const (
 // (prototype budget: ~3.5k chars).
 const maxPostingChars = 3500
 
-// maxTokens is the per-request token budget. Reasoning models burn
-// tokens before the tool call — below 1024 the call gets truncated.
-const maxTokens = 1024
+// maxTokens is the per-request completion budget. Reasoning models burn
+// tokens before the tool call — the old 1024 (calibrated on mimo) truncated
+// deepseek-v4-flash mid-reasoning on empty-description postings (live-probed
+// 2026-08-19: finish_reason=length, no tool call; worst observed completion
+// 901 tokens). 4096 leaves headroom for toolLoop turns with history.
+const maxTokens = 4096
 
 // sleep is the test seam for backoff pauses.
 var (
@@ -71,7 +74,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		BaseURL:   "https://opencode.ai/zen",
-		Model:     "mimo-v2.5-free",
+		Model:     "deepseek-v4-flash-free",
 		UserAgent: "opencode/" + version.Version,
 	}
 }
@@ -85,6 +88,8 @@ type Client struct {
 	sessionID     string
 	baseURL       string
 	fallbackModel string
+	searcher      CompanySearcher // optional company research
+	pageFetcher   PageFetcher     // optional posting-page fetch
 }
 
 // New builds a Client with a fresh ses_<32hex> identity.
@@ -103,6 +108,16 @@ func New(cfg Config) *Client {
 		baseURL:       strings.TrimRight(cfg.BaseURL, "/"),
 		fallbackModel: cfg.FallbackModel,
 	}
+}
+
+// SetCompanySearcher injects a company research backend.
+func (c *Client) SetCompanySearcher(s CompanySearcher) {
+	c.searcher = s
+}
+
+// SetPageFetcher injects a posting-page fetch backend.
+func (c *Client) SetPageFetcher(f PageFetcher) {
+	c.pageFetcher = f
 }
 
 // Posting is one curation input: a URL and its merged markdown.
@@ -154,7 +169,8 @@ type toolCall struct {
 
 type completionResponse struct {
 	Choices []struct {
-		Message message `json:"message"`
+		FinishReason string  `json:"finish_reason"`
+		Message      message `json:"message"`
 	} `json:"choices"`
 	Error *struct {
 		Message string `json:"message"`
@@ -183,30 +199,76 @@ var curateTool = map[string]any{
 	},
 }
 
+// searchCompanyTool lets the model research a company before judging.
+var searchCompanyTool = map[string]any{
+	"type": "function",
+	"function": map[string]any{
+		"name":        "search_company",
+		"description": "Look up what a company does, its domain, size, and tech stack. Call this when the posting doesn't say what the company builds.",
+		"parameters": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"company": map[string]any{"type": "string", "description": "Company name to research"},
+			},
+			"required": []string{"company"},
+		},
+	},
+}
+
+// CompanySearcher is the interface for looking up company descriptions.
+// Injected by the caller; when nil, search_company returns a fallback.
+type CompanySearcher interface {
+	SearchCompany(ctx context.Context, name string) (string, error)
+}
+
+// fetchPostingTool lets the model pull the full posting page when the
+// description provided is too thin to judge.
+var fetchPostingTool = map[string]any{
+	"type": "function",
+	"function": map[string]any{
+		"name":        "fetch_posting",
+		"description": "Fetch the full job posting page as markdown. Call this when the posting description is empty or too thin to judge against the brief.",
+		"parameters": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"url": map[string]any{"type": "string", "description": "The posting URL from the POSTING turn"},
+			},
+			"required": []string{"url"},
+		},
+	},
+}
+
 // ---- session --------------------------------------------------------------
 
 // Session is one curation conversation: system prompt + turns, held
 // client-side. Create one per cycle (session-per-cycle, WP-131).
+// Session holds the system prompt shared by every posting. Each Curate
+// call runs its own conversation — session-per-posting, not per-cycle:
+// cross-posting history caused quadratic token growth, score anchoring,
+// and protocol poisoning (an unanswered tool_calls message from posting
+// N 400s posting N+1 — live on deepseek 2026-08-19). Company research
+// caching lives in the injected CompanySearcher, not the conversation.
 type Session struct {
-	c       *Client
-	history []message
+	c            *Client
+	systemPrompt string
 }
 
-// NewSession starts a conversation with the given system prompt
-// (the brief JSON verbatim plus the judge instruction).
+// NewSession starts a session with the given system prompt (the brief
+// portrait plus the judge instruction).
 func (c *Client) NewSession(systemPrompt string) *Session {
 	return &Session{
-		c:       c,
-		history: []message{{Role: "system", Content: systemPrompt}},
+		c:            c,
+		systemPrompt: systemPrompt,
 	}
 }
 
-// Curate sends one posting as a turn and returns its verdict.
+// Curate judges one posting in a fresh conversation and returns its
+// verdict. The conversation is discarded afterwards.
 //
 // Failure ladder: retry x3 with backoff -> fallback model (if
-// configured) x3 -> recoverable error. The failed turn is dropped
-// from history so the session self-heals — the next posting starts
-// from clean state. Fatal errors (401/402/403) return immediately.
+// configured) x3 -> recoverable error. Each retry starts clean —
+// there is no cross-posting state to poison. Fatal errors (401/402/403)
+// return immediately.
 func (s *Session) Curate(ctx context.Context, p Posting) (Verdict, error) {
 	turn := message{Role: "user", Content: postingTurn(p)}
 
@@ -220,15 +282,16 @@ func (s *Session) Curate(ctx context.Context, p Posting) (Verdict, error) {
 	for _, model := range models {
 		for attempt := 0; attempt < 3; attempt++ {
 			if !first {
-				// A cancelled cycle must not burn backoff sleeps.
 				if err := ctx.Err(); err != nil {
 					return Verdict{}, &Error{Msg: "context done: " + err.Error()}
 				}
 				sleep(time.Duration(attempt+1) * 2 * time.Second)
 			}
 			first = false
-			msgs := append(append([]message{}, s.history...), turn)
-			v, tc, err := s.c.call(ctx, model, msgs)
+
+			// Fresh conversation per attempt: system + this posting.
+			msgs := []message{{Role: "system", Content: s.systemPrompt}, turn}
+			v, err := s.c.toolLoop(ctx, model, msgs)
 			if err != nil {
 				if err.Fatal {
 					return Verdict{}, err
@@ -236,7 +299,6 @@ func (s *Session) Curate(ctx context.Context, p Posting) (Verdict, error) {
 				lastErr = err
 				continue
 			}
-			s.history = append(s.history, turn, assistantMessage(tc))
 			return v, nil
 		}
 	}
@@ -244,11 +306,6 @@ func (s *Session) Curate(ctx context.Context, p Posting) (Verdict, error) {
 		lastErr = &Error{Msg: "no attempts made"}
 	}
 	return Verdict{}, lastErr
-}
-
-// assistantMessage rebuilds the assistant turn recorded in history.
-func assistantMessage(tc toolCall) message {
-	return message{Role: "assistant", ToolCalls: []toolCall{tc}}
 }
 
 // postingTurn formats one posting as a user turn, URL first so the
@@ -270,27 +327,28 @@ func truncateChars(s string, n int) string {
 	return s
 }
 
-// ---- transport --------------------------------------------------------------
-
-// call performs one chat-completions request and validates the tool
-// call into a Verdict.
-func (c *Client) call(ctx context.Context, model string, msgs []message) (Verdict, toolCall, *Error) {
+// call performs one chat-completions request and returns the assistant
+// message exactly as received (all tool calls intact — models may batch
+// parallel tool calls), plus the validated curate_posting verdict if one
+// is present. curateFound is false when the model called only research
+// tools; that is not an error — toolLoop answers them and loops.
+func (c *Client) call(ctx context.Context, model string, msgs []message) (message, Verdict, bool, *Error) {
 	body := map[string]any{
 		"model":      model,
 		"messages":   msgs,
 		"max_tokens": maxTokens,
-		"tools":      []any{curateTool},
+		"tools":      []any{curateTool, searchCompanyTool, fetchPostingTool},
 		// no tool_choice — mimo rejects it (WP-127)
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
-		return Verdict{}, toolCall{}, &Error{Msg: "marshal request: " + err.Error()}
+		return message{}, Verdict{}, false, &Error{Msg: "marshal request: " + err.Error()}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST",
 		c.baseURL+"/v1/chat/completions", bytes.NewReader(raw))
 	if err != nil {
-		return Verdict{}, toolCall{}, &Error{Msg: "build request: " + err.Error()}
+		return message{}, Verdict{}, false, &Error{Msg: "build request: " + err.Error()}
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
@@ -303,7 +361,7 @@ func (c *Client) call(ctx context.Context, model string, msgs []message) (Verdic
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return Verdict{}, toolCall{}, &Error{Msg: "request: " + err.Error()}
+		return message{}, Verdict{}, false, &Error{Msg: "request: " + err.Error()}
 	}
 	defer resp.Body.Close()
 
@@ -318,36 +376,134 @@ func (c *Client) call(ctx context.Context, model string, msgs []message) (Verdic
 			msg = out.Error.Message
 		}
 		fatal := resp.StatusCode == 401 || resp.StatusCode == 402 || resp.StatusCode == 403
-		return Verdict{}, toolCall{}, &Error{Status: resp.StatusCode, Fatal: fatal, Msg: msg}
+		return message{}, Verdict{}, false, &Error{Status: resp.StatusCode, Fatal: fatal, Msg: msg}
 	}
 
 	var out completionResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
-		return Verdict{}, toolCall{}, &Error{Status: resp.StatusCode, Msg: "decode response: " + err.Error()}
+		return message{}, Verdict{}, false, &Error{Status: resp.StatusCode, Msg: "decode response: " + err.Error()}
 	}
 
-	if len(out.Choices) == 0 || len(out.Choices[0].Message.ToolCalls) == 0 {
-		return Verdict{}, toolCall{}, &Error{Msg: "no tool call in response"}
+	if len(out.Choices) == 0 {
+		return message{}, Verdict{}, false, &Error{Msg: "empty choices in response"}
 	}
-	tc := out.Choices[0].Message.ToolCalls[0]
+	msg := out.Choices[0].Message
+	if len(msg.ToolCalls) == 0 {
+		// finish_reason distinguishes truncation (length — max_tokens too
+		// small, reasoning burned the budget) from refusal (stop — model
+		// answered in prose instead of calling the tool).
+		return message{}, Verdict{}, false, &Error{Msg: "no tool call in response (finish_reason=" + out.Choices[0].FinishReason + ")"}
+	}
 
+	// Validate the curate_posting call if the model made one (possibly
+	// batched with research calls).
 	var v Verdict
-	if err := json.Unmarshal([]byte(tc.Function.Arguments), &v); err != nil {
-		return Verdict{}, toolCall{}, &Error{Msg: "decode tool arguments: " + err.Error()}
+	found := false
+	for _, tc := range msg.ToolCalls {
+		if tc.Function.Name != "curate_posting" {
+			continue
+		}
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &v); err != nil {
+			return message{}, Verdict{}, false, &Error{Msg: "decode tool arguments: " + err.Error()}
+		}
+		if v.Decision != DecisionShortlist && v.Decision != DecisionDismiss {
+			return message{}, Verdict{}, false, &Error{Msg: "invalid verdict " + fmt.Sprintf("%q", v.Decision)}
+		}
+		if len(v.Reasons) == 0 {
+			return message{}, Verdict{}, false, &Error{Msg: "verdict has no reasons"}
+		}
+		if v.Score < 0 {
+			v.Score = 0
+		}
+		if v.Score > 100 {
+			v.Score = 100
+		}
+		found = true
+		break
 	}
-	if v.Decision != DecisionShortlist && v.Decision != DecisionDismiss {
-		return Verdict{}, toolCall{}, &Error{Msg: "invalid verdict " + fmt.Sprintf("%q", v.Decision)}
+	return msg, v, found, nil
+}
+
+// toolLoop runs one posting's conversation: system + posting turn, then
+// answer the model's tool calls until it calls curate_posting. Every
+// tool_call_id in an assistant message is answered with a tool response —
+// including curate_posting itself, which gets a synthetic "recorded" ack —
+// otherwise the next request 400s ("insufficient tool messages following
+// tool_calls message"; models may batch parallel calls, seen live on
+// deepseek 2026-08-19). Bounded to prevent runaway tool loops.
+func (c *Client) toolLoop(ctx context.Context, model string, msgs []message) (Verdict, *Error) {
+	const maxTurns = 6 // fetch_posting + search_company + curate_posting = 3 typical
+
+	for turn := 0; turn < maxTurns; turn++ {
+		if err := ctx.Err(); err != nil {
+			return Verdict{}, &Error{Msg: "context done: " + err.Error()}
+		}
+
+		res, v, curateFound, err := c.call(ctx, model, msgs)
+		if err != nil {
+			return Verdict{}, err
+		}
+
+		// Record the assistant message verbatim (all tool calls intact),
+		// then one tool response per call — protocol-valid for any batch.
+		ext := []message{res}
+		for _, tc := range res.ToolCalls {
+			ext = append(ext, message{
+				Role:       "tool",
+				Content:    c.executeTool(ctx, tc),
+				ToolCallID: tc.ID,
+			})
+		}
+		msgs = append(msgs, ext...)
+
+		if curateFound {
+			return v, nil
+		}
 	}
-	if len(v.Reasons) == 0 {
-		return Verdict{}, toolCall{}, &Error{Msg: "verdict has no reasons"}
+
+	return Verdict{}, &Error{Msg: "exceeded max tool turns"}
+}
+
+// executeTool runs one tool call and returns the string the model sees
+// as the tool response.
+func (c *Client) executeTool(ctx context.Context, tc toolCall) string {
+	switch tc.Function.Name {
+	case "curate_posting":
+		// The verdict is already captured by call(); this ack only keeps
+		// the conversation protocol-valid.
+		return `{"status": "recorded"}`
+
+	case "search_company":
+		var args struct {
+			Company string `json:"company"`
+		}
+		_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
+		if c.searcher != nil {
+			r, err := c.searcher.SearchCompany(ctx, args.Company)
+			if err != nil {
+				return fmt.Sprintf("No information found for %s: %v", args.Company, err)
+			}
+			return r
+		}
+		return fmt.Sprintf("Company research not available. Company: %s", args.Company)
+
+	case "fetch_posting":
+		var args struct {
+			URL string `json:"url"`
+		}
+		_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
+		if c.pageFetcher != nil {
+			r, err := c.pageFetcher.FetchPage(ctx, args.URL)
+			if err != nil {
+				return fmt.Sprintf("Could not fetch the posting page: %v — judge on the posting text alone.", err)
+			}
+			return r
+		}
+		return "Posting page fetch not available. Judge on the posting text alone."
+
+	default:
+		return "Unknown tool."
 	}
-	if v.Score < 0 {
-		v.Score = 0
-	}
-	if v.Score > 100 {
-		v.Score = 100
-	}
-	return v, tc, nil
 }
 
 // ---- key resolution -----------------------------------------------------------
