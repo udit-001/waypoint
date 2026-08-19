@@ -4,16 +4,19 @@ go 1.25.10
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/kardianos/service v1.3.0
+	github.com/nyaruka/phonenumbers v1.8.1
 	github.com/pressly/goose/v3 v3.27.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.9
+	github.com/yfedoseev/pdf_oxide/go v0.3.77
 	modernc.org/sqlite v1.53.0
 )
 
 require (
 	github.com/JohannesKaufmann/dom v0.3.1 // indirect
-	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -21,10 +24,8 @@ require (
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/nyaruka/phonenumbers v1.8.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
-	github.com/yfedoseev/pdf_oxide/go v0.3.77 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
