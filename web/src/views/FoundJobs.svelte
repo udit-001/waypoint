@@ -19,6 +19,7 @@
   import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { formatDateShort, formatDateFull } from '../lib/format.js';
+  import { renderMarkdown } from '../lib/markdown.js';
   import Skeleton from '../components/Skeleton.svelte';
   import * as api from '../stores/api.svelte.js';
 
@@ -427,7 +428,9 @@
                 {#if p.result.description}
                   <div class="mb-3">
                     <span class="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px] font-semibold">Description</span>
-                    <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed whitespace-pre-line line-clamp-6">{p.result.description}</p>
+                    <!-- line-clamp keeps the review queue scannable; full text
+                         is one click away at the source. -->
+                    <div class="description-content text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed line-clamp-[12]">{@html renderMarkdown(p.result.description)}</div>
                   </div>
                 {/if}
 
@@ -483,3 +486,40 @@
     <span class="truncate min-w-0">{toast.title} — {toast.company}</span>
   </div>
 {/if}
+
+<style>
+  /* Rendered-markdown prose inside the expanded description — mirrors
+     JobDetail's notes-content rules, sized down for the queue row. */
+  .description-content :global(h1),
+  .description-content :global(h2),
+  .description-content :global(h3),
+  .description-content :global(h4) {
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 12px 0 6px;
+  }
+  .description-content :global(h1) { font-size: 0.9rem; }
+  .description-content :global(h2) { font-size: 0.85rem; }
+  .description-content :global(h3),
+  .description-content :global(h4) { font-size: 0.8rem; }
+  .description-content :global(h1:first-child),
+  .description-content :global(h2:first-child),
+  .description-content :global(h3:first-child) { margin-top: 0; }
+  .description-content :global(p) { margin: 0 0 6px; }
+  .description-content :global(ul),
+  .description-content :global(ol) { margin: 0 0 6px; padding-left: 18px; }
+  .description-content :global(li) { margin-bottom: 2px; }
+  .description-content :global(a) { color: #2563eb; text-decoration: underline; }
+  :global(.dark) .description-content :global(a) { color: #93c5fd; }
+  .description-content :global(code) {
+    background: var(--color-slate-100);
+    border-radius: 4px;
+    padding: 1px 4px;
+    font-size: 0.75rem;
+  }
+  :global(.dark) .description-content :global(code) { background: var(--color-slate-800); }
+  .description-content :global(img) { max-width: 100%; height: auto; }
+  .description-content :global(table) { border-collapse: collapse; margin: 6px 0; font-size: 0.7rem; }
+  .description-content :global(th),
+  .description-content :global(td) { text-align: left; border-bottom: 1px solid var(--color-slate-200); padding: 4px 8px; }
+</style>

@@ -5,22 +5,16 @@
   import * as api from '../stores/api.svelte.js';
   import { setPage } from '../stores/page.svelte.js';
   import { skillLabel } from '../stores/skillMeta.js';
-  import { marked } from 'marked';
   import Spinner from '../components/Spinner.svelte';
   import Card from '../components/Card.svelte';
   import { formatDate, formatDateTime } from '../lib/format.js';
   import { STATUS_META } from '../lib/status.js';
   import { iconSvg } from '../lib/icons.js';
 
+  import { renderMarkdown as renderMd } from '../lib/markdown.js';
+
   function renderMarkdown(text) {
-    if (!text) return '';
-    try {
-      const unescaped = text.replace(/\\n/g, '\n');
-      const html = marked.parse(unescaped, { gfm: true, breaks: true });
-      return html.replace(/<a\s/g, '<a target="_blank" rel="noopener noreferrer" ');
-    } catch {
-      return text;
-    }
+    return renderMd(text);
   }
 
   async function copyCli() {
