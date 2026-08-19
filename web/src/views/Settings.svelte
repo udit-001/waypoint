@@ -75,7 +75,7 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
       {@html iconSvg('sliders', 20)} App Settings
     </h3>
-    <p class="text-sm text-slate-400 mb-6">Settings are managed via the CLI.</p>
+    <p class="text-sm text-slate-400 mb-6">Set these with the <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-xs">waypoint</code> CLI.</p>
     {#if settingsData}
       <div class="grid grid-cols-2 gap-4">
         <div>

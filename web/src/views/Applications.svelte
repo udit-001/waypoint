@@ -284,7 +284,7 @@
               </button>
             </div>
           {:else}
-            <p class="text-xs text-slate-400 dark:text-slate-500 text-center py-4">No jobs</p>
+            <p class="text-xs text-slate-400 dark:text-slate-500 text-center py-4">No applications</p>
           {/each}
         </div>
       </div>

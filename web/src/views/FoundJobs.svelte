@@ -82,10 +82,10 @@
   // status. The enable/disable toggle itself lives in Settings.
   let byline = $derived.by(() => {
     const parts = [];
-    if (queue.length > 0) parts.push(queue.length === 1 ? '1 curated' : `${queue.length} curated`);
+    if (queue.length > 0) parts.push(queue.length === 1 ? '1 match' : `${queue.length} matches`);
     if (autopilotData) {
       if (!autopilotData.enabled) parts.push('autopilot off');
-      else parts.push(`next sweep ~${nextCadence()}`);
+      else parts.push(`next run ~${nextCadence()}`);
     }
     return parts.join(' · ');
   });
@@ -254,8 +254,8 @@
 {:else if queue.length === 0}
   <div class="text-center py-20 text-slate-400 dark:text-slate-500">
     <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('sparkles', 48)}</div>
-    <p class="text-sm">Nothing curated yet — autopilot matches land here.</p>
-    <p class="text-xs mt-2 text-slate-400 dark:text-slate-600">Run <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">waypoint autopilot run</code> to curate the backlog.</p>
+    <p class="text-sm">No matches yet — autopilot puts new matches here for review.</p>
+    <p class="text-xs mt-2 text-slate-400 dark:text-slate-600">Ask your assistant to run <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">waypoint autopilot run</code> for an immediate pass.</p>
   </div>
 {:else}
   <!-- ── LIST ────────────────────────────────────────── -->

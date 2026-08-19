@@ -4,7 +4,7 @@
   import * as api from '../stores/api.svelte.js';
   import Card from '../components/Card.svelte';
 
-  onMount(() => { setPage({ title: 'AI Integration' }); });
+  onMount(() => { setPage({ title: 'AI Skills' }); });
 
   const agents = [
     { id: 'pi.dev', name: 'Pi', dir: '.pi/skills/waypoint' },
@@ -36,13 +36,13 @@
 
 <div class="space-y-6">
   <p class="text-sm text-slate-400">
-    Connect your AI coding agent to Waypoint — it learns the CLI commands and can generate job-search content on demand.
+    Connect your assistant to Waypoint — it learns the CLI commands and can run your job search on demand.
   </p>
 
   <!-- Install section -->
   <Card hover={false}>
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-1">{@html iconSvg('bot', 18)} Install the Waypoint skill</h3>
-    <p class="text-sm text-slate-400 mb-3">Run this in your project directory. The skill teaches your agent how to use <code class="bg-slate-100 px-1 rounded text-xs">waypoint</code>.</p>
+    <p class="text-sm text-slate-400 mb-3">Run this in your project directory. The skill teaches your assistant how to use <code class="bg-slate-100 px-1 rounded text-xs">waypoint</code>.</p>
     <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 font-mono text-sm mb-3">
       <code class="flex-1 text-slate-700">waypoint skills install --agent {selectedAgent}</code>
       <button

@@ -20,7 +20,7 @@
   // Set correct page title immediately — before any view mounts
   const routeTitles = {
     applications: 'Applications', found: 'Found Jobs', categories: 'Categories',
-    profile: 'Profile', skills: 'AI Integration', artifacts: 'Artifacts',
+    profile: 'Profile', skills: 'AI Skills', artifacts: 'Artifacts',
     settings: 'Settings', job: 'Job Detail', artifact: 'Artifact',
   };
   setPage({ title: routeTitles[router.current.route] || 'Applications' });
