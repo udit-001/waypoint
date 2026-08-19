@@ -4,6 +4,7 @@ import { setPage } from '../stores/page.svelte.js';
   import { onMount } from 'svelte';
   import Spinner from '../components/Spinner.svelte';
   import Card from '../components/Card.svelte';
+  import { formatDateTime } from '../lib/format.js';
   import * as api from '../stores/api.svelte.js';
 
   let settingsData = $state(null);
@@ -19,6 +20,7 @@ import { setPage } from '../stores/page.svelte.js';
   let zenKeySaving = $state(false);
   let zenKeySaved = $state(false);
   let zenKeyError = $state(null);
+  let autopilotToggling = $state(false);
 
   onMount(async () => {
     setPage({ title: 'Settings' });
@@ -41,6 +43,8 @@ import { setPage } from '../stores/page.svelte.js';
   });
 
   async function toggleAutopilot() {
+    if (autopilotToggling) return;
+    autopilotToggling = true;
     autopilotError = null;
     const newState = !autopilotEnabled;
     try {
@@ -58,6 +62,8 @@ import { setPage } from '../stores/page.svelte.js';
       autopilotEnabled = updated.autopilotEnabled === 1;
     } catch (e) {
       autopilotError = e.message;
+    } finally {
+      autopilotToggling = false;
     }
   }
 
@@ -189,7 +195,11 @@ import { setPage } from '../stores/page.svelte.js';
         <div class="flex items-center justify-between">
           <span class="text-sm text-slate-700">Enabled</span>
           <button
-            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer {autopilotEnabled ? 'bg-slate-800' : 'bg-slate-300'}"
+            role="switch"
+            aria-checked={!!autopilotEnabled}
+            aria-label="Autopilot enabled"
+            disabled={autopilotToggling}
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer disabled:opacity-50 {autopilotEnabled ? 'bg-slate-800' : 'bg-slate-300'}"
             onclick={toggleAutopilot}
           >
             <span
@@ -205,7 +215,7 @@ import { setPage } from '../stores/page.svelte.js';
           <div class="flex items-center justify-between">
             <span class="text-sm text-slate-700">Last run</span>
             <span class="text-sm text-slate-500">
-              {new Date(lastRun.startedAt).toLocaleString()}
+              {formatDateTime(lastRun.startedAt) || lastRun.startedAt}
             </span>
           </div>
           {#if lastRun.finishedAt}
@@ -260,7 +270,9 @@ import { setPage } from '../stores/page.svelte.js';
         bind:value={zenKeyValue}
         placeholder={zenKeySet ? 'Replace saved key…' : 'oc_…'}
         autocomplete="off"
-        class="flex-1 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-slate-400"
+        aria-label="Zen API key"
+        maxlength="128"
+        class="flex-1 min-w-0 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-slate-400"
       />
       <button
         class="px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"

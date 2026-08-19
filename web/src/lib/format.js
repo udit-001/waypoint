@@ -1,29 +1,41 @@
 // Date formatting helpers shared across all views.
 // Each variant is a named export so call sites are self-documenting.
 // All return '' for empty/null input; callers handle their own fallback.
+// Scraper dates are hostile input — new Date(garbage) does NOT throw
+// (it yields an Invalid Date whose toLocale* renders "Invalid Date"),
+// so the guard is isNaN on the timestamp: unparsable input is returned
+// unchanged for the caller to fall back on.
+function parseable(d) {
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? null : dt;
+}
 
 export function formatDate(d) {
   if (!d) return '';
-  try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-  catch { return d; }
+  const dt = parseable(d);
+  if (!dt) return d;
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export function formatDateShort(d) {
   if (!d) return '';
-  try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-  catch { return d; }
+  const dt = parseable(d);
+  if (!dt) return d;
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 export function formatDateTime(d) {
   if (!d) return '';
-  try { return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-  catch { return d; }
+  const dt = parseable(d);
+  if (!dt) return d;
+  return dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export function formatDateFull(d) {
   if (!d) return '';
-  try { return new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-  catch { return d; }
+  const dt = parseable(d);
+  if (!dt) return d;
+  return dt.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 // Partial-ISO month formatter (YYYY-MM → 'Mar 2023') for experience/education

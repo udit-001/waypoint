@@ -46,6 +46,12 @@
   let expandedUrl = $state(null);
   let collapsedGroups = $state(new Set());
   let firstRender = true;
+  // In-flight guards: per-URL acting set stops double-fire from rapid
+  // clicks (promote is idempotent server-side, but a second click still
+  // wastes a POST and double-fires the toast); busy flag stops batch
+  // loops from being re-entered while a previous loop is still running.
+  const acting = new Set();
+  let batchBusy = $state(false);
 
   onMount(async () => {
     await loadQueue();
@@ -143,23 +149,31 @@
 
   // ── Actions ─────────────────────────────────────────
   async function addOne(p) {
+    if (acting.has(p.result.url)) return;
+    acting.add(p.result.url);
     try {
       await api.promotePosting(p.result.url);
       queue = queue.filter(q => q.result.url !== p.result.url);
       selected = new Set([...selected].filter(u => u !== p.result.url));
       if (expandedUrl === p.result.url) expandedUrl = null;
       showToast('Added', p);
-    } catch (e) { error = e.message; }
+    } catch (e) { error = e.message; } finally {
+      acting.delete(p.result.url);
+    }
   }
 
   async function dismissOne(p) {
+    if (acting.has(p.result.url)) return;
+    acting.add(p.result.url);
     try {
       await api.dismissPosting(p.result.url);
       queue = queue.filter(q => q.result.url !== p.result.url);
       selected = new Set([...selected].filter(u => u !== p.result.url));
       if (expandedUrl === p.result.url) expandedUrl = null;
       showToast('Dismissed', p);
-    } catch (e) { error = e.message; }
+    } catch (e) { error = e.message; } finally {
+      acting.delete(p.result.url);
+    }
   }
 
   async function addSelected() {
@@ -296,11 +310,11 @@
       </span>
       <div class="flex items-center gap-1.5">
         {#if selected.size > 0}
-          <button class="px-2.5 py-1 text-[11px] font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700 cursor-pointer" onclick={addSelected}>Add {selected.size}</button>
-          <button class="px-2.5 py-1 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer" onclick={dismissSelected}>Dismiss {selected.size}</button>
+          <button class="px-2.5 py-1 text-[11px] font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700 cursor-pointer disabled:opacity-50" disabled={batchBusy} onclick={addSelected}>Add {selected.size}</button>
+          <button class="px-2.5 py-1 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer disabled:opacity-50" disabled={batchBusy} onclick={dismissSelected}>Dismiss {selected.size}</button>
         {:else}
-          <button class="px-2.5 py-1 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer" onclick={() => { for (const p of [...queue]) addOne(p); }}>Add all</button>
-          <button class="px-2.5 py-1 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer" onclick={() => { for (const p of [...queue]) dismissOne(p); }}>Dismiss all</button>
+          <button class="px-2.5 py-1 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer disabled:opacity-50" disabled={batchBusy} onclick={() => { for (const p of [...queue]) addOne(p); }}>Add all</button>
+          <button class="px-2.5 py-1 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer disabled:opacity-50" disabled={batchBusy} onclick={() => { for (const p of [...queue]) dismissOne(p); }}>Dismiss all</button>
         {/if}
       </div>
     </div>
@@ -331,8 +345,18 @@
             <!-- Compact row: checkbox · score dot+num · title · company ·
                  location … date · chevron. Click expands. -->
             <div
-              class="flex items-center gap-3 px-6 py-2 border-b border-slate-100 dark:border-slate-700 cursor-pointer transition-colors {isExpanded ? 'bg-slate-50 dark:bg-slate-700/40' : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'}"
+              class="flex items-center gap-3 px-6 py-2 border-b border-slate-100 dark:border-slate-700 cursor-pointer transition-colors focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-700/40 {isExpanded ? 'bg-slate-50 dark:bg-slate-700/40' : 'hover:bg-slate-50 dark:hover:bg-slate-700/40'}"
+              tabindex="0"
+              role="button"
+              aria-expanded={isExpanded}
               onclick={() => toggleExpand(p.result.url)}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleExpand(p.result.url);
+                }
+              }}
             >
               <button
                 class="w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors cursor-pointer
@@ -454,7 +478,8 @@
 <!-- Confirmation toast (no Undo — promote/dismiss aren't reversible via
      the API; real undo needs a DELETE endpoint, follow-up). -->
 {#if toast}
-  <div class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 dark:bg-slate-700 text-white px-4 py-3 rounded-xl shadow-lg text-sm z-50">
-    {toast.action}: {toast.title} — {toast.company}
+  <div role="status" aria-live="polite" class="fixed bottom-6 left-1/2 -translate-x-1/2 max-w-[calc(100vw-2rem)] bg-slate-800 dark:bg-slate-700 text-white px-4 py-3 rounded-xl shadow-lg text-sm z-50 flex gap-2 items-center min-w-0">
+    <span class="shrink-0">{toast.action}:</span>
+    <span class="truncate min-w-0">{toast.title} — {toast.company}</span>
   </div>
 {/if}

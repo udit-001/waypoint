@@ -10,6 +10,17 @@ describe('formatDate', () => {
     assert.ok(result.includes('2026'));
   });
 
+  it('returns unparsable input unchanged — never "Invalid Date"', () => {
+    // Scraper dates are hostile: new Date(garbage) does not throw, it
+    // renders as "Invalid Date" via toLocale*. The guard must return
+    // the original string for the caller to fall back on.
+    assert.equal(formatDate('not-a-date'), 'not-a-date');
+    assert.equal(formatDate('2026-13-99'), '2026-13-99');
+    assert.equal(formatDateShort('garbage'), 'garbage');
+    assert.equal(formatDateTime('garbage'), 'garbage');
+    assert.equal(formatDateFull('garbage'), 'garbage');
+  });
+
   it('returns empty string for null', () => {
     assert.equal(formatDate(null), '');
   });
