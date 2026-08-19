@@ -85,38 +85,51 @@
     } catch { /* byline degrades to counts */ }
   }
 
-  // Byline (carried to TopBar via setPage): queue size + autopilot
-  // state, in priority order — running > interrupted > scoring-off >
-  // next run. The unfinished lastRun row (finished_at empty) is the
-  // in-flight signal; older than 2h means the cycle died without
-  // closing its ledger row.
+  // Header (via setPage): three hierarchy levels — title (identity),
+  // status chip (live state, one notch louder), byline (quiet facts).
+  // Chip tones: running now = live pulse, degraded/blocked = warn with
+  // a link to the fix, off = quiet link to Settings. Idle (next run
+  // known, scoring on) needs no chip — the byline's "next run ~Xh"
+  // carries it at fact level.
   let byline = $derived.by(() => {
     const parts = [];
     if (queue.length > 0) parts.push(queue.length === 1 ? '1 match' : `${queue.length} matches`);
     if (autopilotData) {
       const run = autopilotData.lastRun;
-      if (!autopilotData.enabled) {
-        parts.push('autopilot off');
-      } else if (run && !run.finishedAt) {
-        const ageMs = Date.now() - new Date(run.startedAt).getTime();
-        parts.push(ageMs < 2 * 3600e3 ? 'running now' : 'last run interrupted');
-      } else if (!autopilotData.zenKeySet) {
-        parts.push('scoring off — add Zen key in Settings');
-      } else {
-        let s = `next run ~${nextCadence()}`;
-        if (run && run.finishedAt) {
-          const bits = [];
-          if (run.postingsNew > 0) bits.push(`${run.postingsNew} new`);
-          if (run.postingsErrored > 0) bits.push(`${run.postingsErrored} errored`);
-          if (bits.length > 0) s += ` · last run ${bits.join(', ')}`;
-        }
-        parts.push(s);
+      if (autopilotData.enabled && run && run.finishedAt) {
+        const bits = [];
+        if (run.postingsNew > 0) bits.push(`${run.postingsNew} new`);
+        if (run.postingsErrored > 0) bits.push(`${run.postingsErrored} errored`);
+        if (bits.length > 0) parts.push(`last run ${bits.join(', ')}`);
+      }
+      // Healthy idle: the "when" question at fact level, no chip.
+      if (autopilotData.enabled && autopilotData.zenKeySet) {
+        parts.push(`next run ~${nextCadence()}`);
       }
     }
     return parts.join(' · ');
   });
 
-  $effect(() => { setPage({ title: 'Matches', byline }); });
+  let status = $derived.by(() => {
+    if (!autopilotData) return null;
+    const run = autopilotData.lastRun;
+    if (!autopilotData.enabled) {
+      return { label: 'off', tone: 'off', href: '/settings', title: 'Autopilot is off — enable in Settings' };
+    }
+    if (run && !run.finishedAt) {
+      const ageMs = Date.now() - new Date(run.startedAt).getTime();
+      if (ageMs < 2 * 3600e3) {
+        return { label: 'running now', tone: 'live', title: 'An autopilot run is in progress' };
+      }
+      return { label: 'last run interrupted', tone: 'warn', href: '/settings', title: 'The last run did not finish — details in Settings' };
+    }
+    if (!autopilotData.zenKeySet) {
+      return { label: 'scoring off — no Zen key', tone: 'warn', href: '/settings', title: 'Add your Zen API key in Settings for scored matches' };
+    }
+    return null;
+  });
+
+  $effect(() => { setPage({ title: 'Matches', byline, status }); });
 
   function nextCadence() {
     if (!autopilotData?.cadence) return 'a few hours';

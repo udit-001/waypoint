@@ -52,6 +52,17 @@
     var m = document.getElementById('theme-color');
     if (m) m.content = getComputedStyle(html).getPropertyValue('--color-slate-50').trim();
   }
+
+  // ── Status chip (WP-141) ──────────────────────────
+  const CHIP_TONE = {
+    live: 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300',
+    warn: 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:border-amber-400 dark:hover:border-amber-600',
+    off:  'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500',
+  };
+
+  function chipClass(tone) {
+    return CHIP_TONE[tone] || CHIP_TONE.off;
+  }
 </script>
 
 <header class="flex items-center justify-between gap-4 min-h-10 px-6 py-1.5 bg-stone-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
@@ -74,6 +85,29 @@
       </nav>
     {:else}
       <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">{page.title}</h2>
+      {#if page.status}
+        <!-- Status chip (WP-141): the page's live state, one visual notch
+             above the byline facts. Pulse for happening-now; link to the
+             fix for degraded states. -->
+        {#if page.status.href}
+          <a
+            href={page.status.href}
+            title={page.status.title || page.status.label}
+            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors cursor-pointer {chipClass(page.status.tone)}"
+          >
+            <span class="size-1.5 rounded-full bg-current {page.status.tone === 'live' ? 'animate-pulse' : 'opacity-70'}"></span>
+            {page.status.label}
+          </a>
+        {:else}
+          <span
+            title={page.status.title || page.status.label}
+            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border {chipClass(page.status.tone)}"
+          >
+            <span class="size-1.5 rounded-full bg-current {page.status.tone === 'live' ? 'animate-pulse' : 'opacity-70'}"></span>
+            {page.status.label}
+          </span>
+        {/if}
+      {/if}
       {#if page.byline}
         <span class="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap shrink-0">{page.byline}</span>
       {/if}
