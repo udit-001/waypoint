@@ -55,9 +55,9 @@
 
   // ── Status chip (WP-141) ──────────────────────────
   const CHIP_TONE = {
-    live: 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300',
-    warn: 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:border-amber-400 dark:hover:border-amber-600',
-    off:  'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500',
+    live: 'bg-emerald-50 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-600 text-emerald-700 dark:text-emerald-200',
+    warn: 'bg-amber-50 dark:bg-amber-900/40 border-amber-200 dark:border-amber-600 text-amber-700 dark:text-amber-200 hover:border-amber-500 dark:hover:border-amber-400',
+    off:  'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-500 text-slate-500 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-400',
   };
 
   function chipClass(tone) {
