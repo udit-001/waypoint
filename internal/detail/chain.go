@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/udit-001/waypoint/internal/scraper"
 )
 
 // Chain orchestrates the detail fetch for a single posting URL.
@@ -169,6 +171,16 @@ func (c *Chain) parseBody(rawURL, body, source string) DetailResult {
 	if len(body) > maxDetailBodyChars {
 		body = body[:maxDetailBodyChars]
 	}
+	// Tiers fetch different media: direct HTTP returns raw HTML,
+	// mdsvc/Exa return markdown. Parsers (and the description column)
+	// speak markdown — convert before parsing so an HTML body never
+	// reaches the parser or the DB.
+	if looksLikeHTML(body) {
+		body = scraper.HTMLToMarkdown(body)
+		if len(body) > maxDetailBodyChars {
+			body = body[:maxDetailBodyChars]
+		}
+	}
 	family := DetectFamily(rawURL)
 	if parser := ParserFor(family); parser != nil {
 		r := parser.Parse(body)
@@ -177,6 +189,23 @@ func (c *Chain) parseBody(rawURL, body, source string) DetailResult {
 		return r
 	}
 	return DetailResult{Body: body, Source: source}
+}
+
+// looksLikeHTML reports whether a fetched body is a full HTML page
+// rather than converted markdown. Cheap prefix/structure sniff — the
+// only decision it feeds is whether to run the HTML→markdown pass.
+func looksLikeHTML(body string) bool {
+	s := body
+	if len(s) > 4096 {
+		s = s[:4096]
+	}
+	t := strings.TrimLeft(s, " \t\r\n")
+	low := strings.ToLower(t)
+	if strings.HasPrefix(low, "<!doctype") || strings.HasPrefix(low, "<html") {
+		return true
+	}
+	// Fragment heuristic: multiple block-level tags means HTML.
+	return strings.Contains(low, "<div") && strings.Contains(low, "<p")
 }
 
 // fetchExa fetches raw markdown via Exa and parses it with a per-family parser.
