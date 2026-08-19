@@ -255,53 +255,17 @@ var scrapeStagedFlags struct {
 }
 
 var scrapeStagedCmd = &cobra.Command{
-	Use:   "staged",
-	Short: "View postings in the review queue",
-	Long: `List postings that have been scraped into the postings ledger.
-Optionally filter by status.
+	Use:        "staged",
+	Deprecated: "use 'waypoint postings list' instead",
+	Short:      "View postings in the review queue (deprecated: use 'waypoint postings list')",
+	Long: `List postings that have been scraped into the postings ledger. Optionally filter by status.
 
-Examples:
-  waypoint scrape staged
-  waypoint scrape staged --status new
-  waypoint scrape staged --status dismissed --json`,
+This command is deprecated. Use 'waypoint postings list' instead.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		legacyStagingHint()
-
-		results, err := store.ListPostings(scrapeStagedFlags.status)
-		if err != nil {
-			return formatError("list postings", err)
-		}
-
-		if jsonOut {
-			if results == nil {
-				results = []db.Posting{}
-			}
-			printJSON(results)
-			return nil
-		}
-
-		if len(results) == 0 {
-			fmt.Println("  No postings. Run 'waypoint scrape run <name>' to search.")
-			return nil
-		}
-
-		fmt.Printf("  %d posting(s)\n\n", len(results))
-
-		rows := make([][]string, 0, len(results))
-		for _, r := range results {
-			rows = append(rows, []string{
-				truncate(r.Result.Title, 45),
-				truncate(r.Result.Company, 20),
-				truncate(r.Result.URL, 50),
-				r.Status,
-				r.FirstSeen,
-			})
-		}
-
-		fmt.Println(formatTable([]string{"Title", "Company", "URL", "Status", "First Seen"}, rows))
-		fmt.Println()
-		return nil
+		postingsListFlags.status = scrapeStagedFlags.status
+		return postingsListCmd.RunE(cmd, args)
 	},
 }
 
@@ -312,98 +276,16 @@ var scrapeDismissFlags struct {
 }
 
 var scrapeDismissCmd = &cobra.Command{
-	Use:   "dismiss [<url>...]",
-	Short: "Dismiss postings",
-	Long: `Mark postings as dismissed so they don't reappear
-on future scrape runs.
+	Use:        "dismiss [<url>...]",
+	Deprecated: "use 'waypoint postings dismiss' instead",
+	Short:      "Dismiss postings (deprecated: use 'waypoint postings dismiss')",
+	Long: `Mark postings as dismissed so they don't reappear on future scrape runs.
 
---all dismisses every "new" status result. Entries that are "dismissed"
-or "promoted" are skipped.
-
-Examples:
-  waypoint scrape dismiss "https://www.ncbs.res.in/jobportal/node/142669"
-  waypoint scrape dismiss "url1" "url2" "url3"
-  waypoint scrape dismiss --all`,
+This command is deprecated. Use 'waypoint postings dismiss' instead.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		legacyStagingHint()
-
-		if scrapeDismissFlags.all {
-			results, err := store.ListPostings("new")
-			if err != nil {
-				return formatError("list postings", err)
-			}
-
-			dismissed := 0
-			for _, r := range results {
-				if err := store.SetPostingStatus(r.Result.URL, "dismissed"); err != nil {
-					return formatError("dismiss "+r.Result.URL, err)
-				}
-				dismissed++
-			}
-
-			if jsonOut {
-				printJSON(map[string]int{"dismissed": dismissed})
-				return nil
-			}
-
-			fmt.Printf("  Dismissed %d results.\n", dismissed)
-			return nil
-		}
-
-		if len(args) == 0 {
-			return fmt.Errorf("provide at least one URL or use --all")
-		}
-
-		// Single URL — backward compatible path.
-		if len(args) == 1 {
-			url := args[0]
-
-			_, ok, err := store.GetPosting(url)
-			if err != nil {
-				return formatError("check postings", err)
-			}
-			if !ok {
-				return fmt.Errorf("no posting with URL %q", url)
-			}
-
-			if err := store.SetPostingStatus(url, "dismissed"); err != nil {
-				return formatError("dismiss", err)
-			}
-
-			if jsonOut {
-				printJSON(map[string]string{"status": "dismissed", "url": url})
-				return nil
-			}
-
-			fmt.Printf("  ✓ Dismissed: %s\n", url)
-			return nil
-		}
-
-		// Multiple URLs — batch path. Errors for non-existent URLs
-		// are reported to stderr but processing continues.
-		dismissed := 0
-		for _, url := range args {
-			_, ok, err := store.GetPosting(url)
-			if err != nil {
-				return formatError("check postings", err)
-			}
-			if !ok {
-				fmt.Fprintf(os.Stderr, "  ✗ no posting with URL %q\n", url)
-				continue
-			}
-			if err := store.SetPostingStatus(url, "dismissed"); err != nil {
-				return formatError("dismiss", err)
-			}
-			dismissed++
-		}
-
-		if jsonOut {
-			printJSON(map[string]int{"dismissed": dismissed})
-			return nil
-		}
-
-		fmt.Printf("  Dismissed %d results.\n", dismissed)
-		return nil
+		postingsDismissFlags.all = scrapeDismissFlags.all
+		return postingsDismissCmd.RunE(cmd, args)
 	},
 }
 
@@ -508,35 +390,17 @@ var scrapePruneFlags struct {
 }
 
 var scrapePruneCmd = &cobra.Command{
-	Use:   "prune",
-	Short: "Remove old postings",
+	Use:        "prune",
+	Deprecated: "use 'waypoint postings prune' instead",
+	Short:      "Remove old postings (deprecated: use 'waypoint postings prune')",
 	Long: `Remove postings older than N days.
-Default: 30 days. Only removes entries — does not affect tracked jobs.
 
-Examples:
-  waypoint scrape prune
-  waypoint scrape prune --days 7`,
+This command is deprecated. Use 'waypoint postings prune' instead.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		legacyStagingHint()
-
-		removed, err := store.PrunePostings(scrapePruneFlags.days)
-		if err != nil {
-			return formatError("prune", err)
-		}
-
-		if jsonOut {
-			printJSON(map[string]int{"removed": removed, "days": scrapePruneFlags.days})
-			return nil
-		}
-
-		if removed == 0 {
-			fmt.Printf("  No entries older than %d days.\n", scrapePruneFlags.days)
-			return nil
-		}
-
-		fmt.Printf("  ✓ Removed %d entr(y/ies) older than %d days.\n", removed, scrapePruneFlags.days)
-		return nil
+		postingsPruneFlags.days = scrapePruneFlags.days
+		return postingsPruneCmd.RunE(cmd, args)
 	},
 }
 
@@ -600,73 +464,17 @@ var scrapePromoteFlags struct {
 }
 
 var scrapePromoteCmd = &cobra.Command{
-	Use:   "promote [<url>]",
-	Short: "Promote postings into the tracked jobs table",
+	Use:        "promote [<url>]",
+	Deprecated: "use 'waypoint postings promote' instead",
+	Short:      "Promote postings (deprecated: use 'waypoint postings promote')",
 	Long: `Move postings into the tracked jobs table.
 
---all promotes every "new" status posting. Entries that are "dismissed"
-or "promoted" are skipped. If a URL already exists in the jobs table,
-the posting is skipped but still marked "promoted" so it won't reappear.
-
-Examples:
-  waypoint scrape promote "https://www.ncbs.res.in/jobportal/node/142669"
-  waypoint scrape promote --all`,
+This command is deprecated. Use 'waypoint postings promote' instead.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		legacyStagingHint()
-
-		if scrapePromoteFlags.all {
-			results, err := store.ListPostings("new")
-			if err != nil {
-				return formatError("list postings", err)
-			}
-
-			promoted, skipped := 0, 0
-			for _, r := range results {
-				job, err := store.Promote(r.Result.URL)
-				if err != nil {
-					return formatError("promote "+r.Result.URL, err)
-				}
-				if job.ID > 0 {
-					promoted++
-				} else {
-					skipped++
-				}
-			}
-
-			if jsonOut {
-				printJSON(map[string]int{
-					"promoted": promoted,
-					"skipped":  skipped,
-				})
-				return nil
-			}
-
-			fmt.Printf("  Promoted %d, skipped %d (already tracked).\n", promoted, skipped)
-			return nil
-		}
-
-		if len(args) == 0 {
-			return fmt.Errorf("provide a URL or use --all")
-		}
-
-		url := args[0]
-		job, err := store.Promote(url)
-		if err != nil {
-			return formatError("promote", err)
-		}
-
-		if jsonOut {
-			printJSON(job)
-			return nil
-		}
-
-		if job.ID > 0 {
-			fmt.Printf("  ✓ Promoted: %s → Job #%d\n", url, job.ID)
-		} else {
-			fmt.Printf("  → Skipped (already tracked): %s\n", url)
-		}
-		return nil
+		postingsPromoteFlags.all = scrapePromoteFlags.all
+		return postingsPromoteCmd.RunE(cmd, args)
 	},
 }
 
@@ -674,12 +482,15 @@ func init() {
 	rootCmd.AddCommand(scrapeCmd)
 	scrapeCmd.AddCommand(scrapeListCmd)
 	scrapeCmd.AddCommand(scrapeRunCmd)
-	scrapeCmd.AddCommand(scrapeStagedCmd)
-	scrapeCmd.AddCommand(scrapeDismissCmd)
 	scrapeCmd.AddCommand(scrapeDetailCmd)
-	scrapeCmd.AddCommand(scrapePruneCmd)
 	scrapeCmd.AddCommand(scrapeMigrateCmd)
+
+	// Deprecated staging commands → replaced by postings group.
+	// Keep the old commands as deprecated aliases for backward compat.
+	scrapeCmd.AddCommand(scrapeStagedCmd)
 	scrapeCmd.AddCommand(scrapePromoteCmd)
+	scrapeCmd.AddCommand(scrapeDismissCmd)
+	scrapeCmd.AddCommand(scrapePruneCmd)
 
 	scrapeRunCmd.Flags().StringVarP(&scrapeRunFlags.query, "query", "q", "", "Filter results by keyword")
 	scrapeRunCmd.Flags().StringVarP(&scrapeRunFlags.location, "location", "l", "", "Location to search (e.g. 'Bengaluru, India', 'Remote')")
