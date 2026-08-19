@@ -247,7 +247,13 @@ For each posting:
 3. Call curate_posting with:
    - verdict: shortlist or dismiss
    - score: 0-100
-   - reasons: 1-3 grounded facts about the ROLE. Each reason must name a specific thing from the posting — the responsibilities, the tech, the level, the domain, the location. Reason format: "<what the job is> — <why it fits or doesn't>".
+   - reasons: 1-3 fit facts, one per dimension. Each is an object:
+       kind: "match" (supports the fit) or "gap" (works against it)
+       field: one of role, domain, level, location, company
+       text: a terse fragment, max 60 chars, naming the specific thing —
+             e.g. "Senior distributed-systems role" (role/match),
+             "Hybrid — conflicts with remote preference" (location/gap).
+     Never write full sentences. Facts the user can skim, not prose.
 
 Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-79 decent (most align, one gap), below 60 weak (major mismatch).`, portrait)
 

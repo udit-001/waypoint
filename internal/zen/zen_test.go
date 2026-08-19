@@ -41,12 +41,16 @@ type fakeResponse struct {
 	toolCall bool // true: reply with a curate_posting tool call
 	decision string
 	score    int
-	reasons  []string
+	reasons  []string // raw text fragments; serialized as {kind:match, field:role, text}
 }
 
 func toolCallBody(model, decision string, score int, reasons []string) map[string]any {
+	objs := make([]map[string]any, len(reasons))
+	for i, r := range reasons {
+		objs[i] = map[string]any{"kind": "match", "field": "role", "text": r}
+	}
 	args, _ := json.Marshal(map[string]any{
-		"verdict": decision, "score": score, "reasons": reasons,
+		"verdict": decision, "score": score, "reasons": objs,
 	})
 	return map[string]any{
 		"id":     "chatcmpl-fake",
@@ -165,7 +169,7 @@ const briefPrompt = `BRIEF: {"facts":{"title":"Backend Engineer"}}`
 // ---- happy path -------------------------------------------------------------
 
 func TestCurate_sendsLockedWireShape(t *testing.T) {
-	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 88, reasons: []string{"matches Go keyword"}}}}
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 88, reasons: []string{"Senior Go engineer role"}}}}
 	c := f.start(t)
 
 	sess := c.NewSession(briefPrompt)
@@ -644,7 +648,7 @@ func TestCurate_parallelToolCallsAllAnswered(t *testing.T) {
 							{"id": "call-1", "type": "function", "function": map[string]any{
 								"name": "search_company", "arguments": `{"company":"Algolia"}`}},
 							{"id": "call-2", "type": "function", "function": map[string]any{
-								"name": "curate_posting", "arguments": `{"verdict":"shortlist","score":72,"reasons":["search API backend role — matches Go/backend skills"]}`}},
+								"name": "curate_posting", "arguments": `{"verdict":"shortlist","score":72,"reasons":[{"kind":"match","field":"role","text":"search API backend role"}]}`}},
 						},
 					},
 				}},

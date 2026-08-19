@@ -129,8 +129,18 @@ type Posting struct {
 // Verdict is the locked curation output.
 type Verdict struct {
 	Decision string   `json:"verdict"` // shortlist | dismiss
-	Score    int      `json:"score"`   // 0-100, ranks the queue (never gates)
-	Reasons  []string `json:"reasons"` // 1-3 short reasons, each citing a brief field
+	Score    int      `json:"score"`    // 0-100, ranks the queue (never gates)
+	Reasons  []Reason `json:"reasons"`  // 1-3 tagged facts, one per fit dimension
+}
+
+// Reason is one skimmable fit fact. Kind says whether it supports the
+// match or works against it; Field names the dimension it's about, so
+// the UI can badge it (role/domain/level/location/company) instead of
+// rendering a sentence. Text is a terse fragment (≤60 chars), not prose.
+type Reason struct {
+	Kind  string `json:"kind"`  // match | gap
+	Field string `json:"field"` // role | domain | level | location | company
+	Text  string `json:"text"`  // terse fragment, e.g. "Senior distributed-systems role"
 }
 
 // Error is a curation failure. Fatal errors (bad key, out of credits)
@@ -189,10 +199,18 @@ var curateTool = map[string]any{
 				"verdict": map[string]any{"type": "string", "enum": []string{DecisionShortlist, DecisionDismiss}},
 				"score":   map[string]any{"type": "integer", "description": "0-100 fit score"},
 				"reasons": map[string]any{
-					"type":        "array",
-					"items":       map[string]any{"type": "string"},
-					"description": "1-3 short reasons, each citing a brief field",
-				},
+					"type":  "array",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"kind":  map[string]any{"type": "string", "enum": []string{"match", "gap"}},
+							"field": map[string]any{"type": "string", "enum": []string{"role", "domain", "level", "location", "company"}},
+							"text":  map[string]any{"type": "string", "description": "terse fragment, max 60 chars, no full sentences"},
+						},
+						"required":             []string{"kind", "field", "text"},
+					},
+					"description":       "1-3 fit facts: one per dimension (role, domain, level, location, company), each tagged match or gap",
+					},
 			},
 			"required": []string{"verdict", "score", "reasons"},
 		},
@@ -411,6 +429,21 @@ func (c *Client) call(ctx context.Context, model string, msgs []message) (messag
 		}
 		if len(v.Reasons) == 0 {
 			return message{}, Verdict{}, false, &Error{Msg: "verdict has no reasons"}
+		}
+		// Normalize: clamp text, default unknown kinds/fields so a
+		// sloppy verdict still renders (legacy string reasons from older
+		// cycles arrive as gaps with the raw sentence as text).
+		for i := range v.Reasons {
+			r := &v.Reasons[i]
+			if r.Kind != "match" && r.Kind != "gap" {
+				r.Kind = "gap"
+			}
+			if r.Field == "" {
+				r.Field = "role"
+			}
+			if len(r.Text) > 80 {
+				r.Text = r.Text[:80]
+			}
 		}
 		if v.Score < 0 {
 			v.Score = 0

@@ -141,8 +141,26 @@
 
   function parseReasons(reasons) {
     if (!reasons) return [];
-    if (Array.isArray(reasons)) return reasons;
-    try { return JSON.parse(reasons); } catch { return [String(reasons)]; }
+    let parsed;
+    if (Array.isArray(reasons)) parsed = reasons;
+    else { try { parsed = JSON.parse(reasons); } catch { return []; } }
+    // New shape: {kind, field, text}. Legacy: plain strings — mapped
+    // to a neutral chip so old verdicts still render.
+    return parsed.map(r => {
+      if (typeof r === 'string') return { kind: 'match', field: '', text: r };
+      if (r && typeof r === 'object') {
+        return { kind: r.kind === 'gap' ? 'gap' : 'match', field: r.field || '', text: r.text || '' };
+      }
+      return null;
+    }).filter(Boolean);
+  }
+
+  // Field badge + tone classes for a reason chip.
+  const FIELD_ICON = { role: 'briefcase', domain: 'box', level: 'star', location: 'target', company: 'user' };
+  function reasonClass(r) {
+    return r.kind === 'gap'
+      ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300'
+      : 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300';
   }
 
   // ── Derived pipeline ────────────────────────────────
@@ -410,10 +428,13 @@
               <div class="px-6 pb-4 pt-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/40">
                 {#if reasons.length > 0}
                   <div class="flex flex-wrap gap-1.5 mb-3">
-                    {#each reasons as reason}
-                      <span class="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-md px-2 py-0.5">
-                        <span style="color: {band.color}">{@html iconSvg('check-circle', 10)}</span>
-                        {reason}
+                    {#each reasons as r}
+                      <span class="inline-flex items-center gap-1 text-[11px] border rounded-md px-2 py-0.5 max-w-full {reasonClass(r)}" title={r.field ? `${r.field}: ${r.text}` : r.text}>
+                        {#if r.field && FIELD_ICON[r.field]}
+                          {@html iconSvg(FIELD_ICON[r.field], 10, { duotone: false })}
+                        {/if}
+                        <span class="font-medium">{r.field || (r.kind === 'gap' ? 'gap' : 'fit')}</span>
+                        {#if r.text}<span class="opacity-60">·</span><span class="truncate">{r.text}</span>{/if}
                       </span>
                     {/each}
                   </div>
