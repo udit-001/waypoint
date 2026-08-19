@@ -24,11 +24,13 @@ type FakeStore struct {
 	Profile    Profile
 	Settings   Settings
 	Postings   map[string]Posting
+	RunLogs    []RunLog
 
-	nextJobID  int64
-	nextCatID  int64
-	nextArtID  int64
-	nextHistID int64
+	nextJobID    int64
+	nextCatID    int64
+	nextArtID    int64
+	nextHistID   int64
+	nextRunLogID int64
 }
 
 func NewFakeStore() *FakeStore {
@@ -559,6 +561,22 @@ func (f *FakeStore) UpsertSettings(updates map[string]any) error {
 		if n, ok := v.(int); ok {
 			f.Settings.ItemsPerPage = n
 		}
+	}
+	if v, ok := updates["autopilot_enabled"]; ok {
+		if n, ok := v.(int); ok {
+			f.Settings.AutopilotEnabled = n
+		}
+	}
+	if v, ok := updates["autopilot_cadence"]; ok {
+		if n, ok := v.(int); ok {
+			f.Settings.AutopilotCadence = n
+		}
+	}
+	if v, ok := updates["autopilot_provider"]; ok {
+		f.Settings.AutopilotProvider = fmt.Sprint(v)
+	}
+	if v, ok := updates["zen_api_key"]; ok {
+		f.Settings.ZenAPIKey = fmt.Sprint(v)
 	}
 	return nil
 }

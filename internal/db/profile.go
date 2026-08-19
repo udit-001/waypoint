@@ -92,6 +92,12 @@ type Settings struct {
 	RemindersEnabled int    `db:"reminders_enabled" json:"remindersEnabled"`
 	DefaultView      string `db:"default_view" json:"defaultView"`
 	ItemsPerPage     int    `db:"items_per_page" json:"itemsPerPage"`
+
+	// Autopilot settings.
+	AutopilotEnabled  int    `db:"autopilot_enabled" json:"autopilotEnabled"`
+	AutopilotCadence  int    `db:"autopilot_cadence" json:"autopilotCadence"` // hours; 0 = default (6)
+	AutopilotProvider string `db:"autopilot_provider" json:"autopilotProvider"`
+	ZenAPIKey         string `db:"zen_api_key" json:"zenApiKey"`
 }
 
 // defaultSettings holds the Go-level defaults returned when no settings row
@@ -101,6 +107,7 @@ var defaultSettings = Settings{
 	RemindersEnabled: 1,
 	DefaultView:      "dashboard",
 	ItemsPerPage:     25,
+	AutopilotCadence: 6, // default 6 hours
 }
 
 // GetProfile returns the user profile. If no profile row exists yet, it
@@ -184,7 +191,14 @@ func isListPrefKey(key string) bool {
 // returns Go-level defaults with a nil error.
 func (s *SQLiteStore) GetSettings() (Settings, error) {
 	var st Settings
-	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page FROM settings WHERE id = 1`)
+	// Ensure autopilot columns exist (added in migration 10-11).
+	// SQLite ADD COLUMN is idempotent — errors when column already exists.
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_enabled INTEGER NOT NULL DEFAULT 0`)
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_cadence INTEGER NOT NULL DEFAULT 6`)
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_provider TEXT NOT NULL DEFAULT ''`)
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN zen_api_key TEXT DEFAULT ''`)
+
+	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key FROM settings WHERE id = 1`)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return defaultSettings, nil
@@ -200,11 +214,16 @@ func (s *SQLiteStore) UpsertSettings(updates map[string]any) error {
 	if len(updates) == 0 {
 		return nil
 	}
+
 	columnMap := map[string]string{
-		"theme":             "theme",
-		"reminders_enabled": "reminders_enabled",
-		"default_view":      "default_view",
-		"items_per_page":    "items_per_page",
+		"theme":              "theme",
+		"reminders_enabled":  "reminders_enabled",
+		"default_view":       "default_view",
+		"items_per_page":     "items_per_page",
+		"autopilot_enabled":  "autopilot_enabled",
+		"autopilot_cadence":  "autopilot_cadence",
+		"autopilot_provider": "autopilot_provider",
+		"zen_api_key":        "zen_api_key",
 	}
 	var setClauses []string
 	var args []any

@@ -1,6 +1,8 @@
 package db
 
-import "github.com/udit-001/waypoint/internal/scraper"
+import (
+	"github.com/udit-001/waypoint/internal/scraper"
+)
 
 // Store is the persistence interface. The concrete implementation
 // (SQLiteStore) wraps sqlx + SQLite. Tests use FakeStore (in-memory maps).
@@ -70,4 +72,9 @@ type Store interface {
 
 	// Promote — moves a posting into the applications (jobs) table.
 	Promote(url string) (Job, error)
+
+	// Autopilot run log.
+	AddRunLog(entry RunLog) (int64, error)
+	UpdateRunLog(id int64, entry RunLog) error
+	GetLastRun() (RunLog, bool, error)
 }

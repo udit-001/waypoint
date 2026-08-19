@@ -74,6 +74,9 @@ func TestMigration00008_existingDB(t *testing.T) {
 		`CREATE INDEX IF NOT EXISTS idx_scrape_staging_status ON scrape_staging(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_scrape_staging_first_seen ON scrape_staging(first_seen)`,
 		`DELETE FROM goose_db_version WHERE version_id = 8`,
+		`DELETE FROM goose_db_version WHERE version_id = 9`,
+		`DELETE FROM goose_db_version WHERE version_id = 10`,
+		`DELETE FROM goose_db_version WHERE version_id = 11`,
 	} {
 		if _, err := raw.Exec(stmt); err != nil {
 			t.Fatalf("revert to V7 (%q): %v", stmt, err)
