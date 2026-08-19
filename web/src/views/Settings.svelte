@@ -284,7 +284,7 @@ import { setPage } from '../stores/page.svelte.js';
       <p class="text-xs text-red-600 mt-2">{zenKeyError}</p>
     {/if}
     <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">
-      Get one at <a href="https://opencode.ai/auth" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 underline">opencode.ai/auth</a> → Billing → copy the key (starts with <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">oc_</code>). Prepaid credits, pay per request.
+      Get one at <a href="https://opencode.ai/auth" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-300 underline">opencode.ai/auth</a> → Billing → copy the key (starts with <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">oc_</code>). Prepaid credits, pay per request.
     </p>
   </Card>
 

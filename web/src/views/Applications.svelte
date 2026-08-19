@@ -297,7 +297,7 @@
     <div class="text-4xl mb-4 flex items-center justify-center">{@html iconSvg('filter', 48)}</div>
     <h3 class="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-1">No applications match these filters</h3>
     <button
-      class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 underline cursor-pointer bg-transparent border-none p-0 mt-2"
+      class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200 underline cursor-pointer bg-transparent border-none p-0 mt-2"
       onclick={() => filter.clear()}
     >Clear all</button>
   </div>
