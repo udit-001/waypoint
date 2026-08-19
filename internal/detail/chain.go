@@ -182,6 +182,11 @@ func (c *Chain) parseBody(rawURL, body, source string) DetailResult {
 		}
 	}
 	family := DetectFamily(rawURL)
+	// Board chrome (logo image, back-link) rides on converted board
+	// pages — strip before parsing so it never reaches the DB.
+	if family != "" {
+		body = stripBoardPreamble(body)
+	}
 	if parser := ParserFor(family); parser != nil {
 		r := parser.Parse(body)
 		r.Body = body
@@ -206,6 +211,35 @@ func looksLikeHTML(body string) bool {
 	}
 	// Fragment heuristic: multiple block-level tags means HTML.
 	return strings.Contains(low, "<div") && strings.Contains(low, "<p")
+}
+
+// stripBoardPreamble removes ATS chrome from the top of a converted
+// posting body: the linked logo image and the "Back to jobs" link
+// that every board page prepends before the actual job content. The
+// real content is taken from the first top-level heading onward —
+// greenhouse/lever/ashby pages all open the posting with an h1.
+// Bodies with no preamble pass through unchanged.
+func stripBoardPreamble(body string) string {
+	lines := strings.Split(body, "\n")
+	cut := -1
+	for i, l := range lines {
+		t := strings.TrimSpace(l)
+		if strings.HasPrefix(t, "# ") {
+			cut = i
+			break
+		}
+		// Preamble lines are only allowed to be image links, links,
+		// images, blank, or a bare badge ("New", "Posted …") — anything
+		// else before the heading means this isn't standard board chrome;
+		// keep everything.
+		if t != "" && !strings.HasPrefix(t, "[") && !strings.HasPrefix(t, "![") && t != "New" && !strings.HasPrefix(t, "Posted ") && t != "tags.new" {
+			return body
+		}
+	}
+	if cut <= 0 {
+		return body
+	}
+	return strings.TrimSpace(strings.Join(lines[cut:], "\n"))
 }
 
 // fetchExa fetches raw markdown via Exa and parses it with a per-family parser.
