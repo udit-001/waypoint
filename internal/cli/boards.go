@@ -13,11 +13,11 @@ import (
 
 var boardsCmd = &cobra.Command{
 	Use:   "boards",
-	Short: "Manage company ATS boards (Greenhouse, Workday, Lever, BambooHR)",
+	Short: "Manage company ATS boards (Greenhouse, Workday, Lever, BambooHR, Eightfold)",
 	Long: `Manage the list of company ATS boards and sweep them into the postings ledger.
 
 A board is one company's careers site behind one vendor (Greenhouse,
-Workday, Lever, BambooHR). Boards live in boards.toml inside data_dir,
+Workday, Lever, BambooHR, Eightfold). Boards live in boards.toml inside data_dir,
 so they travel with the database in backups.
 
 The flow: find the company's careers URL (any search tool), then

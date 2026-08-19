@@ -48,7 +48,7 @@ Alias: `waypoint cat`
 
 ## Boards
 
-Company ATS boards (Greenhouse, Workday, Lever, BambooHR) — one company's careers site per board. Boards live in `boards.toml` inside `data_dir`, so they travel with the database in backups. The flow: find the company's careers URL (any search tool), `add` it (detect + verify + save), then `sweep` to stage postings.
+Company ATS boards (Greenhouse, Workday, Lever, BambooHR, Eightfold) — one company's careers site per board. Boards live in `boards.toml` inside `data_dir`, so they travel with the database in backups. The flow: find the company's careers URL (any search tool), `add` it (detect + verify + save), then `sweep` to stage postings.
 
 | Command | Description |
 |---------|-------------|
