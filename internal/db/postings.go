@@ -105,6 +105,10 @@ func (s *SQLiteStore) AddPostings(results []scraper.Result) error {
 			return fmt.Errorf("insert posting: %w", err)
 		}
 	}
+	// Live-sync (WP-144): new rows grow the Matches queue.
+	if len(results) > 0 {
+		_ = s.AddChangeEvent("matches")
+	}
 	return nil
 }
 
@@ -150,6 +154,8 @@ func (s *SQLiteStore) SetPostingStatus(url, status string) error {
 	if n == 0 {
 		return fmt.Errorf("no posting with URL %q", url)
 	}
+	// Live-sync (WP-144): status moves change the Matches queue.
+	_ = s.AddChangeEvent("matches")
 	return nil
 }
 
@@ -196,6 +202,12 @@ func (s *SQLiteStore) EnrichPosting(url, desc string, meta map[string]string) er
 	); err != nil {
 		return fmt.Errorf("enrich posting: %w", err)
 	}
+
+	// Live-sync (WP-144): enrichment updates the Matches row (note,
+	// reasons, score appear). Published on every enrich — the deep
+	// placement buys the Matches page live verdicts without per-call
+	// wiring.
+	_ = s.AddChangeEvent("matches")
 	return nil
 }
 
@@ -314,6 +326,9 @@ func (s *SQLiteStore) Promote(url string) (Job, error) {
 
 	// Fetch the full job with category join if one was created.
 	if job.ID > 0 {
+		// Live-sync (WP-144): queue lost a row, pipeline gained one.
+		_ = s.AddChangeEvent("matches")
+		_ = s.AddChangeEvent("applications")
 		return s.GetJob(job.ID)
 	}
 	return job, nil

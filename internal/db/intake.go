@@ -25,6 +25,11 @@ func IntakeAddJob(s Store, j Job) (Job, error) {
 		return Job{}, fmt.Errorf("add history: %w", err)
 	}
 
+	// Live-sync (WP-144): intake mutations publish an "applications"
+	// change event; open UIs refetch. Best-effort by design — the event
+	// seam degrades live reload, never the mutation.
+	_ = s.AddChangeEvent("applications")
+
 	return s.GetJob(j.ID)
 }
 
@@ -65,6 +70,9 @@ func IntakeUpdateJob(s Store, id int64, updates map[string]any) (Job, error) {
 			return Job{}, fmt.Errorf("add update history: %w", err)
 		}
 	}
+
+	// Live-sync (WP-144): see IntakeAddJob.
+	_ = s.AddChangeEvent("applications")
 
 	return s.GetJob(id)
 }

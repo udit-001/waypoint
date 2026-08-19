@@ -69,6 +69,9 @@ func newMuxWithLinkedIn(store db.Store, staticFS fs.FS, li *linkedin.Fetcher) ht
 	// Autopilot
 	mux.HandleFunc("GET /api/autopilot", handleGetAutopilot(store))
 
+	// Live-sync (SSE — tails the change_events table)
+	mux.HandleFunc("GET /api/events", handleEvents(store))
+
 	// PWA routes with proper cache headers.
 	// sw.js must always revalidate (no-cache) or updates won't propagate.
 	// Service-Worker-Allowed lets the SW control root scope.

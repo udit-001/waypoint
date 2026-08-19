@@ -198,13 +198,13 @@ var curateTool = map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"verdict": map[string]any{"type": "string", "enum": []string{DecisionShortlist, DecisionDismiss}},
-				"score": map[string]any{"type": "integer", "description": "0-100 fit score"},
+				"score":   map[string]any{"type": "integer", "description": "0-100 fit score"},
 				"note": map[string]any{
-					"type": "string",
+					"type":        "string",
 					"description": "1-2 sentences the row doesn't already tell the user. The title, company, location, score, and reason chips are displayed elsewhere — surface what they can't: the stack and systems, the team's remit, the product it touches, the hiring bar, or the real dealbreaker behind a gap chip. Lead with the decisive fact. Max 200 chars.",
 				},
 				"reasons": map[string]any{
-					"type":  "array",
+					"type": "array",
 					"items": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
@@ -212,10 +212,10 @@ var curateTool = map[string]any{
 							"field": map[string]any{"type": "string", "enum": []string{"role", "domain", "level", "location", "company"}},
 							"text":  map[string]any{"type": "string", "description": "terse fragment, max 60 chars, no full sentences"},
 						},
-						"required":             []string{"kind", "field", "text"},
+						"required": []string{"kind", "field", "text"},
 					},
-					"description":       "1-3 fit facts: one per dimension (role, domain, level, location, company), each tagged match or gap",
-					},
+					"description": "1-3 fit facts: one per dimension (role, domain, level, location, company), each tagged match or gap",
+				},
 			},
 			"required": []string{"verdict", "score", "note", "reasons"},
 		},

@@ -20,6 +20,7 @@
   import { iconSvg } from '../lib/icons.js';
   import { formatDateShort, formatDateFull } from '../lib/format.js';
   import { renderMarkdown } from '../lib/markdown.js';
+  import { subscribeLive } from '../lib/live.js';
   import Skeleton from '../components/Skeleton.svelte';
   import * as api from '../stores/api.svelte.js';
 
@@ -58,23 +59,43 @@
     await loadQueue();
     await loadAutopilot();
     firstRender = false;
+
+    // Live-sync (WP-144): a cycle's sweep/curate moves the queue and the
+    // run ledger — refetch both without flipping the loading skeleton.
+    unsubLive = subscribeLive('matches', () => {
+      loadQueue(true);
+    });
+    unsubLiveRuns = subscribeLive('runs', () => {
+      loadAutopilot();
+      loadQueue(true);
+    });
   });
 
+  let unsubLive = null;
+  let unsubLiveRuns = null;
   onDestroy(() => {
     if (toastTimer) clearTimeout(toastTimer);
+    if (unsubLive) unsubLive();
+    if (unsubLiveRuns) unsubLiveRuns();
   });
 
-  async function loadQueue() {
-    loading = true;
-    error = null;
+  async function loadQueue(silent = false) {
+    if (!silent) {
+      loading = true;
+      error = null;
+    }
     try {
-      await api.postings.ensure();
+      if (silent) {
+        await api.postings.refresh();
+      } else {
+        await api.postings.ensure();
+      }
       queue = (api.postings.value || []).filter(p => p.status === 'shortlisted');
       selected = new Set();
     } catch (e) {
-      error = e.message;
+      if (!silent) error = e.message;
     } finally {
-      loading = false;
+      if (!silent) loading = false;
     }
   }
 

@@ -131,6 +131,8 @@ func (s *SQLiteStore) DeleteJob(id int64) error {
 	if n == 0 {
 		return fmt.Errorf("job %d not found", id)
 	}
+	// Live-sync (WP-144): deletion changes the Applications list.
+	_ = s.AddChangeEvent("applications")
 	return nil
 }
 

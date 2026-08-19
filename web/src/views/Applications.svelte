@@ -15,13 +15,14 @@
   // page title. The velocity chart mounts below the TopBar (above the
   // list/kanban) when the TopBar's Chart toggle is on.
 
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { fly } from 'svelte/transition';
   import { getRouter } from '../stores/router.svelte.js';
   import { setPage } from '../stores/page.svelte.js';
   import { getFilter } from '../stores/filter.svelte.js';
   import { getLayout } from '../stores/layout.svelte.js';
   import { getChartsOpen } from '../stores/chartsOpen.svelte.js';
+  import { subscribeLive } from '../lib/live.js';
   import * as api from '../stores/api.svelte.js';
   import { STATUSES, STATUS_META } from '../lib/status.js';
   import { applyFilter } from '../lib/filter.js';
@@ -133,6 +134,19 @@
     allJobs = api.jobs.value || [];
     loaded = true;
     firstRender = false;
+
+    // Live-sync (WP-144): a Promote from another tab (or a CLI
+    // jobs add) adds rows to the Applications list.
+    unsubLive = subscribeLive('applications', () => {
+      api.jobs.refresh().then(() => {
+        allJobs = api.jobs.value || [];
+      }).catch(() => {});
+    });
+  });
+
+  let unsubLive = null;
+  onDestroy(() => {
+    if (unsubLive) unsubLive();
   });
 
   // Checklist: three steps to the aha moment (first scored matches).

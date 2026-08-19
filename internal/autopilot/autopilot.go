@@ -488,10 +488,16 @@ func RunLogged(ctx context.Context, cfg CycleConfig) db.RunLog {
 		log.Printf("autopilot: failed to open run log: %v", err)
 		return Run(ctx, cfg)
 	}
+	// Live-sync (WP-144): the unfinished row is the "running now" signal;
+	// a "runs" event flips the chip immediately.
+	_ = cfg.Store.AddChangeEvent("runs")
 	entry = Run(ctx, cfg)
 	if err := cfg.Store.UpdateRunLog(id, entry); err != nil {
 		log.Printf("autopilot: failed to close run log: %v", err)
 	}
+	// ...and the matches/queue moved during the cycle.
+	_ = cfg.Store.AddChangeEvent("matches")
+	_ = cfg.Store.AddChangeEvent("runs")
 	entry.ID = id
 	return entry
 }

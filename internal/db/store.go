@@ -73,6 +73,12 @@ type Store interface {
 	// Promote — moves a posting into the applications (jobs) table.
 	Promote(url string) (Job, error)
 
+	// Live-sync — coarse mutation notifications consumed by SSE. The
+	// table (not an in-memory broker) is the bus: writers may live in
+	// another process (CLI autopilot run) than the server.
+	AddChangeEvent(kind string) error
+	ChangesSince(cursor int64, limit int) ([]ChangeEvent, error)
+
 	// Autopilot run log.
 	AddRunLog(entry RunLog) (int64, error)
 	UpdateRunLog(id int64, entry RunLog) error

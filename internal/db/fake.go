@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/udit-001/waypoint/internal/dates"
@@ -25,6 +26,10 @@ type FakeStore struct {
 	Settings   Settings
 	Postings   map[string]Posting
 	RunLogs    []RunLog
+
+	changeEvents  []ChangeEvent
+	changeEventID int64
+	mu            sync.Mutex
 
 	nextJobID    int64
 	nextCatID    int64
