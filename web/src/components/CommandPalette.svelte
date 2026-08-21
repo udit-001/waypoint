@@ -190,18 +190,18 @@
     >
       <!-- Input row -->
       <div class="flex items-center gap-2.5 px-4 py-3 border-b border-slate-200 dark:border-slate-600">
-        <span class="shrink-0 text-slate-400 dark:text-slate-500">{@html iconSvg('search', 15)}</span>
+        <span class="shrink-0 text-slate-600">{@html iconSvg('search', 15)}</span>
         <input
           bind:this={inputEl}
           bind:value={query}
           type="text"
-          class="flex-1 bg-transparent border-0 outline-none text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500"
+          class="flex-1 bg-transparent border-0 outline-none text-sm text-slate-800 dark:text-slate-200 placeholder-slate-600"
           placeholder="Jump or find… (Applications, or type to search)"
           oninput={onInput}
           onkeydown={onInputKeydown}
         />
         <kbd
-          class="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 font-mono text-[10px] leading-none shrink-0"
+          class="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 text-slate-600 font-mono text-[10px] leading-none shrink-0"
         >esc</kbd>
       </div>
 

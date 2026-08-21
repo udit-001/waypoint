@@ -59,9 +59,11 @@
   --color-blue-700:  #5e81ac;   /* nord9 */
   --color-emerald-100: #e6f0e6;
   --color-emerald-600: #a3be8c; /* nord14 */
+  --color-emerald-700: #047857; /* AA text on nord5 — pinned tailwind default */
   --color-amber-100: #fff4e0;
   --color-amber-500: #ebcb8b;   /* nord13 */
   --color-amber-600: #d08770;   /* nord12 */
+  --color-amber-700: #9a3412;   /* AA warning text on nord5 (nord12 is 2.5:1) */
 
   /* Row tint backgrounds — actual red/amber in both themes */
   --color-tint-red:   #fce4e4;
@@ -111,6 +113,7 @@
   --color-amber-200: #4c566a;
   --color-amber-500: #ebcb8b;  /* nord13 */
   --color-amber-600: #d08770;  /* nord12 */
+  --color-amber-700: #ebcb8b;  /* AA warning text on polar night (nord12 is 3.9:1) */
 
   --color-red-100: #4c566a;
   --color-red-600: #bf616a;    /* nord11 */
