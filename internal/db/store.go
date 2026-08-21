@@ -88,4 +88,10 @@ type Store interface {
 	SaveCandidates(cands []CompanyCandidate) error
 	Candidates(status string) ([]CompanyCandidate, error)
 	SetCandidateStatus(id int64, status string) error
+
+	// Board sweep state + per-company new counts (WP-149) — the raw
+	// material of the Companies page's trust strip.
+	SetBoardSweepState(board string, st BoardSweepState) error
+	GetBoardSweepStates() (map[string]BoardSweepState, error)
+	NewPostingCounts() (map[string]int, error)
 }

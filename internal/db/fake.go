@@ -30,6 +30,7 @@ type FakeStore struct {
 
 	changeEvents  []ChangeEvent
 	changeEventID int64
+	boardSweeps   map[string]BoardSweepState
 	mu            sync.Mutex
 
 	nextJobID    int64
@@ -804,4 +805,42 @@ func (f *FakeStore) SetCandidateStatus(id int64, status string) error {
 		}
 	}
 	return fmt.Errorf("no candidate with id %d", id)
+}
+
+// --- Board sweep state + new counts ---
+
+// SetBoardSweepState mirrors the SQLite upsert: newest sweep wins.
+func (f *FakeStore) SetBoardSweepState(board string, st BoardSweepState) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.boardSweeps == nil {
+		f.boardSweeps = make(map[string]BoardSweepState)
+	}
+	f.boardSweeps[board] = st
+	return nil
+}
+
+func (f *FakeStore) GetBoardSweepStates() (map[string]BoardSweepState, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string]BoardSweepState, len(f.boardSweeps))
+	for b, st := range f.boardSweeps {
+		out[b] = st
+	}
+	return out, nil
+}
+
+// NewPostingCounts mirrors the SQLite grouping: status="new" rows only,
+// keyed by lowercase company name.
+func (f *FakeStore) NewPostingCounts() (map[string]int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string]int)
+	for _, p := range f.Postings {
+		if p.Status != StatusNew {
+			continue
+		}
+		out[strings.ToLower(p.Result.Company)]++
+	}
+	return out, nil
 }

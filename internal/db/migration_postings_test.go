@@ -82,6 +82,7 @@ func TestMigration00008_existingDB(t *testing.T) {
 		`DELETE FROM goose_db_version WHERE version_id = 11`,
 		`DELETE FROM goose_db_version WHERE version_id = 12`,
 		`DELETE FROM goose_db_version WHERE version_id = 13`,
+		`DELETE FROM goose_db_version WHERE version_id = 14`,
 	} {
 		if _, err := raw.Exec(stmt); err != nil {
 			t.Fatalf("revert to V7 (%q): %v", stmt, err)
