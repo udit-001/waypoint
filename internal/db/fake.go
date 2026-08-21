@@ -26,6 +26,7 @@ type FakeStore struct {
 	Settings   Settings
 	Postings   map[string]Posting
 	RunLogs    []RunLog
+	Companies  map[string]CompanyCandidate
 
 	changeEvents  []ChangeEvent
 	changeEventID int64
@@ -36,6 +37,7 @@ type FakeStore struct {
 	nextArtID    int64
 	nextHistID   int64
 	nextRunLogID int64
+	nextCandID   int64
 }
 
 func NewFakeStore() *FakeStore {
@@ -46,6 +48,7 @@ func NewFakeStore() *FakeStore {
 		History:    []HistoryEntry{},
 		Settings:   defaultSettings,
 		Postings:   make(map[string]Posting),
+		Companies:  make(map[string]CompanyCandidate),
 	}
 }
 
@@ -738,4 +741,67 @@ func (f *FakeStore) Promote(url string) (Job, error) {
 	}
 
 	return job, nil
+}
+
+// --- Company discovery candidates ---
+
+// SaveCandidates mirrors the SQLite upsert semantics in memory: insert
+// new names as suggested, refresh suggested rows' domain/boards/facet,
+// never touch added/dismissed rows.
+func (f *FakeStore) SaveCandidates(cands []CompanyCandidate) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Companies == nil {
+		f.Companies = make(map[string]CompanyCandidate)
+	}
+	for _, c := range cands {
+		existing, ok := f.Companies[c.Name]
+		if !ok {
+			f.nextCandID++
+			c.ID = f.nextCandID
+			c.Status = StatusCandidateSuggested
+			c.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+			if c.Boards == nil {
+				c.Boards = []CandidateBoard{}
+			}
+			f.Companies[c.Name] = c
+			continue
+		}
+		if existing.Status == StatusCandidateSuggested {
+			existing.Domain = c.Domain
+			existing.Facet = c.Facet
+			existing.Boards = c.Boards
+			if existing.Boards == nil {
+				existing.Boards = []CandidateBoard{}
+			}
+			f.Companies[c.Name] = existing
+		}
+	}
+	return nil
+}
+
+func (f *FakeStore) Candidates(status string) ([]CompanyCandidate, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []CompanyCandidate
+	for _, c := range f.Companies {
+		if status == "" || c.Status == status {
+			out = append(out, c)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+func (f *FakeStore) SetCandidateStatus(id int64, status string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for name, c := range f.Companies {
+		if c.ID == id {
+			c.Status = status
+			f.Companies[name] = c
+			return nil
+		}
+	}
+	return fmt.Errorf("no candidate with id %d", id)
 }

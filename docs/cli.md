@@ -60,6 +60,14 @@ Company ATS boards (Greenhouse, Workday, Lever, BambooHR, Eightfold) — one com
 | `waypoint boards verify [<name>]` | Re-probe one board (or all enabled) for liveness; exits non-zero on failure |
 | `waypoint boards sweep` | Fetch every enabled board, deduplicate against the postings ledger and tracked jobs, and add new postings. Flags: `--jobage` (default 90, same as `scrape run`), `--limit` (per board). JSON: per-board `fetched`/`new`/`seen`/`failed` plus the `jobs` array added this sweep — the completion contract for agents: `new==0` everywhere → done; any `failed` → verify/fix/disable that board |
 
+## Discover
+
+Maps the company universe onto watchable boards automatically. Each candidate company's careers pages are probed, ATS board links extracted (Greenhouse, Lever, Ashby, Workday with site slug, Eightfold), and survivors verified live through the same detection `boards add` uses. Already-watched boards are filtered out — a company you track never surfaces again. Candidates persist in the database across runs; re-runs never duplicate rows or reset review decisions.
+
+| Command | Description |
+|---------|-------------|
+| `waypoint discover run` | Probe the facet list and persist discovered companies as candidates (`suggested`). Prints Company / Facet / Boards / Status; `--json` adds full board URLs under `candidates`. Review decisions land with `discover add|dismiss` |
+
 ## Artifacts
 
 Alias: `waypoint artifact`

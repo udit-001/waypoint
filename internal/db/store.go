@@ -83,4 +83,9 @@ type Store interface {
 	AddRunLog(entry RunLog) (int64, error)
 	UpdateRunLog(id int64, entry RunLog) error
 	GetLastRun() (RunLog, bool, error)
+
+	// Company discovery candidates — the discovery ledger (WP-150).
+	SaveCandidates(cands []CompanyCandidate) error
+	Candidates(status string) ([]CompanyCandidate, error)
+	SetCandidateStatus(id int64, status string) error
 }

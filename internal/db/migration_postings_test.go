@@ -73,11 +73,15 @@ func TestMigration00008_existingDB(t *testing.T) {
 		`DROP INDEX IF EXISTS idx_postings_first_seen`,
 		`CREATE INDEX IF NOT EXISTS idx_scrape_staging_status ON scrape_staging(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_scrape_staging_first_seen ON scrape_staging(first_seen)`,
+		// Roll back everything after V8 so the shape matches a real
+		// V7-era database as later migrations land.
+		`DROP TABLE IF EXISTS company_candidates`,
 		`DELETE FROM goose_db_version WHERE version_id = 8`,
 		`DELETE FROM goose_db_version WHERE version_id = 9`,
 		`DELETE FROM goose_db_version WHERE version_id = 10`,
 		`DELETE FROM goose_db_version WHERE version_id = 11`,
 		`DELETE FROM goose_db_version WHERE version_id = 12`,
+		`DELETE FROM goose_db_version WHERE version_id = 13`,
 	} {
 		if _, err := raw.Exec(stmt); err != nil {
 			t.Fatalf("revert to V7 (%q): %v", stmt, err)
