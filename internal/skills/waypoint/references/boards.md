@@ -13,8 +13,24 @@ waypoint boards list --json
 - **User names companies not yet boarded** → Step 1 (add), then Step 2 (sweep).
 - **All named companies already boarded** → Step 2 (sweep) directly.
 - **User asks what boards exist / to prune them** → `boards list` / `boards remove <name>` / `boards disable <name>`.
+- **`waypoint discover run` has suggested companies** (status `suggested`) → Step 0 (review), then Step 2 (sweep).
 
 **Done when**: every named company is either boarded or the user said skip.
+
+## Step 0 — Review discovered candidates
+
+`waypoint discover run` maps a facet list onto candidate companies and persists the ones with live ATS boards as `suggested`. It skips already-watched URLs and previously decided companies, so re-runs only surface genuinely new suggestions. Each candidate carries an `id`, its verified board URL(s), and the facet that surfaced it.
+
+Decide each candidate with the user:
+
+```bash
+waypoint discover add <id> --json      # promote: verify gate runs, then the board lands in boards.toml enabled
+waypoint discover dismiss <id> --json  # tombstone: discovery never suggests it again
+```
+
+`add` runs the same verify gate as `boards add` — a board is saved only when its API answers. A candidate whose board is already watched is a clear no-op; nothing is saved or decided. `dismiss` is for companies the user never wants tracked.
+
+**Done when**: no candidate remains `suggested` — every one is either added (its postings arrive on the next sweep) or dismissed.
 
 ## Step 1 — Add a board
 
@@ -75,6 +91,9 @@ Rejects: `waypoint scrape dismiss "<url>"` — same rule as scraping: unsure mea
 
 | Command | What it does |
 |---------|--------------|
+| `discover run [--json]` | Probe facets → persist candidate companies with verified boards |
+| `discover add <id> [--json]` | Promote a candidate: verify gate, then into boards.toml |
+| `discover dismiss <id> [--json]` | Tombstone a candidate — never suggested again |
 | `boards add <name> --url <url> [--company]` | Detect + verify + save a board (the verify gate) |
 | `boards list [--json]` | Saved boards with provider + enabled state |
 | `boards remove <name>` | Delete a board |

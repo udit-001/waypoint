@@ -67,6 +67,8 @@ Maps the company universe onto watchable boards automatically. Each candidate co
 | Command | Description |
 |---------|-------------|
 | `waypoint discover run` | Probe the facet list and persist discovered companies as candidates (`suggested`). Prints Company / Facet / Boards / Status; `--json` adds full board URLs under `candidates`. Already-decided companies (added/dismissed) are skipped on later runs |
+| `waypoint discover add <id>` | Promote a candidate: verify gate (same as `boards add`), then into boards.toml enabled; candidate becomes `added`. Already-watched board → clear no-op. `--json` emits `{meta:{id, name, updated, status, detail}}` |
+| `waypoint discover dismiss <id>` | Tombstone a candidate (`dismissed`) — discovery never suggests it again. `--json` same shape as add |
 
 ## Artifacts
 

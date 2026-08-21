@@ -14,7 +14,7 @@ When the user wants to find new jobs or see what's new:
 
 Scrape is the primary path, but Exa is a legitimate discovery fallback when scrapers fall short. The scraping reference's Entry condition decides when.
 
-When the user names **target companies** (or already-tracked boards), there is a third path: `read` [boards](references/boards.md) — company ATS boards swept on demand.
+When the user names **target companies** (or already-tracked boards), or wants candidates **discovered automatically** from their brief, there is a third path: `read` [boards](references/boards.md) — company ATS boards swept on demand, plus discovery candidates to review (add/dismiss).
 
 ## Pipeline
 

@@ -1,0 +1,194 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/boards"
+	"github.com/udit-001/waypoint/internal/config"
+	"github.com/udit-001/waypoint/internal/db"
+)
+
+// verifyBoard is the seam between discover add and the network: fetch
+// page 1 to prove the board answers before it lands in boards.toml.
+// Tests stub this — identical pattern to runDiscovery.
+var verifyBoard = func(p boards.Provider, b boards.Board, hit *boards.DetectHit) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	results, err := p.Fetch(ctx, b, *hit, boards.FetchOpts{MaxPages: 1, Limit: 5})
+	if err != nil {
+		return 0, err
+	}
+	return len(results), nil
+}
+
+// discoverReviewCmd is shared plumbing for `discover add|dismiss`: load
+// the candidate by id, apply the review transition, report.
+//
+// Add promotes the candidate into boards.toml through the same verify
+// gate as `boards add` (a board only lands when its API answers), then
+// marks it added — the next sweep fetches its postings with no further
+// steps. Dismiss only flips status: a tombstone discovery never
+// re-suggests (run filters decided companies), per the design lock-in.
+func discoverReviewCmd(use, short string, apply func(cand db.CompanyCandidate) (string, error)) *cobra.Command {
+	return &cobra.Command{
+		Use:   use,
+		Short: short,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil {
+				return fmt.Errorf("candidate id must be a number, got %q", args[0])
+			}
+
+			cands, err := store.Candidates("")
+			if err != nil {
+				return formatError("list candidates", err)
+			}
+			var cand *db.CompanyCandidate
+			for i := range cands {
+				if cands[i].ID == id {
+					cand = &cands[i]
+					break
+				}
+			}
+			if cand == nil {
+				if jsonOut {
+					printJSON(map[string]any{"meta": map[string]any{"id": id, "updated": false, "error": "not found"}})
+				}
+				return fmt.Errorf("no candidate with id %d — run 'waypoint discover run' to list ids", id)
+			}
+			if cand.Status != db.StatusCandidateSuggested {
+				msg := fmt.Sprintf("already %s", cand.Status)
+				if jsonOut {
+					printJSON(map[string]any{"meta": map[string]any{"id": id, "updated": false, "error": msg}})
+				}
+				return fmt.Errorf("candidate %q is %s — nothing to do", cand.Name, cand.Status)
+			}
+
+			detail, err := apply(*cand)
+			if err != nil {
+				return formatError(fmt.Sprintf("%s %s", use, cand.Name), err)
+			}
+
+			status := db.StatusCandidateDismissed
+			if strings.HasPrefix(use, "add") {
+				status = db.StatusCandidateAdded
+			}
+			if jsonOut {
+				printJSON(map[string]any{"meta": map[string]any{
+					"id": id, "name": cand.Name, "updated": true, "status": status, "detail": detail,
+				}})
+				return nil
+			}
+			fmt.Printf("  %s — %s (%s)\n", cand.Name, status, detail)
+			return nil
+		},
+	}
+}
+
+var discoverAddCmd = discoverReviewCmd(
+	"add <id>",
+	"Promote a discovered company into boards.toml",
+	func(cand db.CompanyCandidate) (string, error) {
+		bf, cfg, err := loadBoardsStore()
+		if err != nil {
+			return "", err
+		}
+
+		boardName := candidateBoardName(cand.Name)
+		added, alreadyWatched, fetched := 0, 0, 0
+		var lastProvider string
+		for _, b := range cand.Boards {
+			// Already watching this exact URL? A clear no-op, not a dupe.
+			watched := false
+			for _, e := range bf.Boards {
+				if e.URL == b.URL {
+					watched = true
+					break
+				}
+			}
+			if watched {
+				alreadyWatched++
+				continue
+			}
+
+			entry := config.BoardEntry{
+				Name:    boardName,
+				Company: cand.Name,
+				URL:     b.URL,
+				Enabled: true,
+				AddedAt: time.Now().UTC().Format(time.RFC3339),
+			}
+			// A same-name board pointing elsewhere must never be silently
+			// replaced — surface the conflict instead.
+			if existing := bf.Find(entry.Name); existing != nil {
+				return "", fmt.Errorf("board %q already exists with a different URL (%s)", entry.Name, existing.URL)
+			}
+
+			b := toBoard(entry)
+			p, hit, err := boards.DetectProvider(b)
+			if err != nil {
+				return "", fmt.Errorf("no provider matched %s", b.URL)
+			}
+			lastProvider = p.Name()
+
+			n, err := verifyBoard(p, b, hit)
+			if err != nil {
+				return "", fmt.Errorf("verification failed for %s: %w", b.URL, err)
+			}
+			fetched = n
+
+			entry.Provider = p.Name()
+			bf.Upsert(entry)
+			added++
+		}
+
+		switch {
+		case len(cand.Boards) == 0:
+			return "", fmt.Errorf("candidate has no verified boards")
+		case added == 0:
+			return "", fmt.Errorf("board(s) already in boards.toml — nothing to add")
+		}
+
+		if err := config.SaveBoards(cfg, bf); err != nil {
+			return "", err
+		}
+		if err := store.SetCandidateStatus(cand.ID, db.StatusCandidateAdded); err != nil {
+			return "", err
+		}
+
+		detail := fmt.Sprintf("%d board(s) added via %s, %d jobs on first page", added, lastProvider, fetched)
+		if alreadyWatched > 0 {
+			detail += fmt.Sprintf(", %d already watched", alreadyWatched)
+		}
+		return detail, nil
+	},
+)
+
+// candidateBoardName derives the boards.toml entry name from the
+// candidate's display name: lowercase, spaces to dashes — deterministic,
+// so re-reviews of one company always map to one entry name.
+func candidateBoardName(name string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), " ", "-"))
+}
+
+var discoverDismissCmd = discoverReviewCmd(
+	"dismiss <id>",
+	"Tombstone a discovered company so it is not suggested again",
+	func(cand db.CompanyCandidate) (string, error) {
+		if err := store.SetCandidateStatus(cand.ID, db.StatusCandidateDismissed); err != nil {
+			return "", err
+		}
+		return "will not be suggested again", nil
+	},
+)
+
+func init() {
+	discoverCmd.AddCommand(discoverAddCmd)
+	discoverCmd.AddCommand(discoverDismissCmd)
+}
