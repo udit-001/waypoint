@@ -51,3 +51,24 @@ export function formatMonth(ym) {
   if (month < 1 || month > 12) return ym;
   return `${MONTHS[month - 1]} ${m[1]}`;
 }
+
+// relTime renders a timestamp as a coarse relative label ("2h ago") for
+// trust strips and freshness indicators. Past a month it falls back to a
+// short absolute date — "32d ago" reads worse than "Jul 12". `now` (epoch
+// ms) is injectable so callers and tests can anchor the clock. Follows
+// the file convention: empty input → '', unparsable input returned
+// unchanged.
+export function relTime(d, now = Date.now()) {
+  if (!d) return '';
+  const dt = parseable(d);
+  if (!dt) return d;
+  const s = Math.floor((now - dt.getTime()) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  if (days <= 30) return `${days}d ago`;
+  return formatDateShort(d);
+}

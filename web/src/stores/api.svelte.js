@@ -97,6 +97,15 @@ export const categories = createStore(async () => {
   return Array.isArray(data) ? data : [{ id: 1, name: 'General' }];
 });
 
+// ─── Companies (WP-149) ────────────────────────────────
+// boards.toml joined with live stats — the server sorts by attention
+// weight (new postings float), the view just renders rows.
+
+export const companies = createStore(async () => {
+  const data = await api('/companies');
+  return Array.isArray(data.companies) ? data.companies : [];
+});
+
 // ─── History ────────────────────────────────────────────
 
 export const history = createStore(async () => {

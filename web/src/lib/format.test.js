@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatDate, formatDateShort, formatDateTime, formatDateFull, formatMonth } from './format.js';
+import { formatDate, formatDateShort, formatDateTime, formatDateFull, formatMonth, relTime } from './format.js';
 
 describe('formatDate', () => {
   it('formats a date with month, day, and year', () => {
@@ -92,5 +92,35 @@ describe('formatMonth', () => {
   it('returns invalid input unchanged', () => {
     assert.equal(formatMonth('2023-13'), '2023-13');
     assert.equal(formatMonth('not-a-date'), 'not-a-date');
+  });
+});
+
+describe('relTime', () => {
+  // Fixed reference: 2026-08-22T12:00:00Z.
+  const NOW = Date.parse('2026-08-22T12:00:00Z');
+  const ago = (iso) => relTime(iso, NOW);
+
+  it('labels sub-minute age as "just now"', () => {
+    assert.equal(ago('2026-08-22T11:59:40Z'), 'just now');
+  });
+
+  it('renders minutes, hours, and days', () => {
+    assert.equal(ago('2026-08-22T11:58:00Z'), '2m ago');
+    assert.equal(ago('2026-08-22T09:00:00Z'), '3h ago');
+    assert.equal(ago('2026-08-20T12:00:00Z'), '2d ago');
+  });
+
+  it('falls back to a short date past a month', () => {
+    const out = ago('2026-06-01T12:00:00Z');
+    assert.ok(out.includes('Jun'), `expected month name in ${out}`);
+  });
+
+  it('returns empty string for empty/null input', () => {
+    assert.equal(relTime('', NOW), '');
+    assert.equal(relTime(null, NOW), '');
+  });
+
+  it('returns unparsable input unchanged — never "Invalid Date"', () => {
+    assert.equal(relTime('garbage', NOW), 'garbage');
   });
 });

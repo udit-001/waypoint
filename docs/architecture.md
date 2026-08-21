@@ -27,6 +27,7 @@ and `PATCH /api/profile` (web) patch only the keys present. Keys, validation,
 and the schema template live behind the db seam (`internal/db/documents.go`),
 shared by both surfaces.
 | `settings` | Theme, default view, reminders |
+| `kv` | Small durable state that doesn't warrant its own table; values are JSON blobs owned by their feature (`board_last_swept.<name>` = how a board's last sweep ended) |
 | `jobs_fts` / `artifacts_fts` | FTS5 full-text search indices |
 
 ## Tech Stack
@@ -117,4 +118,5 @@ same `db.Store` seam as the CLI — the web UI is read-only for everything else.
 | `PATCH /api/profile` | Write any profile field as a patch document (camelCase keys matching `GET /api/profile` and the CLI's `profile set --file`; `waypoint profile schema` shows the writable surface); returns the updated brief |
 | `POST /api/profile/import-linkedin` | Fetch a public LinkedIn profile via Exa's hosted MCP server (`web_fetch_exa`) and **merge** it into the stored profile — **never writes**. Returns `{doc, summary}`: `doc` is the merged profile document (the same camelCase keys `PATCH /api/profile` accepts), `summary` is an Added/Updated/Kept diff (`experienceAdded/Updated`, `educationAdded/Updated`, `skillsAdded`, `*Kept` counts). The merge never deletes: entries match by (title, company) for experience and by institution for education; matched entries get dates/description updated from LinkedIn, unmatched fetched entries are appended, existing entries with no match are kept. An empty stored profile merges to the fetched profile (everything "added"), so seed and update share one code path. The web UI previews the diff and PATCHes `doc` on Apply. `{url}` in the body; 400 on a non-LinkedIn/`/in/` URL, 502 on fetch failure, 422 when the page yielded nothing parseable (login wall / private profile) |
 | `GET /api/settings` | App settings |
+| `GET /api/companies` | boards.toml entries joined with live stats: new-posting counts (ledger rows awaiting review, matched case-insensitively by company) and per-board sweep state (`board_last_swept.*` from kv). Sorted by attention weight — companies with news float on top, loudest first; the rest alphabetical. Read-only: the CLI writes boards.toml and sweep state, the web reads both (ADR 0001) |
 | `GET /api/search?q=` | Unified search across jobs and artifacts |
