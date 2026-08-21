@@ -18,12 +18,16 @@
 
   let companies = $state([]);
   let loaded = $state(false);
+  let error = $state(null);
 
   onMount(async () => {
     setPage({ title: 'Companies' });
     try {
       await api.companies.ensure();
       companies = api.companies.value || [];
+    } catch (e) {
+      // A failed fetch must not masquerade as "no companies" — say so.
+      error = e.message || 'Failed to load companies';
     } finally {
       loaded = true;
     }
@@ -38,7 +42,11 @@
       Watched companies and their board health. Add one with <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono text-[11px]">waypoint boards add</code>.
     </p>
 
-    {#if companies.length === 0}
+    {#if error}
+      <div class="text-sm text-amber-600 dark:text-amber-400">⚠ {error} — the board list lives in boards.toml; check that the server is running.</div>
+    {/if}
+
+    {#if !error && companies.length === 0}
       <div class="text-center py-12">
         <svg class="mx-auto text-slate-300 mb-3" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/></svg>
         <p class="text-sm text-slate-400 mb-1">No companies yet</p>

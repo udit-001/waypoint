@@ -91,8 +91,8 @@ func (s *SQLiteStore) SaveCandidates(cands []CompanyCandidate) error {
 				     domain = excluded.domain,
 				     boards = excluded.boards,
 				     facet  = excluded.facet
-				 WHERE company_candidates.status = 'suggested'`,
-				c.Name, c.Domain, boardsJSON, c.Facet,
+				 WHERE company_candidates.status = ?`,
+				c.Name, c.Domain, boardsJSON, c.Facet, StatusCandidateSuggested,
 			); err != nil {
 				return fmt.Errorf("save candidate %q: %w", c.Name, err)
 			}
