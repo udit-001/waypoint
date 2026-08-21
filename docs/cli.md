@@ -66,7 +66,7 @@ Maps the company universe onto watchable boards automatically. Each candidate co
 
 | Command | Description |
 |---------|-------------|
-| `waypoint discover run` | Probe the facet list and persist discovered companies as candidates (`suggested`). Prints Company / Facet / Boards / Status; `--json` adds full board URLs under `candidates`. Review decisions land with `discover add|dismiss` |
+| `waypoint discover run` | Probe the facet list and persist discovered companies as candidates (`suggested`). Prints Company / Facet / Boards / Status; `--json` adds full board URLs under `candidates`. Already-decided companies (added/dismissed) are skipped on later runs |
 
 ## Artifacts
 

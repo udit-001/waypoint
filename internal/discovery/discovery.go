@@ -57,6 +57,9 @@ type Options struct {
 	Fetcher scraper.Fetcher
 	// Concurrency caps parallel company probes. 0 defaults to 4.
 	Concurrency int
+	// FetchTimeout caps each individual careers-page request.
+	// 0 defaults to 15s.
+	FetchTimeout time.Duration
 }
 
 // Extraction regexes. Greenhouse/Lever/Ashby capture the board token;
@@ -111,9 +114,9 @@ func careersURLs(domain string) []string {
 	}
 }
 
-// quickWin providers short-circuit the ladder: once one of these shows
+// quickWinProviders short-circuit the ladder: once one of these shows
 // up, further careers URLs are unlikely to add anything.
-var quickWin = map[string]bool{"greenhouse": true, "lever": true, "ashby": true}
+var quickWinProviders = map[string]bool{"greenhouse": true, "lever": true, "ashby": true}
 
 // verifyBoard probes one board link for liveness through the existing
 // boards registry seam (Detect claims it, a first-page Fetch proves the
@@ -136,8 +139,9 @@ var verifyBoard = func(ctx context.Context, l BoardLink) bool {
 // URLs, and drop companies left with nothing. Companies keep facet order;
 // output is deterministic regardless of concurrency.
 //
-// watched holds board URLs already configured (boards.toml); comparison
-// ignores trailing slashes and letter case.
+// watched holds board URLs already configured (boards.toml), raw as
+// stored; the module normalizes them (trailing slash, letter case) —
+// callers never pre-process.
 func Discover(ctx context.Context, facets []Facet, watched map[string]bool, opts Options) ([]Candidate, error) {
 	fetcher := opts.Fetcher
 	if fetcher == nil {
@@ -146,6 +150,10 @@ func Discover(ctx context.Context, facets []Facet, watched map[string]bool, opts
 	concurrency := opts.Concurrency
 	if concurrency <= 0 {
 		concurrency = 4
+	}
+	fetchTimeout := opts.FetchTimeout
+	if fetchTimeout <= 0 {
+		fetchTimeout = 15 * time.Second
 	}
 
 	normalize := func(u string) string {
@@ -184,7 +192,7 @@ func Discover(ctx context.Context, facets []Facet, watched map[string]bool, opts
 				return
 			}
 
-			cand := probeCompany(ctx, fetcher, j.facet, j.c, watchedSet, normalize)
+			cand := probeCompany(ctx, fetchTimeout, fetcher, j.facet, j.c, watchedSet, normalize)
 			if cand == nil {
 				return
 			}
@@ -210,16 +218,18 @@ func Discover(ctx context.Context, facets []Facet, watched map[string]bool, opts
 
 // probeCompany fetches the careers ladder for one company and returns a
 // candidate, or nil when nothing survives extraction, verification, and
-// the watched filter.
-func probeCompany(ctx context.Context, fetcher scraper.Fetcher, facet string, c Company, watched map[string]bool, normalize func(string) string) *Candidate {
+// the watched filter. Each careers-page request is capped by fetchTimeout.
+func probeCompany(ctx context.Context, fetchTimeout time.Duration, fetcher scraper.Fetcher, facet string, c Company, watched map[string]bool, normalize func(string) string) *Candidate {
 	var links []BoardLink
 	for i, u := range careersURLs(c.Domain) {
-		html, err := fetcher.Fetch(ctx, u)
+		fctx, cancel := context.WithTimeout(ctx, fetchTimeout)
+		html, err := fetcher.Fetch(fctx, u)
+		cancel()
 		if err != nil || html == "" {
 			continue
 		}
 		links = append(links, ExtractBoards(html)...)
-		if i == 0 && hasAny(links, quickWin) {
+		if i == 0 && hasAny(links, quickWinProviders) {
 			break
 		}
 	}

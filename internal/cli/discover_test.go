@@ -81,8 +81,9 @@ func TestDiscoverRun_watchedBoardsPassed(t *testing.T) {
 	t.Cleanup(func() { runDiscovery = old })
 
 	runDiscoverRun(t)
-	if !gotWatched["https://citi.wd103.myworkdayjobs.com/citicareers"] {
-		t.Errorf("watched set = %v, want the configured board URL (normalized)", gotWatched)
+	// Raw URL passed through — normalization is the discovery module's job.
+	if !gotWatched["https://citi.wd103.myworkdayjobs.com/CitiCareers/"] {
+		t.Errorf("watched set = %v, want the configured board URL as stored", gotWatched)
 	}
 }
 
@@ -127,10 +128,10 @@ func TestDiscoverRun_emptyResult(t *testing.T) {
 	}
 }
 
-// TestDiscoverRun_rerunShowsDismissedStatus: a company dismissed in a
-// prior run re-discovered today reports its persisted dismissed status,
-// not a fresh suggested one.
-func TestDiscoverRun_rerunShowsDismissedStatus(t *testing.T) {
+// TestDiscoverRun_skipsDecidedCandidates: a company dismissed in a
+// prior run is not re-probed at all — decided candidates are filtered
+// from the facet list before the pipeline runs.
+func TestDiscoverRun_skipsDecidedCandidates(t *testing.T) {
 	setupBoardsTest(t)
 	fake := store.(*db.FakeStore)
 	if err := fake.SaveCandidates([]db.CompanyCandidate{{
@@ -145,13 +146,20 @@ func TestDiscoverRun_rerunShowsDismissedStatus(t *testing.T) {
 	if err := fake.SetCandidateStatus(seeded[0].ID, db.StatusCandidateDismissed); err != nil {
 		t.Fatal(err)
 	}
-	stubDiscover(t, []discovery.Candidate{{
-		Name: "Paytm", Domain: "paytm.com", Facet: "payments-fintech",
-		Boards: []discovery.BoardLink{{Provider: "lever", URL: "https://jobs.lever.co/paytm/"}},
-	}})
+	var gotFacets []discovery.Facet
+	old := runDiscovery
+	runDiscovery = func(ctx context.Context, facets []discovery.Facet, watched map[string]bool, opts discovery.Options) ([]discovery.Candidate, error) {
+		gotFacets = facets
+		return nil, nil
+	}
+	t.Cleanup(func() { runDiscovery = old })
 
-	out := runDiscoverRun(t)
-	if !strings.Contains(out, "dismissed") {
-		t.Errorf("output should surface persisted dismissed status:\n%s", out)
+	runDiscoverRun(t)
+	for _, f := range gotFacets {
+		for _, c := range f.Companies {
+			if c.Name == "Paytm" {
+				t.Error("dismissed Paytm was re-probed; decided candidates must be skipped")
+			}
+		}
 	}
 }

@@ -3,6 +3,8 @@ package db
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // Candidate statuses — the discovery ledger's review vocabulary
@@ -74,25 +76,29 @@ func scanCandidate(row interface{ Scan(...any) error }) (CompanyCandidate, error
 //   - rows still suggested get their domain/boards/facet refreshed, so
 //     a later run that finds more boards updates the suggestion.
 func (s *SQLiteStore) SaveCandidates(cands []CompanyCandidate) error {
-	for _, c := range cands {
-		boardsJSON, err := marshalCandidateBoards(c.Boards)
-		if err != nil {
-			return err
+	// One transaction: the batch is the unit of work, so a mid-loop
+	// failure never leaves a half-saved run behind.
+	return s.tx(func(tx *sqlx.Tx) error {
+		for _, c := range cands {
+			boardsJSON, err := marshalCandidateBoards(c.Boards)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(
+				`INSERT INTO company_candidates (name, domain, boards, facet)
+				 VALUES (?, ?, ?, ?)
+				 ON CONFLICT(name) DO UPDATE SET
+				     domain = excluded.domain,
+				     boards = excluded.boards,
+				     facet  = excluded.facet
+				 WHERE company_candidates.status = 'suggested'`,
+				c.Name, c.Domain, boardsJSON, c.Facet,
+			); err != nil {
+				return fmt.Errorf("save candidate %q: %w", c.Name, err)
+			}
 		}
-		if _, err := s.Exec(
-			`INSERT INTO company_candidates (name, domain, boards, facet)
-			 VALUES (?, ?, ?, ?)
-			 ON CONFLICT(name) DO UPDATE SET
-			     domain = excluded.domain,
-			     boards = excluded.boards,
-			     facet  = excluded.facet
-			 WHERE company_candidates.status = 'suggested'`,
-			c.Name, c.Domain, boardsJSON, c.Facet,
-		); err != nil {
-			return fmt.Errorf("save candidate %q: %w", c.Name, err)
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // Candidates returns discovery candidates, optionally filtered by status

@@ -60,10 +60,40 @@ var discoverRunCmd = &cobra.Command{
 		}
 		watched := make(map[string]bool, len(bf.Boards))
 		for _, b := range bf.Boards {
-			watched[strings.TrimSuffix(strings.ToLower(b.URL), "/")] = true
+			watched[b.URL] = true // discovery normalizes case/slashes itself
+		}
+
+		// Companies with a review decision (added/dismissed) are not
+		// re-probed; only still-suggested rows earn fresh fetches.
+		persisted, err := store.Candidates("")
+		if err != nil {
+			return formatError("list candidates", err)
+		}
+		decided := make(map[string]bool, len(persisted))
+		statusByName := make(map[string]string, len(persisted))
+		for _, c := range persisted {
+			statusByName[c.Name] = c.Status
+			if c.Status != db.StatusCandidateSuggested {
+				decided[c.Name] = true
+			}
 		}
 
 		facets := discovery.HardcodedFacets()
+		if len(decided) > 0 {
+			filtered := make([]discovery.Facet, 0, len(facets))
+			for _, f := range facets {
+				kept := f.Companies[:0]
+				for _, c := range f.Companies {
+					if !decided[c.Name] {
+						kept = append(kept, c)
+					}
+				}
+				f.Companies = kept
+				filtered = append(filtered, f)
+			}
+			facets = filtered
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
 
@@ -87,14 +117,12 @@ var discoverRunCmd = &cobra.Command{
 			return formatError("save candidates", err)
 		}
 
-		// Read back this run's rows so output shows true post-save
-		// status (a re-run over a dismissed company reports dismissed).
-		persisted, err := store.Candidates("")
+		// Re-read after save so rows show true post-save boards/status.
+		persistedAfter, err := store.Candidates("")
 		if err != nil {
 			return formatError("list candidates", err)
 		}
-		statusByName := make(map[string]string, len(persisted))
-		for _, c := range persisted {
+		for _, c := range persistedAfter {
 			statusByName[c.Name] = c.Status
 		}
 
@@ -108,7 +136,7 @@ var discoverRunCmd = &cobra.Command{
 		out := make([]row, 0, len(found))
 		for _, c := range found {
 			r := row{Name: c.Name, Domain: c.Domain, Facet: c.Facet, Status: statusByName[c.Name]}
-			if bs, ok := lookupCandidateBoards(persisted, c.Name); ok {
+			if bs, ok := lookupCandidateBoards(persistedAfter, c.Name); ok {
 				r.Boards = bs
 			}
 			out = append(out, r)
@@ -137,7 +165,7 @@ var discoverRunCmd = &cobra.Command{
 			rows = append(rows, []string{r.Name, r.Facet, strings.Join(shorts, ", "), r.Status})
 		}
 		fmt.Println(formatTable([]string{"Company", "Facet", "Boards", "Status"}, rows))
-		fmt.Printf("\n  %d company(ies) discovered. Add or dismiss with 'waypoint discover add|dismiss'.\n\n", len(out))
+		fmt.Printf("\n  %d company(ies) discovered and saved to the discovery ledger.\n\n", len(out))
 		return nil
 	},
 }
