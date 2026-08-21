@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/udit-001/waypoint/internal/boards"
 	"github.com/udit-001/waypoint/internal/config"
+	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/scraper"
 )
 
@@ -54,6 +55,16 @@ func loadBoardsStore() (*config.BoardsFile, *config.Config, error) {
 // toBoard converts a stored entry to the boards package shape.
 func toBoard(e config.BoardEntry) boards.Board {
 	return boards.Board{Name: e.Name, Company: e.Company, URL: e.URL, MaxPages: e.MaxPages, Enabled: e.Enabled}
+}
+
+// recordSweepState persists how one board's sweep ended (WP-149) so the
+// Companies page can render its trust strip. Best-effort: a failed write
+// is surfaced on stderr but never aborts the sweep.
+func recordSweepState(cmd *cobra.Command, board string, ok bool, sweepErr string) {
+	st := db.BoardSweepState{At: time.Now().UTC().Format(time.RFC3339), OK: ok, Error: sweepErr}
+	if err := store.SetBoardSweepState(board, st); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: record sweep state for %s: %v\n", board, err)
+	}
 }
 
 // --- boards add ---
@@ -405,6 +416,7 @@ reviewed the new postings; any failed board needs attention.`,
 			p, hit, err := boards.DetectProvider(b)
 			if err != nil {
 				sr.Failed, sr.Error, failed = true, err.Error(), failed+1
+				recordSweepState(cmd, e.Name, false, sr.Error)
 				out = append(out, sr)
 				continue
 			}
@@ -416,6 +428,7 @@ reviewed the new postings; any failed board needs attention.`,
 			})
 			if err != nil {
 				sr.Failed, sr.Error, failed = true, err.Error(), failed+1
+				recordSweepState(cmd, e.Name, false, sr.Error)
 				out = append(out, sr)
 				continue
 			}
@@ -449,6 +462,7 @@ reviewed the new postings; any failed board needs attention.`,
 			sr.New = len(fresh)
 			totalNew += len(fresh)
 			sr.Jobs = fresh
+			recordSweepState(cmd, e.Name, true, "")
 			out = append(out, sr)
 		}
 

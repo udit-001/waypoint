@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/db"
@@ -131,6 +132,66 @@ func TestBoardsSweepReportsUnmatchableBoard(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("sweep json missing %q in:\n%s", want, out)
 		}
+	}
+}
+
+// TestBoardsSweepWritesState: a board attempt that fails (offline-testable:
+// no provider claims the URL) still ends with its sweep state recorded,
+// so the Companies page can diagnose it inline.
+func TestBoardsSweepWritesState(t *testing.T) {
+	setupBoardsTest(t)
+
+	// Mirror `waypoint init`: migrations exist before any command runs.
+	seedCfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedDB, err := db.Open(config.DBPath(seedCfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := seedDB.RunMigrations(""); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	seedDB.Close()
+
+	bf, cfg, err := loadBoardsStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bf.Upsert(config.BoardEntry{Name: "acme", Company: "Acme", URL: "https://example.com/careers", Enabled: true})
+	if err := config.SaveBoards(cfg, bf); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runCmd(t, "boards", "sweep"); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+
+	// PersistentPreRunE opens the real database (data_dir points at the
+	// test dir) — assert against it, not the injected fake.
+	cfgLoaded, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := db.Open(config.DBPath(cfgLoaded))
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	defer s.Close()
+	states, err := s.GetBoardSweepStates()
+	if err != nil {
+		t.Fatalf("GetBoardSweepStates: %v", err)
+	}
+	st, ok := states["acme"]
+	if !ok {
+		t.Fatalf("no sweep state recorded for acme; states = %v", states)
+	}
+	if st.OK || st.Error == "" {
+		t.Errorf("state = %+v, want OK=false with a diagnostic", st)
+	}
+	if _, err := time.Parse(time.RFC3339, st.At); err != nil {
+		t.Errorf("At = %q is not RFC3339: %v", st.At, err)
 	}
 }
 
