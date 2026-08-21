@@ -132,6 +132,19 @@ Examples:
 			DB:     store,
 			NoOpen: true,
 			Silent: startFlags.daemon,
+			// ADR 0001: CLI writes boards.toml, web reads it. The loader
+			// re-reads per request so `boards add` shows up without a restart.
+			LoadBoards: func() ([]config.BoardEntry, error) {
+				cfg, err := config.Load()
+				if err != nil {
+					return nil, err
+				}
+				bf, err := config.LoadBoards(cfg)
+				if err != nil {
+					return nil, err
+				}
+				return bf.Boards, nil
+			},
 		})
 	},
 }

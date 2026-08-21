@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/linkedin"
 	"github.com/udit-001/waypoint/web"
@@ -27,6 +28,11 @@ type Config struct {
 	NoOpen    bool // don't auto-open browser
 	Silent    bool // suppress terminal output (daemon mode)
 	Autopilot bool // start autopilot ticker (daemon mode only)
+
+	// LoadBoards reads boards.toml for GET /api/companies (WP-149).
+	// Injected by the CLI (ADR 0001: CLI writes, web reads); nil means
+	// no boards file — the endpoint serves an empty list.
+	LoadBoards func() ([]config.BoardEntry, error)
 }
 
 // newMux creates the HTTP mux with API routes, PWA routes, and static file
@@ -35,11 +41,19 @@ type Config struct {
 // newMux builds the mux with the default LinkedIn fetcher (hosted Exa MCP).
 // Tests that need to stub the fetch use newMuxWithLinkedIn.
 func newMux(store db.Store, staticFS fs.FS) http.Handler {
-	return newMuxWithLinkedIn(store, staticFS, linkedin.New())
+	return newMuxWithBoards(store, staticFS, linkedin.New(), nil)
 }
 
-// newMuxWithLinkedIn builds the mux with an injected LinkedIn fetcher.
+// newMuxWithLinkedIn builds the mux with an injected LinkedIn fetcher and
+// no boards source.
 func newMuxWithLinkedIn(store db.Store, staticFS fs.FS, li *linkedin.Fetcher) http.Handler {
+	return newMuxWithBoards(store, staticFS, li, nil)
+}
+
+// newMuxWithBoards builds the mux with both seams injected: the LinkedIn
+// fetcher and the boards.toml loader backing GET /api/companies. A nil
+// loadBoards means "no boards file" — the endpoint serves an empty list.
+func newMuxWithBoards(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, loadBoards func() ([]config.BoardEntry, error)) http.Handler {
 	mux := http.NewServeMux()
 
 	// Read-only API
@@ -60,6 +74,9 @@ func newMuxWithLinkedIn(store db.Store, staticFS fs.FS, li *linkedin.Fetcher) ht
 	mux.HandleFunc("POST /api/profile/import-linkedin", handleImportLinkedIn(store, li))
 	mux.HandleFunc("GET /api/settings", handleGetSettings(store))
 	mux.HandleFunc("PATCH /api/settings", handleUpdateSettings(store))
+
+	// Companies — the boards.toml monitoring surface (WP-149).
+	mux.HandleFunc("GET /api/companies", handleListCompanies(store, loadBoards))
 
 	// Postings review queue
 	mux.HandleFunc("GET /api/postings", handleListPostings(store))
@@ -93,7 +110,7 @@ func Start(cfg Config) error {
 		return fmt.Errorf("static subfs: %w", err)
 	}
 
-	mux := newMux(cfg.DB, staticFS)
+	mux := newMuxWithBoards(cfg.DB, staticFS, linkedin.New(), cfg.LoadBoards)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", cfg.Port)
 	server := &http.Server{
