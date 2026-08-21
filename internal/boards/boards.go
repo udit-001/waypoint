@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"time"
 
 	"github.com/udit-001/waypoint/internal/scraper"
 )
@@ -91,4 +92,18 @@ func DetectProvider(b Board) (Provider, *DetectHit, error) {
 		}
 	}
 	return nil, nil, ErrNotMatched
+}
+
+// Probe is the verify gate shared by 'boards add' and 'discover add':
+// fetch page 1 (capped at five results) and report how many postings
+// answered. A board that probes is live; one that errors never gets
+// saved. Two minutes covers slow vendors without hanging the CLI.
+func Probe(ctx context.Context, p Provider, b Board, hit *DetectHit) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	results, err := p.Fetch(ctx, b, *hit, FetchOpts{MaxPages: 1, Limit: 5})
+	if err != nil {
+		return 0, err
+	}
+	return len(results), nil
 }

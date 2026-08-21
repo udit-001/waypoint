@@ -7,8 +7,9 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// Candidate statuses — the discovery ledger's review vocabulary
-// (add/dismiss lands with WP-151).
+// Candidate statuses — the discovery ledger's review vocabulary.
+// suggested: awaiting a decision; added: promoted into boards.toml
+// (WP-151); dismissed: tombstone, never re-suggested.
 const (
 	StatusCandidateSuggested = "suggested"
 	StatusCandidateAdded     = "added"

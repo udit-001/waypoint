@@ -115,9 +115,7 @@ Exit non-zero when no provider claims the URL or verification fails.`,
 			return fmt.Errorf("no provider matched %s — supported: greenhouse, workday, lever, bamboohr", url)
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		results, err := p.Fetch(ctx, b, *hit, boards.FetchOpts{MaxPages: 1, Limit: 5})
+		fetched, err := boards.Probe(context.Background(), p, b, hit)
 		if err != nil {
 			if jsonOut {
 				printJSON(map[string]any{"meta": map[string]any{
@@ -149,11 +147,11 @@ Exit non-zero when no provider claims the URL or verification fails.`,
 		if jsonOut {
 			printJSON(map[string]any{"meta": map[string]any{
 				"board": entry.Name, "provider": p.Name(), "verified": true,
-				"fetched": len(results),
+				"fetched": fetched,
 			}})
 			return nil
 		}
-		fmt.Printf("  Added %s (provider: %s, verified: %d jobs on first page)\n", entry.Name, p.Name(), len(results))
+		fmt.Printf("  Added %s (provider: %s, verified: %d jobs on first page)\n", entry.Name, p.Name(), fetched)
 		return nil
 	},
 }

@@ -13,28 +13,18 @@ import (
 	"github.com/udit-001/waypoint/internal/db"
 )
 
-// verifyBoard is the seam between discover add and the network: fetch
-// page 1 to prove the board answers before it lands in boards.toml.
-// Tests stub this — identical pattern to runDiscovery.
+// verifyBoard is the seam between discover add and the network: a thin
+// wrapper over boards.Probe (the shared verify gate) so CLI tests can
+// stub it — identical pattern to runDiscovery.
 var verifyBoard = func(p boards.Provider, b boards.Board, hit *boards.DetectHit) (int, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	results, err := p.Fetch(ctx, b, *hit, boards.FetchOpts{MaxPages: 1, Limit: 5})
-	if err != nil {
-		return 0, err
-	}
-	return len(results), nil
+	return boards.Probe(context.Background(), p, b, hit)
 }
 
 // discoverReviewCmd is shared plumbing for `discover add|dismiss`: load
-// the candidate by id, apply the review transition, report.
-//
-// Add promotes the candidate into boards.toml through the same verify
-// gate as `boards add` (a board only lands when its API answers), then
-// marks it added — the next sweep fetches its postings with no further
-// steps. Dismiss only flips status: a tombstone discovery never
-// re-suggests (run filters decided companies), per the design lock-in.
-func discoverReviewCmd(use, short string, apply func(cand db.CompanyCandidate) (string, error)) *cobra.Command {
+// the candidate by id, apply the review transition, report. The target
+// status is passed explicitly — the command's Use string must never
+// decide a database write.
+func discoverReviewCmd(use, short, status string, apply func(cand db.CompanyCandidate) (string, error)) *cobra.Command {
 	return &cobra.Command{
 		Use:   use,
 		Short: short,
@@ -72,13 +62,14 @@ func discoverReviewCmd(use, short string, apply func(cand db.CompanyCandidate) (
 
 			detail, err := apply(*cand)
 			if err != nil {
+				if jsonOut {
+					printJSON(map[string]any{"meta": map[string]any{
+						"id": id, "name": cand.Name, "updated": false, "status": status, "error": err.Error(),
+					}})
+				}
 				return formatError(fmt.Sprintf("%s %s", use, cand.Name), err)
 			}
 
-			status := db.StatusCandidateDismissed
-			if strings.HasPrefix(use, "add") {
-				status = db.StatusCandidateAdded
-			}
 			if jsonOut {
 				printJSON(map[string]any{"meta": map[string]any{
 					"id": id, "name": cand.Name, "updated": true, "status": status, "detail": detail,
@@ -94,6 +85,7 @@ func discoverReviewCmd(use, short string, apply func(cand db.CompanyCandidate) (
 var discoverAddCmd = discoverReviewCmd(
 	"add <id>",
 	"Promote a discovered company into boards.toml",
+	db.StatusCandidateAdded,
 	func(cand db.CompanyCandidate) (string, error) {
 		bf, cfg, err := loadBoardsStore()
 		if err != nil {
@@ -141,7 +133,7 @@ var discoverAddCmd = discoverReviewCmd(
 			if err != nil {
 				return "", fmt.Errorf("verification failed for %s: %w", b.URL, err)
 			}
-			fetched = n
+			fetched += n
 
 			entry.Provider = p.Name()
 			bf.Upsert(entry)
@@ -180,6 +172,7 @@ func candidateBoardName(name string) string {
 var discoverDismissCmd = discoverReviewCmd(
 	"dismiss <id>",
 	"Tombstone a discovered company so it is not suggested again",
+	db.StatusCandidateDismissed,
 	func(cand db.CompanyCandidate) (string, error) {
 		if err := store.SetCandidateStatus(cand.ID, db.StatusCandidateDismissed); err != nil {
 			return "", err
