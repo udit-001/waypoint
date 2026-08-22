@@ -24,10 +24,11 @@ var verifyBoard = func(p boards.Provider, b boards.Board, hit *boards.DetectHit)
 // the candidate by id, apply the review transition, report. The target
 // status is passed explicitly — the command's Use string must never
 // decide a database write.
-func discoverReviewCmd(use, short, status string, apply func(cand db.CompanyCandidate) (string, error)) *cobra.Command {
+func discoverReviewCmd(use, short, long, status string, apply func(cand db.CompanyCandidate) (string, error)) *cobra.Command {
 	return &cobra.Command{
 		Use:   use,
 		Short: short,
+		Long:  long,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id, err := strconv.ParseInt(args[0], 10, 64)
@@ -85,6 +86,21 @@ func discoverReviewCmd(use, short, status string, apply func(cand db.CompanyCand
 var discoverAddCmd = discoverReviewCmd(
 	"add <id>",
 	"Promote a discovered company into boards.toml",
+	`Promote one suggested candidate into boards.toml. Ids come from
+'waypoint discover run' (candidates[].id in JSON; the ID column in the
+table).
+
+Each board runs the same verify gate as 'boards add': page 1 is fetched
+before anything is written, so only answering boards land. The entry is
+saved enabled — the next 'boards sweep' picks up its postings with no
+further steps — and the candidate becomes "added".
+
+No-ops and conflicts:
+  already-watched URL   nothing happens; the candidate stays "suggested"
+  same-name board       fails — an existing board's URL is never replaced
+
+The JSON meta {id, name, updated, status, detail|error} reports every
+outcome on every exit path. Add is done when meta.status is "added".`,
 	db.StatusCandidateAdded,
 	func(cand db.CompanyCandidate) (string, error) {
 		bf, cfg, err := loadBoardsStore()
@@ -172,6 +188,13 @@ func candidateBoardName(name string) string {
 var discoverDismissCmd = discoverReviewCmd(
 	"dismiss <id>",
 	"Tombstone a discovered company so it is not suggested again",
+	`Tombstone one suggested candidate: its status becomes "dismissed",
+discovery stops suggesting the company on future runs, and boards.toml
+is untouched. Decisions are durable — a dismissed name returns only if
+the underlying data is re-seeded.
+
+The JSON meta {id, name, updated, status} reports the outcome. Dismiss
+is done when meta.status is "dismissed".`,
 	db.StatusCandidateDismissed,
 	func(cand db.CompanyCandidate) (string, error) {
 		if err := store.SetCandidateStatus(cand.ID, db.StatusCandidateDismissed); err != nil {

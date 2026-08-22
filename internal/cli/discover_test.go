@@ -115,6 +115,12 @@ func TestDiscoverRun_json(t *testing.T) {
 	if got := payload.Candidates[0]["status"]; got != db.StatusCandidateSuggested {
 		t.Errorf("status = %v, want suggested", got)
 	}
+	// The id is the run→add/dismiss handoff: without it in the output,
+	// an agent has nothing to pass to the review verbs.
+	id, ok := payload.Candidates[0]["id"].(float64)
+	if !ok || id < 1 {
+		t.Errorf("candidates[0].id = %v, want a positive row id", payload.Candidates[0]["id"])
+	}
 }
 
 // TestDiscoverRun_emptyResult prints a friendly line and no table.

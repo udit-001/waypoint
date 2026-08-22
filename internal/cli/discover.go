@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,9 @@ never surfaces again. Review vocabulary: suggested (awaiting a decision),
 added (promoted to boards.toml), dismissed (permanently skipped).`,
 }
 
+// strconvFormatID renders a candidate id for the table.
+func strconvFormatID(n int64) string { return strconv.FormatInt(n, 10) }
+
 // boardShort renders one board compactly for table output. The token
 // that matters differs per provider: tenant for Eightfold, site slug
 // for Workday, board token/org for the rest.
@@ -53,6 +57,16 @@ func boardShort(l discovery.BoardLink) string {
 var discoverRunCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Probe the facet list and persist discovered companies",
+	Long: `Probe each facet company's careers pages and persist the ones with
+working ATS boards as candidates (status "suggested") for review.
+
+Already-watched board URLs are filtered out, and companies with a
+review decision are never re-probed — re-runs surface only genuinely
+new suggestions, without duplicating rows or resetting decisions.
+
+Each candidate reports an id plus its verified board URL(s); those ids
+are what 'discover add' and 'discover dismiss' consume. Run is done
+when every suggestion has been reviewed — nothing remains suggested.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		bf, _, err := loadBoardsStore()
 		if err != nil {
@@ -127,6 +141,7 @@ var discoverRunCmd = &cobra.Command{
 		}
 
 		type row struct {
+			ID     int64               `json:"id"`
 			Name   string              `json:"name"`
 			Domain string              `json:"domain"`
 			Facet  string              `json:"facet"`
@@ -136,8 +151,9 @@ var discoverRunCmd = &cobra.Command{
 		out := make([]row, 0, len(found))
 		for _, c := range found {
 			r := row{Name: c.Name, Domain: c.Domain, Facet: c.Facet, Status: statusByName[c.Name]}
-			if bs, ok := lookupCandidateBoards(persistedAfter, c.Name); ok {
-				r.Boards = bs
+			if pc, ok := findCandidate(persistedAfter, c.Name); ok {
+				r.ID = pc.ID
+				r.Boards = pc.Boards
 			}
 			out = append(out, r)
 		}
@@ -162,22 +178,22 @@ var discoverRunCmd = &cobra.Command{
 			for _, b := range r.Boards {
 				shorts = append(shorts, boardShort(discovery.BoardLink{Provider: b.Provider, URL: b.URL}))
 			}
-			rows = append(rows, []string{r.Name, r.Facet, strings.Join(shorts, ", "), r.Status})
+			rows = append(rows, []string{strconvFormatID(r.ID), r.Name, r.Facet, strings.Join(shorts, ", "), r.Status})
 		}
-		fmt.Println(formatTable([]string{"Company", "Facet", "Boards", "Status"}, rows))
+		fmt.Println(formatTable([]string{"ID", "Company", "Facet", "Boards", "Status"}, rows))
 		fmt.Printf("\n  %d company(ies) discovered and saved to the discovery ledger.\n\n", len(out))
 		return nil
 	},
 }
 
-// lookupCandidateBoards finds one candidate's persisted boards by name.
-func lookupCandidateBoards(cands []db.CompanyCandidate, name string) ([]db.CandidateBoard, bool) {
+// findCandidate locates one persisted candidate by name.
+func findCandidate(cands []db.CompanyCandidate, name string) (db.CompanyCandidate, bool) {
 	for _, c := range cands {
 		if c.Name == name {
-			return c.Boards, true
+			return c, true
 		}
 	}
-	return nil, false
+	return db.CompanyCandidate{}, false
 }
 
 func init() {
