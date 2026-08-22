@@ -570,8 +570,6 @@ import { setPage } from '../stores/page.svelte.js';
   {:else}
   <!-- Job Search Preferences — the brief drives the agent's search; it is
        configuration, so it lives on its own tab. -->
-  // Job Search Preferences — the brief drives the agent's search; it is
-  // configuration, so it lives on its own tab.
   {#if briefData}
     <Card hover={false}>
       {#snippet pills(label, items)}
