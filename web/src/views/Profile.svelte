@@ -20,6 +20,19 @@ import { setPage } from '../stores/page.svelte.js';
   // brief. The active tab persists to ?tab= + localStorage (lib/profileTabs).
   const tabs = getProfileTabs();
   const prefsStatus = $derived(briefStatus(briefData));
+  // Whole-tab empty: nothing settled in preferences OR constraints. Read
+  // mode then shows one proper empty state instead of two hollow sections.
+  const briefEmpty = $derived(
+    !!briefData &&
+    !briefData.preferences.remote &&
+    !(briefData.preferences.location_preference ?? []).length &&
+    !(briefData.preferences.companies ?? []).length &&
+    !(briefData.preferences.avoid_companies ?? []).length &&
+    !(briefData.preferences.keywords ?? []).length &&
+    !(briefData.preferences.dealbreakers ?? []).length &&
+    !briefData.constraints.visa_sponsorship &&
+    !(briefData.constraints.salary_floor ?? []).length
+  );
 
   // View-mode helpers (WP-117): clean read-only render. Empty fields hide;
   // each empty section shows one quiet line.
@@ -557,6 +570,8 @@ import { setPage } from '../stores/page.svelte.js';
   {:else}
   <!-- Job Search Preferences — the brief drives the agent's search; it is
        configuration, so it lives on its own tab. -->
+  // Job Search Preferences — the brief drives the agent's search; it is
+  // configuration, so it lives on its own tab.
   {#if briefData}
     <Card hover={false}>
       {#snippet pills(label, items)}
@@ -593,6 +608,22 @@ import { setPage } from '../stores/page.svelte.js';
         </div>
       </div>
 
+      {#if briefEmpty && !page.editing}
+        <!-- Whole-tab empty state: nothing settled anywhere. One honest
+             block instead of two hollow sections — what this tab is for,
+             why it matters, and the CTA that fixes it. -->
+        <div class="text-center py-14">
+          <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('target', 48)}</div>
+          <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Your search has no preferences yet</p>
+          <p class="text-xs text-slate-400 dark:text-slate-500 mt-1.5 max-w-sm mx-auto">
+            These drive the search — every posting is judged against them before it reaches Matches.
+          </p>
+          <button
+            class="mt-5 px-4 py-2 text-sm font-medium bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 rounded-lg hover:opacity-90 transition-colors cursor-pointer"
+            onclick={() => setEditing(true)}
+          >Set preferences</button>
+        </div>
+      {:else}
       <!-- Preferences — primary, chip-editable -->
       <section>
         <h4 class="wp-section-title">Preferences</h4>
@@ -734,6 +765,7 @@ import { setPage } from '../stores/page.svelte.js';
         {/if}
         {/if}
       </section>
+      {/if}
     </Card>
   {:else if api.brief.loading}
     <Spinner text="Loading brief..." />

@@ -497,7 +497,7 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.BaseURL != "https://opencode.ai/zen" {
 		t.Errorf("BaseURL = %q", cfg.BaseURL)
 	}
-	if cfg.Model != "deepseek-v4-flash-free" {
+	if cfg.Model != "x-preview-f-free" {
 		t.Errorf("Model = %q (default must be the free tier)", cfg.Model)
 	}
 	if cfg.FallbackModel != "" {

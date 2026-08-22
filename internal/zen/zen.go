@@ -74,7 +74,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		BaseURL:   "https://opencode.ai/zen",
-		Model:     "deepseek-v4-flash-free",
+		Model:     "x-preview-f-free",
 		UserAgent: "opencode/" + version.Version,
 	}
 }
