@@ -20,6 +20,11 @@ import { setPage } from '../stores/page.svelte.js';
   let zenKeySaving = $state(false);
   let zenKeySaved = $state(false);
   let zenKeyError = $state(null);
+  let exaKeySet = $state(false);
+  let exaKeyValue = $state('');
+  let exaKeySaving = $state(false);
+  let exaKeySaved = $state(false);
+  let exaKeyError = $state(null);
   let autopilotToggling = $state(false);
 
   onMount(async () => {
@@ -38,9 +43,38 @@ import { setPage } from '../stores/page.svelte.js';
         autopilotCadence = data.cadence || 6;
         lastRun = data.lastRun;
         zenKeySet = !!data.zenKeySet;
+        exaKeySet = !!data.exaKeySet;
       }
     } catch {}
   });
+
+  async function saveExaKey() {
+    exaKeyError = null;
+    if (!exaKeyValue.trim()) {
+      exaKeyError = 'Paste a key first.';
+      return;
+    }
+    exaKeySaving = true;
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exa_api_key: exaKeyValue.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      exaKeySet = true;
+      exaKeyValue = '';
+      exaKeySaved = true;
+      setTimeout(() => { exaKeySaved = false; }, 2000);
+    } catch (e) {
+      exaKeyError = e.message;
+    } finally {
+      exaKeySaving = false;
+    }
+  }
 
   async function toggleAutopilot() {
     if (autopilotToggling) return;
@@ -286,6 +320,40 @@ import { setPage } from '../stores/page.svelte.js';
     <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">
       Get one at <a href="https://opencode.ai/auth" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-300 underline">opencode.ai/auth</a> → Billing → copy the key (starts with <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">oc_</code>). Prepaid credits, pay per request.
     </p>
+  </Card>
+
+  <!-- Exa API key -->
+  <Card hover={false}>
+    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
+      {@html iconSvg('search', 20)} Exa API key
+    </h3>
+    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Powers company discovery: expands your brief into facets and enumerates companies per facet. Without it, discovery runs on the built-in starter list.</p>
+    {#if exaKeySet}
+      <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
+        {@html iconSvg('check-circle', 14)}
+        Key saved — brief-driven discovery is active.
+      </p>
+    {/if}
+    <div class="flex gap-2">
+      <input
+        type="password"
+        bind:value={exaKeyValue}
+        placeholder={exaKeySet ? 'Replace saved key…' : 'exa key'}
+        autocomplete="off"
+        aria-label="Exa API key"
+        maxlength="128"
+        class="flex-1 min-w-0 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-slate-400"
+      />
+      <button
+        class="px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"
+        disabled={exaKeySaving}
+        onclick={saveExaKey}
+      >{exaKeySaving ? 'Saving…' : exaKeySaved ? 'Saved' : 'Save'}</button>
+    </div>
+    {#if exaKeyError}
+      <p class="text-xs text-red-600 mt-2">{exaKeyError}</p>
+    {/if}
+    <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">Also needs a Zen API key — discovery expands the brief with Zen, then enumerates with Exa (~30–60 calls per run).</p>
   </Card>
 
   <!-- CLI Reference -->

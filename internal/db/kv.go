@@ -1,7 +1,9 @@
 package db
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -87,4 +89,43 @@ func (s *SQLiteStore) NewPostingCounts() (map[string]int, error) {
 		out[company] = n
 	}
 	return out, rows.Err()
+}
+
+const kvFacetPrefix = "discovery_facets."
+
+// SaveDiscoveryFacets caches the expanded facet list under a brief hash,
+// so a repeat discovery run with an unchanged brief skips the LLM
+// expansion (WP-152). Newest write wins.
+func (s *SQLiteStore) SaveDiscoveryFacets(hash string, facets []string) error {
+	raw, err := json.Marshal(facets)
+	if err != nil {
+		return fmt.Errorf("marshal discovery facets: %w", err)
+	}
+	_, err = s.Exec(
+		`INSERT INTO kv (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+		kvFacetPrefix+hash, string(raw),
+	)
+	if err != nil {
+		return fmt.Errorf("save discovery facets: %w", err)
+	}
+	return nil
+}
+
+// DiscoveryFacets returns the cached facet list for a brief hash.
+// found is false when nothing was cached yet.
+func (s *SQLiteStore) DiscoveryFacets(hash string) ([]string, bool, error) {
+	var raw string
+	err := s.Get(&raw, `SELECT value FROM kv WHERE key = ?`, kvFacetPrefix+hash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("load discovery facets: %w", err)
+	}
+	var facets []string
+	if err := json.Unmarshal([]byte(raw), &facets); err != nil {
+		return nil, false, fmt.Errorf("unmarshal discovery facets: %w", err)
+	}
+	return facets, true, nil
 }

@@ -12,6 +12,7 @@ package exa
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -231,4 +232,109 @@ func Summarize(raw string, limit int) string {
 		out = out[:limit] + "…"
 	}
 	return out
+}
+
+// CompanyHit is one enumerated company from a facet search: display name
+// and the source URL it was found at (domain derived on demand).
+type CompanyHit struct {
+	Name string
+	URL  string
+}
+
+// SearchCompanies enumerates companies for a facet via
+// `category:company` search, returning raw hits (name + URL) for the
+// discovery pipeline to dedup and probe. Unlike SearchCompany (which
+// summarizes one known company) this lists the universe. Cached per
+// facet; each uncached call spends budget.
+func (c *Client) SearchCompanies(ctx context.Context, facet string, numResults int) ([]CompanyHit, error) {
+	facet = strings.TrimSpace(facet)
+	if facet == "" {
+		return nil, fmt.Errorf("exa: empty facet")
+	}
+	if numResults <= 0 || numResults > 25 {
+		numResults = 15
+	}
+
+	c.mu.Lock()
+	key := "facet:" + strings.ToLower(facet)
+	if raw, ok := c.searches[key]; ok {
+		c.mu.Unlock()
+		return parseCompanyHits(raw)
+	}
+	c.mu.Unlock()
+
+	if err := c.spend(); err != nil {
+		return nil, err
+	}
+
+	raw, err := c.callTool(ctx, "web_search_exa", map[string]any{
+		"query":      fmt.Sprintf("category:company %s", facet),
+		"numResults": numResults,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("exa search: %w", err)
+	}
+
+	hits, err := parseCompanyHits(raw)
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	c.searches[key] = raw
+	c.mu.Unlock()
+	return hits, nil
+}
+
+// parseCompanyHits extracts companies from raw Exa search output. The
+// hosted tool's text format varies between JSON arrays and line blocks
+// ("Title:" / "URL:"), so both shapes are handled.
+func parseCompanyHits(raw string) ([]CompanyHit, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, fmt.Errorf("exa search: empty body")
+	}
+
+	// Shape 1: a JSON array of result objects.
+	var jsonHits []struct {
+		Title string `json:"title"`
+		URL   string `json:"url"`
+	}
+	if err := json.Unmarshal([]byte(raw), &jsonHits); err == nil && len(jsonHits) > 0 {
+		out := make([]CompanyHit, 0, len(jsonHits))
+		for _, h := range jsonHits {
+			if h.Title == "" && h.URL == "" {
+				continue
+			}
+			out = append(out, CompanyHit{Name: h.Title, URL: h.URL})
+		}
+		if len(out) > 0 {
+			return out, nil
+		}
+	}
+
+	// Shape 2: line blocks with Title:/URL: pairs.
+	var out []CompanyHit
+	var cur CompanyHit
+	flush := func() {
+		if cur.Name != "" || cur.URL != "" {
+			out = append(out, cur)
+		}
+		cur = CompanyHit{}
+	}
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "{") || strings.HasPrefix(line, "["):
+			continue // metadata lines Summarize also skips
+		case strings.HasPrefix(strings.ToLower(line), "title:"):
+			flush()
+			cur.Name = strings.TrimSpace(line[6:])
+		case strings.HasPrefix(strings.ToLower(line), "url:"):
+			cur.URL = strings.TrimSpace(line[4:])
+		}
+	}
+	flush()
+	if len(out) == 0 {
+		return nil, fmt.Errorf("exa search: no companies in response")
+	}
+	return out, nil
 }

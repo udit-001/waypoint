@@ -94,4 +94,9 @@ type Store interface {
 	SetBoardSweepState(board string, st BoardSweepState) error
 	GetBoardSweepStates() (map[string]BoardSweepState, error)
 	NewPostingCounts() (map[string]int, error)
+
+	// Facet cache (WP-152) — the expanded facet list keyed by brief
+	// hash, so repeat discovery runs skip the LLM expansion.
+	SaveDiscoveryFacets(hash string, facets []string) error
+	DiscoveryFacets(hash string) ([]string, bool, error)
 }

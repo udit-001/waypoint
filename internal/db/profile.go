@@ -98,6 +98,7 @@ type Settings struct {
 	AutopilotCadence  int    `db:"autopilot_cadence" json:"autopilotCadence"` // hours; 0 = default (6)
 	AutopilotProvider string `db:"autopilot_provider" json:"autopilotProvider"`
 	ZenAPIKey         string `db:"zen_api_key" json:"zenApiKey"`
+	ExaAPIKey         string `db:"exa_api_key" json:"exaApiKey"`
 }
 
 // defaultSettings holds the Go-level defaults returned when no settings row
@@ -197,8 +198,9 @@ func (s *SQLiteStore) GetSettings() (Settings, error) {
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_cadence INTEGER NOT NULL DEFAULT 6`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_provider TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN zen_api_key TEXT DEFAULT ''`)
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN exa_api_key TEXT DEFAULT ''`)
 
-	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key FROM settings WHERE id = 1`)
+	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key, exa_api_key FROM settings WHERE id = 1`)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return defaultSettings, nil
@@ -224,6 +226,7 @@ func (s *SQLiteStore) UpsertSettings(updates map[string]any) error {
 		"autopilot_cadence":  "autopilot_cadence",
 		"autopilot_provider": "autopilot_provider",
 		"zen_api_key":        "zen_api_key",
+		"exa_api_key":        "exa_api_key",
 	}
 	var setClauses []string
 	var args []any

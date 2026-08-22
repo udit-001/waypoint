@@ -169,3 +169,46 @@ func TestDiscoverRun_skipsDecidedCandidates(t *testing.T) {
 		}
 	}
 }
+
+// TestDiscoverRun_realEnumeration: when enumeration is wired (both keys
+// set), run consumes its facets, tags the source in meta, and persists
+// candidates under the joined facet label.
+func TestDiscoverRun_realEnumeration(t *testing.T) {
+	setupBoardsTest(t)
+	// PersistentPreRunE opens the real database — mirror 'waypoint init'
+	// so its schema exists.
+	if cfg, err := config.Load(); err != nil {
+		t.Fatal(err)
+	} else if s, err := db.Open(config.DBPath(cfg)); err != nil {
+		t.Fatal(err)
+	} else if err := s.RunMigrations(""); err != nil {
+		t.Fatalf("migrate: %v", err)
+	} else {
+		s.Close()
+	}
+	fake := store.(*db.FakeStore)
+	fake.Settings.ZenAPIKey = "k"
+	fake.Settings.ExaAPIKey = "k"
+
+	origEnum := enumerateFacets
+	enumerateFacets = func(_ context.Context, _ db.Store) ([]discovery.Facet, string, error) {
+		return []discovery.Facet{{Name: "enumerated", Companies: []discovery.Company{
+			{Name: "Arcesium", Domain: "arcesium.com", Facets: "payments, fininfra"},
+		}}}, "brief+exa", nil
+	}
+	stubDiscover(t, []discovery.Candidate{{
+		Name: "Arcesium", Domain: "arcesium.com", Facet: "payments, fininfra",
+		Boards: []discovery.BoardLink{{Provider: "greenhouse", URL: "https://job-boards.greenhouse.io/arcesium/"}},
+	}})
+	t.Cleanup(func() { enumerateFacets = origEnum })
+
+	out, err := runCmd(t, "discover", "run", "--json")
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	for _, want := range []string{`"source": "brief+exa"`, `"facet": "payments, fininfra"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("json missing %q in:\n%s", want, out)
+		}
+	}
+}

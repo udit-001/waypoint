@@ -567,3 +567,59 @@ func ProjectID(dbPath string) string {
 	h := sha1.Sum([]byte(dbPath))
 	return hex.EncodeToString(h[:])
 }
+
+// Complete runs one user turn against a system prompt in a fresh,
+// tool-free conversation and returns the assistant text. Generic
+// single-turn completion for non-curation jobs — facet expansion
+// (WP-152). Fatal errors (bad key, out of credits) surface as *Error.
+func (c *Client) Complete(ctx context.Context, system, user string) (string, error) {
+	body := map[string]any{
+		"model": c.cfg.Model,
+		"messages": []message{
+			{Role: "system", Content: system},
+			{Role: "user", Content: user},
+		},
+		"max_tokens": maxTokens,
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return "", &Error{Msg: "marshal request: " + err.Error()}
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST",
+		c.baseURL+"/v1/chat/completions", bytes.NewReader(raw))
+	if err != nil {
+		return "", &Error{Msg: "build request: " + err.Error()}
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
+	req.Header.Set("User-Agent", c.cfg.UserAgent)
+	if c.cfg.ProjectID != "" {
+		req.Header.Set("x-opencode-project", c.cfg.ProjectID)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", &Error{Msg: "request: " + err.Error()}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var out completionResponse
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out)
+		msg := "request failed"
+		if out.Error != nil && out.Error.Message != "" {
+			msg = out.Error.Message
+		}
+		fatal := resp.StatusCode == 401 || resp.StatusCode == 402 || resp.StatusCode == 403
+		return "", &Error{Status: resp.StatusCode, Fatal: fatal, Msg: msg}
+	}
+
+	var out completionResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+		return "", &Error{Msg: "decode response: " + err.Error()}
+	}
+	if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
+		return "", &Error{Msg: "empty completion"}
+	}
+	return out.Choices[0].Message.Content, nil
+}

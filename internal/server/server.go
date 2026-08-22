@@ -519,6 +519,7 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 			"enabled":   settings.AutopilotEnabled == 1,
 			"cadence":   cadence,
 			"zenKeySet": settings.ZenAPIKey != "",
+			"exaKeySet": settings.ExaAPIKey != "",
 			"lastRun":   nil,
 		}
 		if hasRun {

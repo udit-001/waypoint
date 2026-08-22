@@ -62,7 +62,7 @@ Company ATS boards (Greenhouse, Workday, Lever, BambooHR, Eightfold) — one com
 
 ## Discover
 
-Maps the company universe onto watchable boards automatically. Each candidate company's careers pages are probed, ATS board links extracted (Greenhouse, Lever, Ashby, Workday with site slug, Eightfold), and survivors verified live through the same detection `boards add` uses. Already-watched boards are filtered out — a company you track never surfaces again. Candidates persist in the database across runs; re-runs never duplicate rows or reset review decisions.
+Maps the company universe onto watchable boards automatically. With `zen_api_key` + `exa_api_key` set (Settings), the brief expands into facet labels via Zen (cached by brief hash — unchanged briefs skip the LLM call), each facet enumerates companies via Exa `category:company` search (≤60 calls/run), deduped by domain with all source facets listed. Without keys it falls back to the built-in starter facets. Each candidate company's careers pages are probed, ATS board links extracted (Greenhouse, Lever, Ashby, Workday with site slug, Eightfold), and survivors verified live through the same detection `boards add` uses. Already-watched boards are filtered out — a company you track never surfaces again. Candidates persist in the database across runs; re-runs never duplicate rows or reset review decisions.
 
 | Command | Description |
 |---------|-------------|

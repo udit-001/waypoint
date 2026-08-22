@@ -31,6 +31,7 @@ type FakeStore struct {
 	changeEvents  []ChangeEvent
 	changeEventID int64
 	boardSweeps   map[string]BoardSweepState
+	facetCache    map[string][]string
 	mu            sync.Mutex
 
 	nextJobID    int64
@@ -587,6 +588,9 @@ func (f *FakeStore) UpsertSettings(updates map[string]any) error {
 	if v, ok := updates["zen_api_key"]; ok {
 		f.Settings.ZenAPIKey = fmt.Sprint(v)
 	}
+	if v, ok := updates["exa_api_key"]; ok {
+		f.Settings.ExaAPIKey = fmt.Sprint(v)
+	}
 	return nil
 }
 
@@ -843,4 +847,23 @@ func (f *FakeStore) NewPostingCounts() (map[string]int, error) {
 		out[strings.ToLower(p.Result.Company)]++
 	}
 	return out, nil
+}
+
+// --- Facet cache ---
+
+func (f *FakeStore) SaveDiscoveryFacets(hash string, facets []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.facetCache == nil {
+		f.facetCache = make(map[string][]string)
+	}
+	f.facetCache[hash] = facets
+	return nil
+}
+
+func (f *FakeStore) DiscoveryFacets(hash string) ([]string, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	facets, ok := f.facetCache[hash]
+	return facets, ok, nil
 }

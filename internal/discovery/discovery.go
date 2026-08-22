@@ -27,6 +27,9 @@ import (
 type Company struct {
 	Name   string `json:"name"`
 	Domain string `json:"domain"`
+	// Facets is the comma-joined facet labels a company was found under
+	// (set by enumeration dedup, WP-152). Empty for plain facet data.
+	Facets string `json:"facets,omitempty"`
 }
 
 // Facet is a named slice of the company universe (e.g. "ratings",
@@ -172,7 +175,11 @@ func Discover(ctx context.Context, facets []Facet, watched map[string]bool, opts
 	var jobs []job
 	for _, f := range facets {
 		for _, c := range f.Companies {
-			jobs = append(jobs, job{facet: f.Name, c: c})
+			label := c.Facets
+			if label == "" {
+				label = f.Name // enumerated companies carry their joined facets
+			}
+			jobs = append(jobs, job{facet: label, c: c})
 		}
 	}
 
