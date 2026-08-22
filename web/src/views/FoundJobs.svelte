@@ -134,13 +134,18 @@
       error = null;
     }
     try {
+      const previousSelection = selected;
       if (silent) {
         await api.postings.refresh();
       } else {
         await api.postings.ensure();
       }
       queue = (api.postings.value || []).filter(p => p.status === 'shortlisted');
-      selected = new Set();
+      // Keep the reviewer's selection across live refetches — a background
+      // sweep landing mid-review must not silently drop checked rows.
+      // Selection only shrinks when its rows actually left the queue.
+      const urls = new Set(queue.map(q => q.result.url));
+      selected = new Set([...previousSelection].filter(u => urls.has(u)));
     } catch (e) {
       if (!silent) error = e.message;
     } finally {
@@ -666,14 +671,19 @@
   .description-content :global(ol) { margin: 0 0 6px; padding-left: 18px; }
   .description-content :global(li) { margin-bottom: 2px; }
   .description-content :global(a) { color: #2563eb; text-decoration: underline; }
-  :global(.dark) .description-content :global(a) { color: #93c5fd; }
+  /* Theme is an attribute ([data-theme="dark"]), not a class — the
+     Tailwind dark: variant is wired via @custom-variant to the same
+     attribute. These hand-written rules must match that convention or
+     they silently never apply (links rendered light-blue on the dark
+     panel at 2.4:1 — WCAG fail). */
+  :global([data-theme="dark"]) .description-content :global(a) { color: #93c5fd; }
   .description-content :global(code) {
     background: var(--color-slate-100);
     border-radius: 4px;
     padding: 1px 4px;
     font-size: 0.75rem;
   }
-  :global(.dark) .description-content :global(code) { background: var(--color-slate-800); }
+  :global([data-theme="dark"]) .description-content :global(code) { background: var(--color-slate-800); }
   .description-content :global(table) { border-collapse: collapse; margin: 6px 0; font-size: 0.7rem; }
   .description-content :global(th),
   .description-content :global(td) { text-align: left; border-bottom: 1px solid var(--color-slate-200); padding: 4px 8px; }
