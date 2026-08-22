@@ -27,13 +27,16 @@ func deliver(title, body string, _ func()) error {
 }
 
 // powershellToast shows a WinRT toast. The script is passed as base64
-// UTF-16LE (-EncodedCommand) so quoting never mangles the copy.
+// UTF-16LE (-EncodedCommand) so shell-level quoting never mangles the
+// copy; inside PowerShell, single quotes are doubled because titles
+// are scraper-sourced content and apostrophes are everywhere.
 func powershellToast(title, body string) error {
+	escape := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
 	script := strings.Join([]string{
 		"[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null",
 		"$t = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)",
-		"$t.GetElementsByTagName('text').Item(0).AppendChild($t.CreateTextNode('" + title + "')) > $null",
-		"$t.GetElementsByTagName('text').Item(1).AppendChild($t.CreateTextNode('" + body + "')) > $null",
+		"$t.GetElementsByTagName('text').Item(0).AppendChild($t.CreateTextNode('" + escape(title) + "')) > $null",
+		"$t.GetElementsByTagName('text').Item(1).AppendChild($t.CreateTextNode('" + escape(body) + "')) > $null",
 		"[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('" + appName + "').Show([Windows.UI.Notifications.ToastNotification]::new($t))",
 	}, "; ")
 	return exec.Command("powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encodePS(script)).Run()

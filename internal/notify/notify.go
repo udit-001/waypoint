@@ -77,8 +77,8 @@ func formatShortlist(n autopilot.ShortlistNotice) (title, body string) {
 	}
 
 	top := n.TopTitle
-	if len(top) > 60 {
-		top = strings.TrimSpace(top[:57]) + "…"
+	if runes := []rune(top); len(runes) > 60 {
+		top = strings.TrimSpace(string(runes[:57])) + "…"
 	}
 	var b strings.Builder
 	b.WriteString("Top pick: ")

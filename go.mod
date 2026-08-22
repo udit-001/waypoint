@@ -5,6 +5,7 @@ go 1.25.10
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
+	github.com/godbus/dbus/v5 v5.2.2
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/kardianos/service v1.3.0
 	github.com/nyaruka/phonenumbers v1.8.1
@@ -19,7 +20,6 @@ require (
 	github.com/JohannesKaufmann/dom v0.3.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.10.2 // indirect
-	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect

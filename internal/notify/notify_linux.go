@@ -3,10 +3,12 @@
 package notify
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -38,8 +40,13 @@ var sendDBus = func(title, body string, onClick func()) error {
 		actions = []string{"default", "Open Waypoint"}
 	}
 
+	// Explicit bound: a hung bus must not stall cycle end (the default
+	// daemon timeout is ~25s).
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	obj := conn.Object(dbusName, dbusPath)
-	call := obj.Call(dbusIface+".Notify", 0,
+	call := obj.CallWithContext(ctx, dbusIface+".Notify", 0,
 		appName, uint32(0), "", title, body, actions,
 		map[string]dbus.Variant{}, int32(-1))
 	if call.Err != nil {
@@ -47,6 +54,9 @@ var sendDBus = func(title, body string, onClick func()) error {
 	}
 	if len(call.Body) > 0 {
 		if id, ok := call.Body[0].(uint32); ok {
+			// Pairing id→click via two atomics is only safe because the
+			// ticker serializes cycles. If sends ever become concurrent,
+			// fold both into one atomic.Pointer[struct].
 			lastID.Store(id)
 			lastClick.Store(&onClick)
 		}

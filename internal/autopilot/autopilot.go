@@ -111,7 +111,7 @@ func Run(ctx context.Context, cfg CycleConfig) db.RunLog {
 	logEntry.PostingsErrored = errored
 
 	// Stage 5: Notify — one nudge per cycle when shortlists exist.
-	notifyShortlist(ctx, cfg, &logEntry, shortlisted)
+	notifyShortlist(ctx, cfg, &logEntry, shortlisted, allPostings)
 
 	// Stage 6: Run log — written by RunLogged by the caller.
 
@@ -513,53 +513,6 @@ func RunLogged(ctx context.Context, cfg CycleConfig) db.RunLog {
 	_ = cfg.Store.AddChangeEvent("runs")
 	entry.ID = id
 	return entry
-}
-
-// Ticker runs the autopilot cycle on a ticker. It blocks until ctx is done.
-func Ticker(ctx context.Context, cfg CycleConfig, store db.Store) {
-	// Get initial settings.
-	settings, _ := store.GetSettings()
-	cadence := time.Duration(settings.AutopilotCadence) * time.Hour
-	if cadence <= 0 {
-		cadence = 6 * time.Hour
-	}
-
-	ticker := time.NewTicker(cadence)
-	defer ticker.Stop()
-
-	log.Printf("autopilot: ticker started (cadence: %s)", cadence)
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("autopilot: ticker stopped")
-			return
-		case <-ticker.C:
-			// Re-read settings in case cadence changed.
-			settings, _ = store.GetSettings()
-			if settings.AutopilotEnabled == 0 {
-				continue
-			}
-
-			newCadence := time.Duration(settings.AutopilotCadence) * time.Hour
-			if newCadence <= 0 {
-				newCadence = 6 * time.Hour
-			}
-			if newCadence != cadence {
-				ticker.Reset(newCadence)
-				cadence = newCadence
-				log.Printf("autopilot: cadence changed to %s", cadence)
-			}
-
-			// Run one cycle.
-			log.Println("autopilot: starting cycle")
-			entry := RunLogged(ctx, cfg)
-
-			log.Printf("autopilot: cycle complete (id=%d, new=%d, shortlisted=%d, dismissed=%d, errored=%d, duration=%dms)",
-				entry.ID, entry.PostingsNew, entry.PostingsShortlisted,
-				entry.PostingsDismissed, entry.PostingsErrored, entry.DurationMs)
-		}
-	}
 }
 
 // --- helpers ---

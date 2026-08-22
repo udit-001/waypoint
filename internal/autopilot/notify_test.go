@@ -155,7 +155,9 @@ func TestBuildNotice_TopScoreWins(t *testing.T) {
 	_ = f.EnrichPosting("https://example.com/low", "", map[string]string{"score": "55"})
 	_ = f.EnrichPosting("https://example.com/high", "", map[string]string{"score": "92"})
 
-	n := buildNotice(context.Background(), f, 2)
+	n := buildNotice(context.Background(), f, 2, map[string]bool{
+		"https://example.com/low": true, "https://example.com/high": true,
+	})
 
 	if n.Count != 2 {
 		t.Errorf("Count = %d, want 2", n.Count)
