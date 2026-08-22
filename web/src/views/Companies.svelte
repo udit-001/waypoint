@@ -15,7 +15,7 @@
   // amber-700 warnings (6.3/7.2). The zero dash is decorative — the count's
   // sr-only text carries the information.
 
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { relTime } from '../lib/format.js';
@@ -25,6 +25,26 @@
   let companies = $state([]);
   let loaded = $state(false);
   let error = $state(null);
+  let acting = $state(new Set()); // board names mid-action
+  let sweepErr = $state({});      // name -> diagnosed failure
+  let confirmRemove = $state(''); // name awaiting removal confirmation
+  let undo = $state(null);        // {entry, timer} for remove undo
+  let undoTimer = null;
+
+  async function refresh() {
+    await api.companies.refresh();
+    companies = api.companies.value || [];
+  }
+
+  function guard(name) {
+    if (acting.has(name)) return false;
+    acting.add(name);
+    return true;
+  }
+  function release(name) {
+    acting.delete(name);
+    acting = new Set(acting);
+  }
 
   onMount(async () => {
     setPage({ title: 'Companies' });
@@ -38,6 +58,80 @@
       loaded = true;
     }
   });
+
+  onDestroy(() => { if (undoTimer) clearTimeout(undoTimer); });
+
+  async function setEnabled(c, enable) {
+    if (!guard(c.name)) return;
+    try {
+      await (enable ? api.resumeCompany(c.name) : api.pauseCompany(c.name));
+      await refresh();
+    } catch (e) {
+      sweepErr = { ...sweepErr, [c.name]: e.message };
+    } finally {
+      release(c.name);
+    }
+  }
+
+  async function removeCompany(c) {
+    if (confirmRemove !== c.name) {
+      confirmRemove = c.name; // two-step: the button asks first
+      setTimeout(() => { if (confirmRemove === c.name) confirmRemove = ''; }, 4000);
+      return;
+    }
+    confirmRemove = '';
+    if (!guard(c.name)) return;
+    try {
+      await api.removeCompany(c.name);
+      const removed = companies.find(x => x.name === c.name);
+      companies = companies.filter(x => x.name !== c.name);
+      if (undoTimer) clearTimeout(undoTimer);
+      undo = { entry: { ...removed }, timer: setTimeout(() => { undo = null; }, 5000) };
+    } catch (e) {
+      sweepErr = { ...sweepErr, [c.name]: e.message };
+    } finally {
+      release(c.name);
+    }
+  }
+
+  async function undoRemove() {
+    if (!undo) return;
+    clearTimeout(undoTimer);
+    const entry = undo.entry;
+    undo = null;
+    try {
+      await api.restoreCompany(entry.name, entry);
+      await refresh();
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
+  async function sweepNow(c) {
+    if (!guard(c.name)) return;
+    sweepErr = { ...sweepErr, [c.name]: null };
+    try {
+      const res = await api.sweepCompany(c.name);
+      if (res.meta?.failed) {
+        sweepErr = { ...sweepErr, [c.name]: res.meta.error + ' — retry in a minute' };
+      } else {
+        showToastCount(c.name, res.meta.new);
+      }
+      await refresh();
+    } catch (e) {
+      sweepErr = { ...sweepErr, [c.name]: e.message };
+    } finally {
+      release(c.name);
+    }
+  }
+
+  let flash = $state(null); // {name, msg} transient per-row success note
+  let flashTimer = null;
+  function showToastCount(name, n) {
+    flash = { name, msg: `+${n} new posting${n === 1 ? '' : 's'}` };
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { flash = null; }, 4000);
+  }
 </script>
 
 {#if !loaded && companies.length === 0}
@@ -61,7 +155,7 @@
     {:else}
       <ul class="divide-y divide-slate-100 dark:divide-slate-700 border-y border-slate-100 dark:border-slate-700">
         {#each companies as c (c.name)}
-          <li class="flex items-center gap-3 py-2.5 px-1 hover:bg-white/40 transition-colors">
+          <li class="flex items-center gap-3 py-2.5 px-1 hover:bg-white/40 transition-colors {c.enabled ? '' : 'opacity-50'}">
             <!-- New postings — accent only when there is news; the zero
                  dash is decorative (sr-only text carries the state) -->
             <span
@@ -89,8 +183,13 @@
               {/if}
             </div>
 
-            <!-- Trust strip -->
+            <!-- Trust strip + per-row action feedback -->
             <div class="ml-auto flex items-center gap-2 shrink-0 text-xs">
+              {#if sweepErr[c.name]}
+                <span class="text-amber-700" title={sweepErr[c.name]}>⚠ {sweepErr[c.name]}</span>
+              {:else if flash?.name === c.name}
+                <span class="text-emerald-700 font-medium">{flash.msg}</span>
+              {/if}
               {#if c.lastSweepError}
                 <span class="text-amber-700" title={c.lastSweepError}>⚠ {c.lastSweepError}</span>
               {:else if c.lastSweptAt}
@@ -102,9 +201,39 @@
                 <span class="text-slate-600 italic">never swept</span>
               {/if}
             </div>
+
+            <!-- Controls (WP-155): pause/resume/remove via the boards
+                 manager seam; Sweep now runs one board through the shared
+                 sweeper and records state like the CLI does. -->
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button
+                class="px-2 py-0.5 text-[11px] rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer disabled:opacity-50 transition-colors"
+                disabled={acting.has(c.name)}
+                onclick={() => setEnabled(c, !c.enabled)}
+              >{c.enabled ? 'Pause' : 'Resume'}</button>
+              <button
+                class="px-2 py-0.5 text-[11px] rounded-md {confirmRemove === c.name
+                  ? 'bg-red-600 text-white hover:bg-red-500'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'} cursor-pointer disabled:opacity-50 transition-colors"
+                disabled={acting.has(c.name)}
+                onclick={() => removeCompany(c)}
+              >{confirmRemove === c.name ? 'Confirm remove?' : 'Remove'}</button>
+              <button
+                class="px-2 py-0.5 text-[11px] rounded-md bg-slate-800 text-white hover:opacity-90 cursor-pointer disabled:opacity-50 transition-colors"
+                disabled={acting.has(c.name)}
+                onclick={() => sweepNow(c)}
+              >{acting.has(c.name) ? 'Sweeping…' : 'Sweep now'}</button>
+            </div>
           </li>
         {/each}
       </ul>
     {/if}
+  </div>
+{/if}
+
+{#if undo}
+  <div role="status" aria-live="polite" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 dark:bg-slate-700 text-white px-4 py-3 rounded-xl shadow-lg text-sm z-50 flex gap-3 items-center">
+    <span>Removed {undo.entry.company || undo.entry.name}</span>
+    <button class="underline underline-offset-2 text-emerald-300 hover:text-emerald-200 cursor-pointer" onclick={undoRemove}>Undo</button>
   </div>
 {/if}

@@ -84,8 +84,15 @@ func newMuxWithBoards(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, load
 	mux.HandleFunc("POST /api/candidates/{id}/add", handleAddCandidate(store, withBoards))
 	mux.HandleFunc("POST /api/candidates/{id}/dismiss", handleDismissCandidate(store))
 
-	// Companies — the boards.toml monitoring surface (WP-149).
+	// Companies — the boards.toml monitoring surface (WP-149) plus its
+	// write controls (WP-155): pause/resume/remove/restore via the
+	// injected mutator, one-board sweep through the shared sweeper.
 	mux.HandleFunc("GET /api/companies", handleListCompanies(store, loadBoards))
+	mux.HandleFunc("POST /api/companies/{name}/pause", handlePauseResumeCompany(withBoards, false))
+	mux.HandleFunc("POST /api/companies/{name}/resume", handlePauseResumeCompany(withBoards, true))
+	mux.HandleFunc("DELETE /api/companies/{name}", handleRemoveCompany(withBoards))
+	mux.HandleFunc("PUT /api/companies/{name}", handleRestoreCompany(withBoards))
+	mux.HandleFunc("POST /api/companies/{name}/sweep", handleSweepCompany(store, loadBoards))
 
 	// Postings review queue
 	mux.HandleFunc("GET /api/postings", handleListPostings(store))

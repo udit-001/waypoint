@@ -10,6 +10,7 @@ import (
 	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/scraper"
+	"github.com/udit-001/waypoint/internal/sweeper"
 )
 
 var boardsCmd = &cobra.Command{
@@ -410,56 +411,21 @@ reviewed the new postings; any failed board needs attention.`,
 
 		for _, e := range enabled {
 			sr := sweepResult{Board: e.Name, Provider: e.Provider}
-			b := toBoard(e)
-			p, hit, err := boards.DetectProvider(b)
+			res, err := sweeper.SweepOne(ctx, store, e, boardsSweepFlags.jobage, boardsSweepFlags.limit)
 			if err != nil {
 				sr.Failed, sr.Error, failed = true, err.Error(), failed+1
 				recordSweepState(cmd, e.Name, false, sr.Error)
 				out = append(out, sr)
 				continue
 			}
-			sr.Provider = p.Name()
-			results, err := p.Fetch(ctx, b, *hit, boards.FetchOpts{
-				JobAgeDays: boardsSweepFlags.jobage,
-				MaxPages:   e.MaxPages,
-				Limit:      boardsSweepFlags.limit,
-			})
-			if err != nil {
-				sr.Failed, sr.Error, failed = true, err.Error(), failed+1
-				recordSweepState(cmd, e.Name, false, sr.Error)
-				out = append(out, sr)
-				continue
+			sr.Fetched = res.Fetched
+			sr.New = res.New
+			sr.Seen = res.Seen
+			sr.Jobs = res.Jobs
+			if sr.Provider == "" && res.Provider != "" {
+				sr.Provider = res.Provider
 			}
-			sr.Fetched = len(results)
-
-			var fresh []scraper.Result
-			for _, r := range results {
-				seen, err := store.HasPosting(r.URL)
-				if err != nil {
-					return formatError("check postings", err)
-				}
-				if seen {
-					sr.Seen++
-					continue
-				}
-				tracked, err := store.JobExists(r.URL)
-				if err != nil {
-					return formatError("check jobs", err)
-				}
-				if tracked {
-					sr.Seen++
-					continue
-				}
-				fresh = append(fresh, r)
-			}
-			if len(fresh) > 0 {
-				if err := store.AddPostings(fresh); err != nil {
-					return formatError("add postings", err)
-				}
-			}
-			sr.New = len(fresh)
-			totalNew += len(fresh)
-			sr.Jobs = fresh
+			totalNew += res.New
 			recordSweepState(cmd, e.Name, true, "")
 			out = append(out, sr)
 		}

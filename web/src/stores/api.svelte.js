@@ -221,6 +221,24 @@ export async function dismissCandidate(id) {
   return apiMutate('POST', `/candidates/${id}/dismiss`);
 }
 
+// ─── Companies controls (WP-155) ───────────────────────
+
+async function companyAction(name, action) {
+  return apiMutate('POST', '/companies/' + encodeURIComponent(name) + '/' + action);
+}
+
+export function pauseCompany(name) { return companyAction(name, 'pause'); }
+export function resumeCompany(name) { return companyAction(name, 'resume'); }
+export function sweepCompany(name) { return companyAction(name, 'sweep'); }
+
+export async function removeCompany(name) {
+  return apiMutate('DELETE', '/companies/' + encodeURIComponent(name));
+}
+
+export async function restoreCompany(name, entry) {
+  return apiMutate('PUT', '/companies/' + encodeURIComponent(name), entry);
+}
+
 // ─── Autopilot ─────────────────────────────────────────
 
 export const autopilot = createStore(async () => {
