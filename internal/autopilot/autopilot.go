@@ -48,10 +48,13 @@ type CycleConfig struct {
 }
 
 // Run executes one full autopilot cycle. It is safe to call from a
-// goroutine — panics are recovered and logged.
-func Run(ctx context.Context, cfg CycleConfig) db.RunLog {
+// goroutine — panics are recovered and logged, and the run-log row is
+// always CLOSED (FinishedAt set) even on panic: the scheduler's cadence
+// measures from the last finished run, so an open row would re-fire a
+// poisoned cycle at poll rate forever.
+func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	started := time.Now().UTC()
-	logEntry := db.RunLog{
+	logEntry = db.RunLog{
 		StartedAt: started.Format(time.RFC3339),
 	}
 
@@ -59,6 +62,10 @@ func Run(ctx context.Context, cfg CycleConfig) db.RunLog {
 		if r := recover(); r != nil {
 			log.Printf("autopilot: cycle panicked: %v", r)
 			logEntry.Errors = addError(logEntry.Errors, fmt.Sprintf("panic: %v", r))
+			// Close the row — a panicked cycle still happened.
+			finished := time.Now().UTC()
+			logEntry.FinishedAt = finished.Format(time.RFC3339)
+			logEntry.DurationMs = finished.Sub(started).Milliseconds()
 		}
 	}()
 

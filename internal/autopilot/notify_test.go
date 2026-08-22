@@ -169,3 +169,36 @@ func TestBuildNotice_TopScoreWins(t *testing.T) {
 		t.Errorf("TopScore = %d, want 92", n.TopScore)
 	}
 }
+
+// panickyScraper panics inside Search — simulates a poisoned stage.
+type panickyScraper struct{}
+
+func (panickyScraper) Name() string         { return "panic" }
+func (panickyScraper) Source() string       { return "panic" }
+func (panickyScraper) Categories() []string { return []string{"test"} }
+func (panickyScraper) Search(context.Context, scraper.SearchOpts) ([]scraper.Result, error) {
+	panic("boom")
+}
+
+// TestCycle_PanicClosesRunRow: a mid-cycle panic must still produce a
+// CLOSED run-log row (finished_at set, panic recorded as an error).
+// The scheduler's cadence measures from last FINISHED run — an empty
+// FinishedAt would re-fire a panicking cycle at poll rate forever.
+func TestCycle_PanicClosesRunRow(t *testing.T) {
+	stubDiscovery(t)
+	f := db.NewFakeStore()
+
+	entry := Run(context.Background(), CycleConfig{
+		Store:    f,
+		Scrapers: []scraper.Scraper{panickyScraper{}},
+		ExaCap:   0,
+		Recency:  14,
+	})
+
+	if entry.FinishedAt == "" {
+		t.Fatal("panicked cycle left FinishedAt empty — scheduler would hot-refire every poll")
+	}
+	if !strings.Contains(entry.Errors, "panic") {
+		t.Errorf("errors = %q, want panic recorded", entry.Errors)
+	}
+}

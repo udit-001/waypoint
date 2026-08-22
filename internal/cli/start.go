@@ -209,17 +209,24 @@ func startAutopilotTicker(store db.Store, port int) {
 	exaClient := exa.New("", nil)
 	openURL := fmt.Sprintf("http://127.0.0.1:%d/#/found", port)
 
-	// Check immediately at boot, then poll.
-	if due, reason := autopilotDue(store); due {
-		runAutopilotCycle(store, exaClient, openURL, reason)
+	// Check immediately at boot, then poll. safeRun keeps a panic
+	// anywhere in the iteration from killing scheduling forever.
+	safeRun := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("autopilot: scheduler recovered: %v", r)
+			}
+		}()
+		if due, reason := autopilotDue(store); due {
+			runAutopilotCycle(store, exaClient, openURL, reason)
+		}
 	}
+	safeRun()
 
 	tick := time.NewTicker(autopilot.PollInterval)
 	defer tick.Stop()
 	for range tick.C {
-		if due, reason := autopilotDue(store); due {
-			runAutopilotCycle(store, exaClient, openURL, reason)
-		}
+		safeRun()
 	}
 }
 

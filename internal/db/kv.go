@@ -164,8 +164,10 @@ func (s *SQLiteStore) RequestAutopilotRun() error {
 	return nil
 }
 
-// ConsumeAutopilotRunRequest reads and clears the run-request marker in
-// one transaction: exactly one poll ever sees a given request.
+// ConsumeAutopilotRunRequest reads and clears the run-request marker.
+// The SELECT and DELETE are two statements — atomic enough because the
+// daemon's scheduler is the single consumer and strictly serial; if a
+// second consumer ever appears, wrap this in a transaction.
 func (s *SQLiteStore) ConsumeAutopilotRunRequest() (bool, error) {
 	var raw string
 	err := s.Get(&raw, `SELECT value FROM kv WHERE key = ?`, kvAutopilotRunRequest)
@@ -173,11 +175,10 @@ func (s *SQLiteStore) ConsumeAutopilotRunRequest() (bool, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
 		}
-		return false, err
+		return false, fmt.Errorf("read autopilot run request: %w", err)
 	}
-	_, err = s.Exec(`DELETE FROM kv WHERE key = ?`, kvAutopilotRunRequest)
-	if err != nil {
-		return false, err
+	if _, err := s.Exec(`DELETE FROM kv WHERE key = ?`, kvAutopilotRunRequest); err != nil {
+		return false, fmt.Errorf("clear autopilot run request: %w", err)
 	}
 	return true, nil
 }
