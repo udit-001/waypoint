@@ -13,24 +13,24 @@ waypoint boards list --json
 - **User names companies not yet boarded** → Step 1 (add), then Step 2 (sweep).
 - **All named companies already boarded** → Step 2 (sweep) directly.
 - **User asks what boards exist / to prune them** → `boards list` / `boards remove <name>` / `boards disable <name>`.
-- **`waypoint discover run` has suggested companies** (status `suggested`) → Step 0 (review), then Step 2 (sweep).
+- **Discovery candidates are pending** (`discover run` marked them `suggested`) → Step 0, then Step 2 (sweep).
 
 **Done when**: every named company is either boarded or the user said skip.
 
 ## Step 0 — Review discovered candidates
 
-`waypoint discover run` maps a facet list onto candidate companies and persists the ones with live ATS boards as `suggested`. It skips already-watched URLs and previously decided companies, so re-runs only surface genuinely new suggestions. Each candidate carries an `id`, its verified board URL(s), and the facet that surfaced it.
+`waypoint discover run` maps its facet list onto candidate companies and persists those with live ATS boards as `suggested` — skipping already-watched URLs and previously decided companies, so re-runs surface only genuinely new suggestions. Each candidate carries an `id`, its verified board URL(s), and the facet that surfaced it.
 
-Decide each candidate with the user:
+Decide each with the user:
 
 ```bash
-waypoint discover add <id> --json      # promote: verify gate runs, then the board lands in boards.toml enabled
-waypoint discover dismiss <id> --json  # tombstone: discovery never suggests it again
+waypoint discover add <id> --json      # runs Step 1's verify gate, lands the board enabled
+waypoint discover dismiss <id> --json  # tombstone — never suggested again
 ```
 
-`add` runs the same verify gate as `boards add` — a board is saved only when its API answers. A candidate whose board is already watched is a clear no-op; nothing is saved or decided. `dismiss` is for companies the user never wants tracked.
+An already-watched board makes `add` a clear no-op: nothing saved, status stays `suggested`. Dismiss is for companies the user never wants tracked.
 
-**Done when**: no candidate remains `suggested` — every one is either added (its postings arrive on the next sweep) or dismissed.
+**Done when**: no candidate remains `suggested` — each is either added (its postings arrive via Step 2) or dismissed.
 
 ## Step 1 — Add a board
 
