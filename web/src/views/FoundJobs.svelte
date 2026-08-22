@@ -19,10 +19,14 @@
   import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { formatDateShort, formatDateFull } from '../lib/format.js';
+  import { candidateBoardLabel, pendingCandidates } from '../lib/discovery.js';
   import { renderMarkdown } from '../lib/markdown.js';
   import { subscribeLive } from '../lib/live.js';
   import Skeleton from '../components/Skeleton.svelte';
   import * as api from '../stores/api.svelte.js';
+  import { getRouter } from '../stores/router.svelte.js';
+
+  const router = getRouter();
 
   // Score bands — the found-jobs counterpart to STATUSES. Color is the
   // canonical hue (hex, like STATUS_META); the label is the group
@@ -58,6 +62,7 @@
   onMount(async () => {
     await loadQueue();
     await loadAutopilot();
+    await loadCandidates();
     firstRender = false;
 
     // Live-sync (WP-144): a cycle's sweep/curate moves the queue and the
@@ -69,7 +74,50 @@
       loadAutopilot();
       loadQueue(true);
     });
+    // Discovery decisions (WP-154) move candidates across surfaces —
+    // another tab's add/dismiss drops the row here too.
+    unsubLiveCands = subscribeLive('candidates', () => {
+      loadCandidates(true);
+    });
   });
+
+  // ── Discovery band (WP-154) ──────────────────────────
+  let cands = $state([]);
+  let candActing = $state(new Set());
+  let candError = $state(null);
+  let unsubLiveCands = null;
+
+  async function loadCandidates(silent = false) {
+    try {
+      await api.candidates.ensure();
+      if (silent) await api.candidates.refresh();
+      cands = pendingCandidates(api.candidates.value);
+    } catch { /* band is optional chrome — stay quiet on failure */ }
+  }
+
+  async function addCompany(c) {
+    if (candActing.has(c.id)) return;
+    candActing.add(c.id);
+    try {
+      const res = await api.addCandidate(c.id);
+      cands = cands.filter(x => x.id !== c.id);
+      showToast('Added company', { result: { title: c.name, company: res.meta?.detail || '' }, link: '/companies' });
+    } catch (e) { candError = e.message; } finally {
+      candActing.delete(c.id);
+    }
+  }
+
+  async function dismissCompany(c) {
+    if (candActing.has(c.id)) return;
+    candActing.add(c.id);
+    try {
+      await api.dismissCandidate(c.id);
+      cands = cands.filter(x => x.id !== c.id);
+      showToast('Dismissed', { result: { title: c.name, company: 'won\'t be suggested again' } });
+    } catch (e) { candError = e.message; } finally {
+      candActing.delete(c.id);
+    }
+  }
 
   let unsubLive = null;
   let unsubLiveRuns = null;
@@ -77,6 +125,7 @@
     if (toastTimer) clearTimeout(toastTimer);
     if (unsubLive) unsubLive();
     if (unsubLiveRuns) unsubLiveRuns();
+    if (unsubLiveCands) unsubLiveCands();
   });
 
   async function loadQueue(silent = false) {
@@ -264,8 +313,8 @@
 
   function showToast(action, posting) {
     if (toastTimer) clearTimeout(toastTimer);
-    toast = { action, title: posting.result.title, company: posting.result.company };
-    toastTimer = setTimeout(() => { toast = null; }, 5000);
+    toast = { action, title: posting.result.title, company: posting.result.company, link: posting.link || null };
+    toastTimer = setTimeout(() => { toast = null; }, 6000);
   }
 
   // ── Keyboard ────────────────────────────────────────
@@ -319,6 +368,45 @@
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
+
+{#if cands.length > 0}
+  <!-- Discovery band (WP-154): companies suggested by 'discover run',
+       awaiting an add/dismiss decision. Sits above the match queue —
+       a company decision widens what future sweeps even fetch. -->
+  <div class="-mx-6 -mt-6 mb-6 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/60">
+    <div class="flex items-center gap-2 px-6 py-2 border-b border-slate-100 dark:border-slate-700">
+      <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Discovered companies</span>
+      <span class="bg-slate-200 dark:bg-slate-700 text-slate-600 rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums">{cands.length}</span>
+    </div>
+    {#if candError}<p class="px-6 pt-2 text-xs text-amber-700">⚠ {candError}</p>{/if}
+    {#each cands as c (c.id)}
+      <div class="flex items-center gap-3 px-6 py-2 border-b border-slate-100 dark:border-slate-700 hover:bg-white/40 transition-colors">
+        <div class="min-w-0 flex items-baseline gap-2">
+          <span class="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{c.name}</span>
+          {#if c.domain}<span class="text-xs text-slate-500 dark:text-slate-400 truncate">{c.domain}</span>{/if}
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          {#each c.boards as b (b.url)}
+            <span class="px-1.5 py-px rounded bg-slate-100 dark:bg-slate-700 text-[10px] font-mono text-slate-600">{candidateBoardLabel(b)}</span>
+          {/each}
+        </div>
+        <span class="ml-auto shrink-0 text-[11px] text-slate-500 dark:text-slate-400" title={`suggested by the "${c.facet}" facet`}>via {c.facet}</span>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button
+            class="px-2.5 py-1 text-[11px] font-medium rounded-md bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer disabled:opacity-50 transition-colors"
+            disabled={candActing.has(c.id)}
+            onclick={() => addCompany(c)}
+          >Add company</button>
+          <button
+            class="px-2.5 py-1 text-[11px] font-medium rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer disabled:opacity-50 transition-colors"
+            disabled={candActing.has(c.id)}
+            onclick={() => dismissCompany(c)}
+          >Dismiss</button>
+        </div>
+      </div>
+    {/each}
+  </div>
+{/if}
 
 {#if loading}
   <!-- Loading: skeleton rows, same shape as the Applications list. -->
@@ -544,7 +632,14 @@
 {#if toast}
   <div role="status" aria-live="polite" class="fixed bottom-6 left-1/2 -translate-x-1/2 max-w-[calc(100vw-2rem)] bg-slate-800 dark:bg-slate-700 text-white px-4 py-3 rounded-xl shadow-lg text-sm z-50 flex gap-2 items-center min-w-0">
     <span class="shrink-0">{toast.action}:</span>
-    <span class="truncate min-w-0">{toast.title} — {toast.company}</span>
+    <span class="truncate min-w-0">{toast.title}{toast.company ? ' — ' + toast.company : ''}</span>
+    {#if toast.link}
+      <a
+        href={toast.link}
+        class="shrink-0 underline underline-offset-2 text-emerald-300 hover:text-emerald-200"
+        onclick={(e) => { e.preventDefault(); router.navigate(toast.link); toast = null; }}
+      >Companies</a>
+    {/if}
   </div>
 {/if}
 

@@ -1,13 +1,14 @@
 package cli
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/udit-001/waypoint/internal/boards"
 	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/discovery"
 )
 
 // setupDiscoverReviewTest points config at temp dirs, migrates the real
@@ -46,14 +47,15 @@ func setupDiscoverReviewTest(t *testing.T) db.CompanyCandidate {
 	return cand
 }
 
-// stubVerifyBoard replaces the network seam for add; restore via cleanup.
+// stubVerifyBoard replaces the shared network seam for add; restore via
+// cleanup.
 func stubVerifyBoard(t *testing.T, jobs int, err error) {
 	t.Helper()
-	orig := verifyBoard
-	verifyBoard = func(_ boards.Provider, _ boards.Board, _ *boards.DetectHit) (int, error) {
+	orig := discovery.ProbeBoard
+	discovery.ProbeBoard = func(_ context.Context, _ discovery.BoardLink) (int, error) {
 		return jobs, err
 	}
-	t.Cleanup(func() { verifyBoard = orig })
+	t.Cleanup(func() { discovery.ProbeBoard = orig })
 }
 
 // TestDiscoverAddPromotesToBoards: add verifies the board, writes it into

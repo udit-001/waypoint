@@ -4,21 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/udit-001/waypoint/internal/boards"
 	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/discovery"
 )
-
-// verifyBoard is the seam between discover add and the network: a thin
-// wrapper over boards.Probe (the shared verify gate) so CLI tests can
-// stub it — identical pattern to runDiscovery.
-var verifyBoard = func(p boards.Provider, b boards.Board, hit *boards.DetectHit) (int, error) {
-	return boards.Probe(context.Background(), p, b, hit)
-}
 
 // discoverReviewCmd is shared plumbing for `discover add|dismiss`: load
 // the candidate by id, apply the review transition, report. The target
@@ -108,61 +99,13 @@ outcome on every exit path. Add is done when meta.status is "added".`,
 			return "", err
 		}
 
-		boardName := candidateBoardName(cand.Name)
-		added, alreadyWatched, fetched := 0, 0, 0
-		var lastProvider string
-		for _, b := range cand.Boards {
-			// Already watching this exact URL? A clear no-op, not a dupe.
-			watched := false
-			for _, e := range bf.Boards {
-				if e.URL == b.URL {
-					watched = true
-					break
-				}
-			}
-			if watched {
-				alreadyWatched++
-				continue
-			}
-
-			entry := config.BoardEntry{
-				Name:    boardName,
-				Company: cand.Name,
-				URL:     b.URL,
-				Enabled: true,
-				AddedAt: time.Now().UTC().Format(time.RFC3339),
-			}
-			// A same-name board pointing elsewhere must never be silently
-			// replaced — surface the conflict instead.
-			if existing := bf.Find(entry.Name); existing != nil {
-				return "", fmt.Errorf("board %q already exists with a different URL (%s)", entry.Name, existing.URL)
-			}
-
-			b := toBoard(entry)
-			p, hit, err := boards.DetectProvider(b)
-			if err != nil {
-				return "", fmt.Errorf("no provider matched %s", b.URL)
-			}
-			lastProvider = p.Name()
-
-			n, err := verifyBoard(p, b, hit)
-			if err != nil {
-				return "", fmt.Errorf("verification failed for %s: %w", b.URL, err)
-			}
-			fetched += n
-
-			entry.Provider = p.Name()
-			bf.Upsert(entry)
-			added++
+		out, err := discovery.Promote(context.Background(), cand.Name, candidateLinks(cand.Boards), bf)
+		if err != nil {
+			return "", err
 		}
-
-		switch {
-		case len(cand.Boards) == 0:
-			return "", fmt.Errorf("candidate has no verified boards")
-		case added == 0:
+		if out.Added == 0 {
 			return "", fmt.Errorf("board(s) already in boards.toml — nothing to add")
 		}
-
 		if err := config.SaveBoards(cfg, bf); err != nil {
 			return "", err
 		}
@@ -170,19 +113,22 @@ outcome on every exit path. Add is done when meta.status is "added".`,
 			return "", err
 		}
 
-		detail := fmt.Sprintf("%d board(s) added via %s, %d jobs on first page", added, lastProvider, fetched)
-		if alreadyWatched > 0 {
-			detail += fmt.Sprintf(", %d already watched", alreadyWatched)
+		detail := fmt.Sprintf("%d board(s) added via %s, %d jobs on first page", out.Added, out.Provider, out.Fetched)
+		if out.AlreadyWatched > 0 {
+			detail += fmt.Sprintf(", %d already watched", out.AlreadyWatched)
 		}
 		return detail, nil
 	},
 )
 
-// candidateBoardName derives the boards.toml entry name from the
-// candidate's display name: lowercase, spaces to dashes — deterministic,
-// so re-reviews of one company always map to one entry name.
-func candidateBoardName(name string) string {
-	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), " ", "-"))
+// candidateLinks converts stored board rows into the discovery package's
+// link shape for the shared promotion path.
+func candidateLinks(bs []db.CandidateBoard) []discovery.BoardLink {
+	out := make([]discovery.BoardLink, 0, len(bs))
+	for _, b := range bs {
+		out = append(out, discovery.BoardLink{Provider: b.Provider, URL: b.URL})
+	}
+	return out
 }
 
 var discoverDismissCmd = discoverReviewCmd(

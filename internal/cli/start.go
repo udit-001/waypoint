@@ -145,6 +145,22 @@ Examples:
 				}
 				return bf.Boards, nil
 			},
+			// WP-154: the write side of the same seam — mutate-and-save for
+			// candidate promotion. Same file, same process family.
+			WithBoards: func(fn func(*config.BoardsFile) error) error {
+				wcfg, err := config.Load()
+				if err != nil {
+					return err
+				}
+				bf, err := config.LoadBoards(wcfg)
+				if err != nil {
+					return err
+				}
+				if err := fn(bf); err != nil {
+					return err
+				}
+				return config.SaveBoards(wcfg, bf)
+			},
 		})
 	},
 }

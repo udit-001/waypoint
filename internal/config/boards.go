@@ -10,9 +10,12 @@ import (
 )
 
 // BoardsFile is the board store: one file, one TOML array of tables.
-// Written only by the CLI (ADR 0001: CLI writes, web reads). It lives in
-// data_dir — not the OS config dir — because the board list is user data
-// that belongs with the database in backups, not an application setting.
+// The CLI writes it ('boards add', 'discover add'); since WP-154 the
+// web writes too through the same config.LoadBoards/SaveBoards path
+// (server.Config.WithBoards) — one file, same data_dir, no second
+// format. It lives in data_dir — not the OS config dir — because the
+// board list is user data that belongs with the database in backups,
+// not an application setting.
 type BoardsFile struct {
 	Boards []BoardEntry `toml:"boards"`
 }

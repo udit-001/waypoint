@@ -206,6 +206,21 @@ export async function dismissPosting(url) {
   return apiMutate('POST', '/postings/' + encodeURIComponent(url) + '/dismiss');
 }
 
+// ─── Discovery candidates (WP-154) ─────────────────────
+
+export const candidates = createStore(async () => {
+  const data = await api('/candidates?status=suggested');
+  return Array.isArray(data.candidates) ? data.candidates : [];
+});
+
+export async function addCandidate(id) {
+  return apiMutate('POST', `/candidates/${id}/add`);
+}
+
+export async function dismissCandidate(id) {
+  return apiMutate('POST', `/candidates/${id}/dismiss`);
+}
+
 // ─── Autopilot ─────────────────────────────────────────
 
 export const autopilot = createStore(async () => {

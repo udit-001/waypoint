@@ -19,7 +19,7 @@ func boardsLoader(entries ...config.BoardEntry) func() ([]config.BoardEntry, err
 // TestListCompanies_empty: no boards.toml entries (or no boards file at all)
 // yields an empty companies array — the empty state's raw material.
 func TestListCompanies_empty(t *testing.T) {
-	mux := newMuxWithBoards(db.NewFakeStore(), nil, linkedin.New(), boardsLoader())
+	mux := newMuxWithBoards(db.NewFakeStore(), nil, linkedin.New(), boardsLoader(), nil)
 
 	req := httptest.NewRequest("GET", "/api/companies", nil)
 	w := httptest.NewRecorder()
@@ -57,7 +57,7 @@ func TestListCompanies_mergeSort(t *testing.T) {
 		{Name: "acme", Company: "Acme", URL: "https://acme.com/jobs", Provider: "greenhouse", Enabled: true},
 		{Name: "beta", Company: "Beta", URL: "https://boards.greenhouse.io/beta", Provider: "greenhouse", Enabled: true},
 	}
-	mux := newMuxWithBoards(f, nil, linkedin.New(), boardsLoader(boards...))
+	mux := newMuxWithBoards(f, nil, linkedin.New(), boardsLoader(boards...), nil)
 
 	req := httptest.NewRequest("GET", "/api/companies", nil)
 	w := httptest.NewRecorder()
@@ -105,7 +105,7 @@ func TestListCompanies_staleAndError(t *testing.T) {
 		{Name: "acme", Company: "Acme", URL: "https://acme.com/jobs", Provider: "greenhouse", Enabled: true},
 		{Name: "beta", Company: "Beta", URL: "https://beta.com/jobs", Provider: "lever", Enabled: true},
 	}
-	mux := newMuxWithBoards(f, nil, linkedin.New(), boardsLoader(boards...))
+	mux := newMuxWithBoards(f, nil, linkedin.New(), boardsLoader(boards...), nil)
 
 	req := httptest.NewRequest("GET", "/api/companies", nil)
 	w := httptest.NewRecorder()
