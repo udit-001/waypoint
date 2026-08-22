@@ -190,18 +190,26 @@ func isListPrefKey(key string) bool {
 	return false
 }
 
-// GetSettings returns the app settings. If no settings row exists yet, it
-// returns Go-level defaults with a nil error.
-func (s *SQLiteStore) GetSettings() (Settings, error) {
-	var st Settings
-	// Ensure autopilot columns exist (added in migration 10-11).
-	// SQLite ADD COLUMN is idempotent — errors when column already exists.
+// ensureAutopilotSettingsColumns adds the migration-10/11 columns when
+// missing. Idempotent — SQLite ADD COLUMN errors on duplicates, which we
+// ignore. Called by both settings readers and writers: a fresh database
+// must accept PATCH autopilot_enabled=1 before ANY settings read has
+// ever run (the daemon ticker, the usual first reader, doesn't start
+// while autopilot is off).
+func ensureAutopilotSettingsColumns(s *SQLiteStore) {
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_enabled INTEGER NOT NULL DEFAULT 0`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_cadence INTEGER NOT NULL DEFAULT 6`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_provider TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN zen_api_key TEXT DEFAULT ''`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN exa_api_key TEXT DEFAULT ''`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN discovery_interval_days INTEGER NOT NULL DEFAULT 30`)
+}
+
+// GetSettings returns the app settings. If no settings row exists yet, it
+// returns Go-level defaults with a nil error.
+func (s *SQLiteStore) GetSettings() (Settings, error) {
+	var st Settings
+	ensureAutopilotSettingsColumns(s)
 
 	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key, exa_api_key, discovery_interval_days FROM settings WHERE id = 1`)
 	if err != nil {
@@ -219,6 +227,8 @@ func (s *SQLiteStore) UpsertSettings(updates map[string]any) error {
 	if len(updates) == 0 {
 		return nil
 	}
+
+	ensureAutopilotSettingsColumns(s)
 
 	columnMap := map[string]string{
 		"theme":                   "theme",

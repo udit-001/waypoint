@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/udit-001/waypoint/internal/db"
@@ -47,6 +48,7 @@ func handleUpdateSettings(store db.Store) http.HandlerFunc {
 		}
 
 		updates := make(map[string]any)
+		enabledNow := false
 		for k, v := range body {
 			switch k {
 			case "theme", "default_view", "autopilot_provider", "zen_api_key":
@@ -64,6 +66,7 @@ func handleUpdateSettings(store db.Store) http.HandlerFunc {
 				} else if i, ok := v.(int); ok {
 					updates[k] = i
 				}
+				enabledNow = updates[k] == 1
 			default:
 				// Ignore unknown keys silently (forward-compatible).
 			}
@@ -77,6 +80,16 @@ func handleUpdateSettings(store db.Store) http.HandlerFunc {
 		if err := store.UpsertSettings(updates); err != nil {
 			jsonError(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		// Enabling autopilot asks the daemon for an immediate cycle: the
+		// scheduler consumes this marker within one poll interval, so
+		// matches arrive in seconds — not after a full cadence. Dropped
+		// only after the write succeeded (and only on enable).
+		if enabledNow {
+			if err := store.RequestAutopilotRun(); err != nil {
+				log.Printf("settings: request autopilot run: %v", err)
+			}
 		}
 
 		// Return updated settings.

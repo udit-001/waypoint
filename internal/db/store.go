@@ -101,6 +101,9 @@ type Store interface {
 	DiscoveryFacets(hash string) ([]string, bool, error)
 
 	// Last-discovery trigger state (WP-153).
+	// Autopilot scheduling: one-shot "run now" requests.
+	RequestAutopilotRun() error
+	ConsumeAutopilotRunRequest() (bool, error)
 	SaveDiscoveryLastRun(briefHash, atRFC3339 string) error
 	DiscoveryLastRun() (hash, at string, has bool, err error)
 }

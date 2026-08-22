@@ -147,6 +147,41 @@ func (s *SQLiteStore) SaveDiscoveryLastRun(briefHash, atRFC3339 string) error {
 	return err
 }
 
+const kvAutopilotRunRequest = "autopilot_run_request"
+
+// RequestAutopilotRun drops a one-shot "run now" marker. The daemon's
+// scheduler consumes it on its next poll (within seconds), so enabling
+// autopilot mid-flight produces matches without waiting a full cadence.
+func (s *SQLiteStore) RequestAutopilotRun() error {
+	_, err := s.Exec(
+		`INSERT INTO kv (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+		kvAutopilotRunRequest, `"now"`,
+	)
+	if err != nil {
+		return fmt.Errorf("request autopilot run: %w", err)
+	}
+	return nil
+}
+
+// ConsumeAutopilotRunRequest reads and clears the run-request marker in
+// one transaction: exactly one poll ever sees a given request.
+func (s *SQLiteStore) ConsumeAutopilotRunRequest() (bool, error) {
+	var raw string
+	err := s.Get(&raw, `SELECT value FROM kv WHERE key = ?`, kvAutopilotRunRequest)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	_, err = s.Exec(`DELETE FROM kv WHERE key = ?`, kvAutopilotRunRequest)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // DiscoveryLastRun returns the persisted trigger state; has is false
 // before the first discovery run ever completed.
 func (s *SQLiteStore) DiscoveryLastRun() (string, string, bool, error) {

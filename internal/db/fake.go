@@ -18,15 +18,18 @@ import (
 var _ Store = (*FakeStore)(nil)
 
 type FakeStore struct {
-	Jobs       map[int64]Job
-	Categories map[int64]Category
-	Artifacts  map[int64]Artifact
-	History    []HistoryEntry
-	Profile    Profile
-	Settings   Settings
-	Postings   map[string]Posting
-	RunLogs    []RunLog
-	Companies  map[string]CompanyCandidate
+	// autopilotRunRequested backs RequestAutopilotRun/Consume — the
+	// one-shot "run now" marker (mu-guarded like everything else).
+	autopilotRunRequested bool
+	Jobs                  map[int64]Job
+	Categories            map[int64]Category
+	Artifacts             map[int64]Artifact
+	History               []HistoryEntry
+	Profile               Profile
+	Settings              Settings
+	Postings              map[string]Posting
+	RunLogs               []RunLog
+	Companies             map[string]CompanyCandidate
 
 	changeEvents  []ChangeEvent
 	changeEventID int64
@@ -875,6 +878,21 @@ func (f *FakeStore) DiscoveryFacets(hash string) ([]string, bool, error) {
 	defer f.mu.Unlock()
 	facets, ok := f.facetCache[hash]
 	return facets, ok, nil
+}
+
+func (f *FakeStore) RequestAutopilotRun() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.autopilotRunRequested = true
+	return nil
+}
+
+func (f *FakeStore) ConsumeAutopilotRunRequest() (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	got := f.autopilotRunRequested
+	f.autopilotRunRequested = false
+	return got, nil
 }
 
 func (f *FakeStore) SaveDiscoveryLastRun(hash, atRFC3339 string) error {

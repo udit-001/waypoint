@@ -120,12 +120,12 @@ Examples:
 			return fmt.Errorf("database migration failed: %w", err)
 		}
 
-		// Start autopilot ticker if enabled (daemon mode only).
+		// Autopilot scheduler (daemon mode only). Always started: it
+		// self-gates via CycleDue (enabled flag, run-request marker,
+		// cadence), so enabling mid-flight takes effect on the next poll
+		// instead of requiring a restart.
 		if startFlags.daemon {
-			settings, _ := store.GetSettings()
-			if settings.AutopilotEnabled == 1 {
-				go startAutopilotTicker(store, startFlags.port)
-			}
+			go startAutopilotTicker(store, startFlags.port)
 		}
 
 		return server.Start(server.Config{
@@ -188,68 +188,91 @@ func init() {
 	startCmd.Flags().MarkHidden("daemon")
 }
 
-// startAutopilotTicker runs the autopilot cycle on a ticker. It blocks
-// until the process exits. Called from the daemon goroutine. port is
-// the server's own port — the notification click target.
+// startAutopilotTicker runs the autopilot scheduler inside the daemon.
+// It polls every PollInterval and fires a cycle when CycleDue says so —
+// which makes three behaviors fall out of one policy:
+//
+//   - boot with autopilot enabled → first cycle within seconds
+//   - enable while running → PATCH drops a run-request marker, consumed
+//     on the next poll (no dead air)
+//   - steady state → a cycle per cadence, measured from the last
+//     FINISHED run (an overrun never double-fires)
+//
+// Blocks until the process exits. port is the server's own port — the
+// notification click target.
 func startAutopilotTicker(store db.Store, port int) {
-	settings, _ := store.GetSettings()
-	cadence := time.Duration(settings.AutopilotCadence) * time.Hour
-	if cadence <= 0 {
-		cadence = 6 * time.Hour
-	}
-
-	ticker := time.NewTicker(cadence)
-	defer ticker.Stop()
-
-	log.Printf("autopilot: ticker started (cadence: %s)", cadence)
+	log.Printf("autopilot: scheduler started (poll every %s)", autopilot.PollInterval)
 
 	// Shared anonymous Exa client (one budget + cache for the daemon
-	// lifetime; each cycle resets the budget). Created once, outside the
-	// tick loop, so the cache survives across cycles. No Bearer — see
+	// lifetime; each cycle resets the budget). No Bearer — see
 	// internal/exa/client.go.
 	exaClient := exa.New("", nil)
+	openURL := fmt.Sprintf("http://127.0.0.1:%d/#/found", port)
 
-	for range ticker.C {
-		// Re-read settings in case cadence changed.
-		settings, _ = store.GetSettings()
-		if settings.AutopilotEnabled == 0 {
-			continue
-		}
-
-		newCadence := time.Duration(settings.AutopilotCadence) * time.Hour
-		if newCadence <= 0 {
-			newCadence = 6 * time.Hour
-		}
-		if newCadence != cadence {
-			ticker.Reset(newCadence)
-			cadence = newCadence
-			log.Printf("autopilot: cadence changed to %s", cadence)
-		}
-
-		// Run one cycle.
-		log.Println("autopilot: starting cycle")
-
-		// Build zen client from stored or env API key.
-		var zc *zen.Client
-		if key := zen.ResolveKey(settings.ZenAPIKey); key != "" {
-			zcfg := zen.DefaultConfig()
-			zcfg.APIKey = key
-			zc = zen.New(zcfg)
-			zc.SetCompanySearcher(exaClient)
-		}
-
-		openURL := fmt.Sprintf("http://127.0.0.1:%d/#/found", port)
-		entry := autopilot.RunLogged(context.Background(), autopilot.CycleConfig{
-			Store:     store,
-			ZenClient: zc,
-			Scrapers:  scraper.All(),
-			ExaCap:    10,
-			Recency:   14,
-			Notifier:  notify.New(openURL),
-		})
-
-		log.Printf("autopilot: cycle complete (id=%d, new=%d, shortlisted=%d, dismissed=%d, errored=%d, duration=%dms)",
-			entry.ID, entry.PostingsNew, entry.PostingsShortlisted,
-			entry.PostingsDismissed, entry.PostingsErrored, entry.DurationMs)
+	// Check immediately at boot, then poll.
+	if due, reason := autopilotDue(store); due {
+		runAutopilotCycle(store, exaClient, openURL, reason)
 	}
+
+	tick := time.NewTicker(autopilot.PollInterval)
+	defer tick.Stop()
+	for range tick.C {
+		if due, reason := autopilotDue(store); due {
+			runAutopilotCycle(store, exaClient, openURL, reason)
+		}
+	}
+}
+
+// autopilotDue applies the scheduling policy against persisted state.
+// Any read failure reports not-due and logs — a broken store must not
+// spin the scheduler into tight refiring.
+func autopilotDue(store db.Store) (bool, string) {
+	settings, err := store.GetSettings()
+	if err != nil {
+		log.Printf("autopilot: read settings: %v", err)
+		return false, ""
+	}
+	requested, err := store.ConsumeAutopilotRunRequest()
+	if err != nil {
+		log.Printf("autopilot: consume run request: %v", err)
+	}
+	var finished string
+	if last, ok, err := store.GetLastRun(); err != nil {
+		log.Printf("autopilot: read last run: %v", err)
+	} else if ok {
+		finished = last.FinishedAt
+	}
+	return autopilot.CycleDue(settings.AutopilotEnabled == 1,
+		time.Duration(settings.AutopilotCadence)*time.Hour,
+		finished, requested, time.Now())
+}
+
+// runAutopilotCycle executes one cycle and logs the outcome. Failures
+// inside are recorded by the cycle itself; this wrapper only reports.
+func runAutopilotCycle(store db.Store, exaClient *exa.Client, openURL, reason string) {
+	log.Printf("autopilot: starting cycle (%s)", reason)
+
+	settings, _ := store.GetSettings()
+
+	// Build zen client from stored or env API key.
+	var zc *zen.Client
+	if key := zen.ResolveKey(settings.ZenAPIKey); key != "" {
+		zcfg := zen.DefaultConfig()
+		zcfg.APIKey = key
+		zc = zen.New(zcfg)
+		zc.SetCompanySearcher(exaClient)
+	}
+
+	entry := autopilot.RunLogged(context.Background(), autopilot.CycleConfig{
+		Store:     store,
+		ZenClient: zc,
+		Scrapers:  scraper.All(),
+		ExaCap:    10,
+		Recency:   14,
+		Notifier:  notify.New(openURL),
+	})
+
+	log.Printf("autopilot: cycle complete (id=%d, new=%d, shortlisted=%d, dismissed=%d, errored=%d, duration=%dms)",
+		entry.ID, entry.PostingsNew, entry.PostingsShortlisted,
+		entry.PostingsDismissed, entry.PostingsErrored, entry.DurationMs)
 }
