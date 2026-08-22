@@ -94,21 +94,23 @@ type Settings struct {
 	ItemsPerPage     int    `db:"items_per_page" json:"itemsPerPage"`
 
 	// Autopilot settings.
-	AutopilotEnabled  int    `db:"autopilot_enabled" json:"autopilotEnabled"`
-	AutopilotCadence  int    `db:"autopilot_cadence" json:"autopilotCadence"` // hours; 0 = default (6)
-	AutopilotProvider string `db:"autopilot_provider" json:"autopilotProvider"`
-	ZenAPIKey         string `db:"zen_api_key" json:"zenApiKey"`
-	ExaAPIKey         string `db:"exa_api_key" json:"exaApiKey"`
+	AutopilotEnabled      int    `db:"autopilot_enabled" json:"autopilotEnabled"`
+	AutopilotCadence      int    `db:"autopilot_cadence" json:"autopilotCadence"` // hours; 0 = default (6)
+	AutopilotProvider     string `db:"autopilot_provider" json:"autopilotProvider"`
+	ZenAPIKey             string `db:"zen_api_key" json:"zenApiKey"`
+	ExaAPIKey             string `db:"exa_api_key" json:"exaApiKey"`
+	DiscoveryIntervalDays int    `db:"discovery_interval_days" json:"discoveryIntervalDays"`
 }
 
 // defaultSettings holds the Go-level defaults returned when no settings row
 // exists in the database yet.
 var defaultSettings = Settings{
-	Theme:            "light",
-	RemindersEnabled: 1,
-	DefaultView:      "dashboard",
-	ItemsPerPage:     25,
-	AutopilotCadence: 6, // default 6 hours
+	Theme:                 "light",
+	RemindersEnabled:      1,
+	DefaultView:           "dashboard",
+	ItemsPerPage:          25,
+	AutopilotCadence:      6, // default 6 hours
+	DiscoveryIntervalDays: 30,
 }
 
 // GetProfile returns the user profile. If no profile row exists yet, it
@@ -199,8 +201,9 @@ func (s *SQLiteStore) GetSettings() (Settings, error) {
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_provider TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN zen_api_key TEXT DEFAULT ''`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN exa_api_key TEXT DEFAULT ''`)
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN discovery_interval_days INTEGER NOT NULL DEFAULT 30`)
 
-	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key, exa_api_key FROM settings WHERE id = 1`)
+	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key, exa_api_key, discovery_interval_days FROM settings WHERE id = 1`)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return defaultSettings, nil
@@ -218,15 +221,16 @@ func (s *SQLiteStore) UpsertSettings(updates map[string]any) error {
 	}
 
 	columnMap := map[string]string{
-		"theme":              "theme",
-		"reminders_enabled":  "reminders_enabled",
-		"default_view":       "default_view",
-		"items_per_page":     "items_per_page",
-		"autopilot_enabled":  "autopilot_enabled",
-		"autopilot_cadence":  "autopilot_cadence",
-		"autopilot_provider": "autopilot_provider",
-		"zen_api_key":        "zen_api_key",
-		"exa_api_key":        "exa_api_key",
+		"theme":                   "theme",
+		"reminders_enabled":       "reminders_enabled",
+		"default_view":            "default_view",
+		"items_per_page":          "items_per_page",
+		"autopilot_enabled":       "autopilot_enabled",
+		"autopilot_cadence":       "autopilot_cadence",
+		"autopilot_provider":      "autopilot_provider",
+		"zen_api_key":             "zen_api_key",
+		"exa_api_key":             "exa_api_key",
+		"discovery_interval_days": "discovery_interval_days",
 	}
 	var setClauses []string
 	var args []any

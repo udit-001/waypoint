@@ -71,6 +71,13 @@ func Run(ctx context.Context, cfg CycleConfig) db.RunLog {
 	}
 	cfg.ExaClient.SetBudget(exaCap)
 
+	// Stage 0: Discovery — widen the company universe when a trigger
+	// fires (first-run / brief change / interval). Never blocks scoring:
+	// failures are logged with cause and the cycle proceeds.
+	if reason := stageDiscovery(ctx, cfg); reason != "" {
+		logEntry.Errors = addError(logEntry.Errors, "discovery ran: "+reason)
+	}
+
 	// Stage 1: Sweep — scrape new postings from relevant sources.
 	newPostings := stageSweep(ctx, cfg)
 	logEntry.PostingsNew = len(newPostings)

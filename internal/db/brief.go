@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 )
 
 // Brief is the worked readout of the curation brief for the agent. It
@@ -132,4 +133,32 @@ func (s *SQLiteStore) GetBrief() (Brief, error) {
 		return Brief{}, err
 	}
 	return getBrief(p), nil
+}
+
+// Text renders the brief as compact text for LLM consumption — the
+// single renderer shared by facet expansion (CLI + autopilot).
+func (b Brief) Text() string {
+	var sb strings.Builder
+	if b.Facts.Title != "" {
+		sb.WriteString("title: " + b.Facts.Title + "\n")
+	}
+	if b.Facts.Seniority != "" {
+		sb.WriteString("seniority: " + b.Facts.Seniority + "\n")
+	}
+	if len(b.Facts.Skills) > 0 {
+		sb.WriteString("skills: " + strings.Join(b.Facts.Skills, ", ") + "\n")
+	}
+	if len(b.Preferences.Keywords) > 0 {
+		sb.WriteString("interests: " + strings.Join(b.Preferences.Keywords, ", ") + "\n")
+	}
+	if len(b.Preferences.Companies) > 0 {
+		sb.WriteString("companies liked: " + strings.Join(b.Preferences.Companies, ", ") + "\n")
+	}
+	if b.Preferences.Remote != "" {
+		sb.WriteString("remote: " + b.Preferences.Remote + "\n")
+	}
+	if len(b.Open) > 0 {
+		sb.WriteString("open questions: " + strings.Join(b.Open, "; ") + "\n")
+	}
+	return sb.String()
 }

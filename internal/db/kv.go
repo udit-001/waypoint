@@ -129,3 +129,41 @@ func (s *SQLiteStore) DiscoveryFacets(hash string) ([]string, bool, error) {
 	}
 	return facets, true, nil
 }
+
+const kvDiscoveryLastRun = "discovery_last_run"
+
+// SaveDiscoveryLastRun records when discovery last ran and which brief
+// hash it ran against — the trigger state for WP-153.
+func (s *SQLiteStore) SaveDiscoveryLastRun(briefHash, atRFC3339 string) error {
+	raw, err := json.Marshal(map[string]string{"hash": briefHash, "at": atRFC3339})
+	if err != nil {
+		return fmt.Errorf("marshal discovery last-run: %w", err)
+	}
+	_, err = s.Exec(
+		`INSERT INTO kv (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+		kvDiscoveryLastRun, string(raw),
+	)
+	return err
+}
+
+// DiscoveryLastRun returns the persisted trigger state; has is false
+// before the first discovery run ever completed.
+func (s *SQLiteStore) DiscoveryLastRun() (string, string, bool, error) {
+	var raw string
+	err := s.Get(&raw, `SELECT value FROM kv WHERE key = ?`, kvDiscoveryLastRun)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", "", false, nil
+		}
+		return "", "", false, err
+	}
+	var st struct {
+		Hash string `json:"hash"`
+		At   string `json:"at"`
+	}
+	if err := json.Unmarshal([]byte(raw), &st); err != nil {
+		return "", "", false, err
+	}
+	return st.Hash, st.At, true, nil
+}

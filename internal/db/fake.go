@@ -32,7 +32,11 @@ type FakeStore struct {
 	changeEventID int64
 	boardSweeps   map[string]BoardSweepState
 	facetCache    map[string][]string
-	mu            sync.Mutex
+	lastDiscovery struct {
+		hash, at string
+		has      bool
+	}
+	mu sync.Mutex
 
 	nextJobID    int64
 	nextCatID    int64
@@ -591,6 +595,11 @@ func (f *FakeStore) UpsertSettings(updates map[string]any) error {
 	if v, ok := updates["exa_api_key"]; ok {
 		f.Settings.ExaAPIKey = fmt.Sprint(v)
 	}
+	if v, ok := updates["discovery_interval_days"]; ok {
+		if n, ok := v.(int); ok {
+			f.Settings.DiscoveryIntervalDays = n
+		}
+	}
 	return nil
 }
 
@@ -866,4 +875,20 @@ func (f *FakeStore) DiscoveryFacets(hash string) ([]string, bool, error) {
 	defer f.mu.Unlock()
 	facets, ok := f.facetCache[hash]
 	return facets, ok, nil
+}
+
+func (f *FakeStore) SaveDiscoveryLastRun(hash, atRFC3339 string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lastDiscovery = struct {
+		hash, at string
+		has      bool
+	}{hash, atRFC3339, true}
+	return nil
+}
+
+func (f *FakeStore) DiscoveryLastRun() (string, string, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.lastDiscovery.hash, f.lastDiscovery.at, f.lastDiscovery.has, nil
 }

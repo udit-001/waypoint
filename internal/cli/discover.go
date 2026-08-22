@@ -37,7 +37,7 @@ var enumerateFacets = func(ctx context.Context, store db.Store) ([]discovery.Fac
 	if err != nil {
 		return nil, "", err
 	}
-	text := briefText(brief)
+	text := brief.Text()
 	hash := discovery.BriefHash(text)
 
 	// Facet cache: an unchanged brief skips the LLM expansion.
@@ -99,33 +99,6 @@ func domainOf(rawURL string) string {
 		return ""
 	}
 	return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
-}
-
-// briefText renders the curation brief as compact text for the LLM.
-func briefText(b db.Brief) string {
-	var sb strings.Builder
-	if b.Facts.Title != "" {
-		sb.WriteString("title: " + b.Facts.Title + "\n")
-	}
-	if b.Facts.Seniority != "" {
-		sb.WriteString("seniority: " + b.Facts.Seniority + "\n")
-	}
-	if len(b.Facts.Skills) > 0 {
-		sb.WriteString("skills: " + strings.Join(b.Facts.Skills, ", ") + "\n")
-	}
-	if len(b.Preferences.Keywords) > 0 {
-		sb.WriteString("interests: " + strings.Join(b.Preferences.Keywords, ", ") + "\n")
-	}
-	if len(b.Preferences.Companies) > 0 {
-		sb.WriteString("companies liked: " + strings.Join(b.Preferences.Companies, ", ") + "\n")
-	}
-	if b.Preferences.Remote != "" {
-		sb.WriteString("remote: " + b.Preferences.Remote + "\n")
-	}
-	if len(b.Open) > 0 {
-		sb.WriteString("open questions: " + strings.Join(b.Open, "; ") + "\n")
-	}
-	return sb.String()
 }
 
 // toFacets wraps plain labels in the pipeline's facet shape.

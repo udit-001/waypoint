@@ -99,4 +99,8 @@ type Store interface {
 	// hash, so repeat discovery runs skip the LLM expansion.
 	SaveDiscoveryFacets(hash string, facets []string) error
 	DiscoveryFacets(hash string) ([]string, bool, error)
+
+	// Last-discovery trigger state (WP-153).
+	SaveDiscoveryLastRun(briefHash, atRFC3339 string) error
+	DiscoveryLastRun() (hash, at string, has bool, err error)
 }
