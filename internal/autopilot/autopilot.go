@@ -33,6 +33,9 @@ type CycleConfig struct {
 	Store     db.Store
 	ZenClient *zen.Client
 	Scrapers  []scraper.Scraper
+	// Notifier delivers the one per-cycle nudge when shortlists exist.
+	// Nil (or any error it returns) never blocks scoring.
+	Notifier Notifier
 	// ExaClient is the shared Exa seam: one budget and one cache for
 	// company research (zen) and posting fetch (detail tier 4). Created
 	// by Run when nil; the budget resets per cycle to ExaCap.
@@ -107,7 +110,10 @@ func Run(ctx context.Context, cfg CycleConfig) db.RunLog {
 	logEntry.PostingsDismissed = dismissed
 	logEntry.PostingsErrored = errored
 
-	// Stage 5+6: Already done per-posting in stage 4.
+	// Stage 5: Notify — one nudge per cycle when shortlists exist.
+	notifyShortlist(ctx, cfg, &logEntry, shortlisted)
+
+	// Stage 6: Run log — written by RunLogged by the caller.
 
 	finished := time.Now().UTC()
 	logEntry.FinishedAt = finished.Format(time.RFC3339)

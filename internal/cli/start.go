@@ -14,6 +14,7 @@ import (
 	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/exa"
+	"github.com/udit-001/waypoint/internal/notify"
 	"github.com/udit-001/waypoint/internal/scraper"
 	"github.com/udit-001/waypoint/internal/server"
 	"github.com/udit-001/waypoint/internal/zen"
@@ -123,7 +124,7 @@ Examples:
 		if startFlags.daemon {
 			settings, _ := store.GetSettings()
 			if settings.AutopilotEnabled == 1 {
-				go startAutopilotTicker(store)
+				go startAutopilotTicker(store, startFlags.port)
 			}
 		}
 
@@ -188,8 +189,9 @@ func init() {
 }
 
 // startAutopilotTicker runs the autopilot cycle on a ticker. It blocks
-// until the process exits. Called from the daemon goroutine.
-func startAutopilotTicker(store db.Store) {
+// until the process exits. Called from the daemon goroutine. port is
+// the server's own port — the notification click target.
+func startAutopilotTicker(store db.Store, port int) {
 	settings, _ := store.GetSettings()
 	cadence := time.Duration(settings.AutopilotCadence) * time.Hour
 	if cadence <= 0 {
@@ -236,12 +238,14 @@ func startAutopilotTicker(store db.Store) {
 			zc.SetCompanySearcher(exaClient)
 		}
 
+		openURL := fmt.Sprintf("http://127.0.0.1:%d/#/found", port)
 		entry := autopilot.RunLogged(context.Background(), autopilot.CycleConfig{
 			Store:     store,
 			ZenClient: zc,
 			Scrapers:  scraper.All(),
 			ExaCap:    10,
 			Recency:   14,
+			Notifier:  notify.New(openURL),
 		})
 
 		log.Printf("autopilot: cycle complete (id=%d, new=%d, shortlisted=%d, dismissed=%d, errored=%d, duration=%dms)",
