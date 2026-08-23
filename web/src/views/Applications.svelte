@@ -51,6 +51,10 @@
   // here on the next visit.
   import { setup } from '../lib/onboarding.svelte.js';
 
+  let profileName = $state('');
+  let autopilotRan = $state(false);
+  let zenKeySet = $state(false);
+
   const setupDoneCount = $derived(
     (profileName !== '' ? 1 : 0) + (autopilotRan ? 1 : 0) + (zenKeySet ? 1 : 0) + (allJobs.length > 0 ? 1 : 0)
   );

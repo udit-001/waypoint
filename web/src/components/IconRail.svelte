@@ -12,7 +12,6 @@
   import { getRouter } from '../stores/router.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import * as api from '../stores/api.svelte.js';
-  import { setup } from '../lib/onboarding.svelte.js';
 
   const router = getRouter();
 
@@ -27,26 +26,6 @@
       router.navigate('/applications');
     }
   }
-
-  // Get Started appears while the setup journey is active; retires
-  // when dismissed or completed. Cheap periodic signal check.
-  let setupActive = $state(false);
-  $effect(() => {
-    const check = () => {
-      const dismissed = localStorage.getItem('wp_onboarding_dismissed') === '1';
-      Promise.all([api.autopilot.ensure(), api.jobs.ensure(), api.profile.ensure()])
-        .then(() => {
-          const done = !!api.profile.value?.name
-            && !!api.autopilot.value?.lastRun
-            && (api.jobs.value || []).length > 0;
-          setupActive = !dismissed && !done;
-        })
-        .catch(() => {});
-    };
-    check();
-    const iv = setInterval(check, 4000);
-    return () => clearInterval(iv);
-  });
 
   const PRIMARY = [
     { view: 'applications', label: 'Applications', icon: 'briefcase' },
@@ -110,22 +89,6 @@
 
   <!-- Nav -->
   <nav class="flex flex-col flex-1 py-2 gap-0.5 px-2">
-    {#if setupActive}
-      <a
-        href="/get-started"
-        class="rail-item flex items-center justify-center rounded-lg p-2 transition-colors {router.current.route === 'get-started'
-          ? 'bg-slate-700 text-white'
-          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100'}"
-        onclick={(e) => { e.preventDefault(); router.navigate('/get-started'); }}
-        aria-label="Get started"
-        aria-current={router.current.route === 'get-started' ? 'page' : undefined}
-      >
-        <span class="flex items-center justify-center">
-          {@html iconSvg('sparkles', 20, { duotone: false })}
-        </span>
-        <span class="tooltip">Get started</span>
-      </a>
-    {/if}
     {#each PRIMARY as item (item.view)}
       <a
         href="/{item.view}"
