@@ -18,7 +18,7 @@
   import { fly } from 'svelte/transition';
   import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
-  import { formatDateShort, formatDateFull } from '../lib/format.js';
+  import { formatDateShort, relTime } from '../lib/format.js';
   import { candidateBoardLabel, pendingCandidates } from '../lib/discovery.js';
   import { renderMarkdown } from '../lib/markdown.js';
   import { subscribeLive } from '../lib/live.js';
@@ -598,7 +598,7 @@
                 </div>
 
                 <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-3">
-                  Posted {formatDateFull(p.result.date) || 'unknown'} · found by autopilot {formatDateFull(p.first_seen)}
+                  Posted {relTime(p.result.date)} · found {relTime(p.first_seen)}
                 </p>
               </div>
 
