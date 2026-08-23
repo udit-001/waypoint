@@ -164,6 +164,7 @@ export const settings = createStore(async () => {
     remindersEnabled: Boolean(s.remindersEnabled),
     defaultView: s.defaultView || 'dashboard',
     itemsPerPage: s.itemsPerPage || 25,
+    zenModel: s.zenModel || '',
   };
 });
 

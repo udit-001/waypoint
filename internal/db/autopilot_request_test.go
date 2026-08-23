@@ -56,3 +56,28 @@ func TestUpsertSettingsAutopilot_freshDB(t *testing.T) {
 		t.Errorf("AutopilotEnabled = %d, want 1", st.AutopilotEnabled)
 	}
 }
+
+// TestZenModel_roundTrip: the chosen curation model persists through
+// GetSettings/UpsertSettings and defaults to empty (= shipped default).
+func TestZenModel_roundTrip(t *testing.T) {
+	s := sqliteStore(t)
+
+	st, err := s.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	if st.ZenModel != "" {
+		t.Errorf("fresh ZenModel = %q, want empty", st.ZenModel)
+	}
+
+	if err := s.UpsertSettings(map[string]any{"zen_model": "mimo-v2.5-free"}); err != nil {
+		t.Fatalf("UpsertSettings: %v", err)
+	}
+	st, err = s.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings after upsert: %v", err)
+	}
+	if st.ZenModel != "mimo-v2.5-free" {
+		t.Errorf("ZenModel = %q, want mimo-v2.5-free", st.ZenModel)
+	}
+}

@@ -579,6 +579,9 @@ func (f *FakeStore) UpsertSettings(updates map[string]any) error {
 			f.Settings.ItemsPerPage = n
 		}
 	}
+	if v, ok := updates["zen_model"]; ok {
+		f.Settings.ZenModel = fmt.Sprint(v)
+	}
 	if v, ok := updates["autopilot_enabled"]; ok {
 		if n, ok := v.(int); ok {
 			f.Settings.AutopilotEnabled = n

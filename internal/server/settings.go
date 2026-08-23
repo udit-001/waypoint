@@ -51,7 +51,7 @@ func handleUpdateSettings(store db.Store) http.HandlerFunc {
 		enabledNow := false
 		for k, v := range body {
 			switch k {
-			case "theme", "default_view", "autopilot_provider", "zen_api_key":
+			case "theme", "default_view", "autopilot_provider", "zen_api_key", "zen_model":
 				updates[k] = v
 			case "items_per_page", "autopilot_cadence":
 				// Accept both float64 (JSON) and int.

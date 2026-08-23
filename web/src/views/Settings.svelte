@@ -17,6 +17,10 @@ import { setPage } from '../stores/page.svelte.js';
   let autopilotError = $state(null);
   let zenKeySet = $state(false);
   let zenKeyValue = $state('');
+  let zenModel = $state('');
+  let zenModels = $state([]);
+  let zenModelSaving = $state(false);
+  let zenModelSaved = $state(false);
   let zenKeySaving = $state(false);
   let zenKeySaved = $state(false);
   let zenKeyError = $state(null);
@@ -32,6 +36,7 @@ import { setPage } from '../stores/page.svelte.js';
 
     await api.settings.ensure();
     settingsData = api.settings.value;
+    zenModel = settingsData.zenModel || '';
     currentFont = document.documentElement.dataset.font || localStorage.getItem('waypoint_font') || 'sans';
 
     // Load autopilot data.
@@ -73,6 +78,35 @@ import { setPage } from '../stores/page.svelte.js';
       exaKeyError = e.message;
     } finally {
       exaKeySaving = false;
+    }
+  }
+
+  async function loadZenModels() {
+    try {
+      const res = await fetch('/api/zen/models');
+      if (res.ok) {
+        const data = await res.json();
+        zenModels = data.models || [];
+      }
+    } catch { /* dropdown falls back to current selection only */ }
+  }
+  loadZenModels();
+
+  async function saveZenModel() {
+    if (zenModelSaving) return;
+    zenModelSaving = true;
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zen_model: zenModel }),
+      });
+      if (res.ok) {
+        zenModelSaved = true;
+        setTimeout(() => { zenModelSaved = false; }, 1500);
+      }
+    } finally {
+      zenModelSaving = false;
     }
   }
 
@@ -159,66 +193,11 @@ import { setPage } from '../stores/page.svelte.js';
   }
 </script>
 
-<div class="space-y-4">
-  <!-- App Settings -->
-  <Card hover={false}>
-    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
-      {@html iconSvg('sliders', 20)} App Settings
-    </h3>
-    <p class="text-sm text-slate-400 mb-6">Set these with the <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-xs">waypoint</code> CLI.</p>
-    {#if settingsData}
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Default View</label>
-          <div class="text-sm text-slate-700">{settingsData.defaultView || 'dashboard'}</div>
-        </div>
-        <div>
-          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Theme</label>
-          <div class="text-sm text-slate-700 capitalize">{settingsData.theme || 'light'}</div>
-        </div>
-        <div>
-          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Notifications</label>
-          <div class="text-sm text-slate-700">{settingsData.remindersEnabled ? 'Enabled' : 'Disabled'}</div>
-        </div>
-        <div>
-          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Items Per Page</label>
-          <div class="text-sm text-slate-700">{settingsData.itemsPerPage || 25}</div>
-        </div>
-      </div>
-    {:else}
-      <Spinner text="Loading settings..." />
-    {/if}
-  </Card>
+<div class="space-y-4">  <div class="pt-2">
+    <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">Your search</h2>
+  </div>
 
-  <!-- Typography -->
-  <Card hover={false}>
-    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
-      <span class="text-lg">T</span> Typography
-    </h3>
-    <p class="text-sm text-slate-400 mb-6">Choose your preferred reading font.</p>
-    <div class="flex gap-3">
-      <button
-        class="flex-1 p-4 rounded-lg border-2 text-center cursor-pointer transition-[border-color] {currentFont === 'sans' ? 'border-slate-700 bg-slate-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}"
-        style="font-family: 'Inter', sans-serif"
-        onclick={() => setFont('sans')}
-      >
-        <div class="text-xl font-semibold mb-1">Aa</div>
-        <div class="text-xs opacity-70">Inter</div>
-        <div class="text-xs opacity-50 mt-0.5">Sans-serif</div>
-      </button>
-      <button
-        class="flex-1 p-4 rounded-lg border-2 text-center cursor-pointer transition-[border-color] {currentFont === 'serif' ? 'border-slate-700 bg-slate-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}"
-        style="font-family: 'PT Serif', serif"
-        onclick={() => setFont('serif')}
-      >
-        <div class="text-xl font-semibold mb-1">Aa</div>
-        <div class="text-xs opacity-70">PT Serif</div>
-        <div class="text-xs opacity-50 mt-0.5">Serif</div>
-      </button>
-    </div>
-  </Card>
-
-  <!-- Autopilot -->
+<!-- Autopilot -->
   <Card hover={false}>
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
       {@html iconSvg('zap', 20)} Autopilot
@@ -286,7 +265,8 @@ import { setPage } from '../stores/page.svelte.js';
     {/if}
   </Card>
 
-  <!-- Zen API key -->
+
+<!-- Zen API key -->
   <Card hover={false}>
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
       {@html iconSvg('zap', 20)} Zen API key
@@ -317,12 +297,40 @@ import { setPage } from '../stores/page.svelte.js';
     {#if zenKeyError}
       <p class="text-xs text-red-600 mt-2">{zenKeyError}</p>
     {/if}
+    <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-600">
+      <label class="wp-label" for="zen-model">Curation model</label>
+      <p class="text-xs text-slate-400 dark:text-slate-500 mb-2">
+        Which free model judges your matches. Different models, different taste — switch any time.
+      </p>
+      <div class="flex gap-2">
+        <select
+          id="zen-model"
+          bind:value={zenModel}
+          class="flex-1 min-w-0 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-slate-400"
+        >
+          <option value="">Default (x-preview-f-free)</option>
+          {#each zenModels as m}
+            <option value={m}>{m}</option>
+          {/each}
+          {#if zenModel && !zenModels.includes(zenModel)}
+            <option value={zenModel}>{zenModel}</option>
+          {/if}
+        </select>
+        <button
+          class="px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"
+          disabled={zenModelSaving || !zenKeySet}
+          title={zenKeySet ? '' : 'Save a Zen key first'}
+          onclick={saveZenModel}
+        >{zenModelSaving ? 'Saving…' : zenModelSaved ? 'Saved' : 'Apply'}</button>
+      </div>
+    </div>
     <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">
       Get one at <a href="https://opencode.ai/auth" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-300 underline">opencode.ai/auth</a> → Billing → copy the key (starts with <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">oc_</code>). Prepaid credits, pay per request.
     </p>
   </Card>
 
-  <!-- Exa API key -->
+
+<!-- Exa API key -->
   <Card hover={false}>
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
       {@html iconSvg('search', 20)} Exa API key
@@ -356,7 +364,76 @@ import { setPage } from '../stores/page.svelte.js';
     <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">Also needs a Zen API key — discovery expands the brief with Zen, then enumerates with Exa (~30–60 calls per run).</p>
   </Card>
 
-  <!-- CLI Reference -->
+
+  <div class="pt-2">
+    <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">Preferences</h2>
+  </div>
+
+<!-- App Settings -->
+  <Card hover={false}>
+    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
+      {@html iconSvg('sliders', 20)} App Settings
+    </h3>
+    <p class="text-sm text-slate-400 mb-6">Set these with the <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-xs">waypoint</code> CLI.</p>
+    {#if settingsData}
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Default View</label>
+          <div class="text-sm text-slate-700">{settingsData.defaultView || 'dashboard'}</div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Theme</label>
+          <div class="text-sm text-slate-700 capitalize">{settingsData.theme || 'light'}</div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Notifications</label>
+          <div class="text-sm text-slate-700">{settingsData.remindersEnabled ? 'Enabled' : 'Disabled'}</div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Items Per Page</label>
+          <div class="text-sm text-slate-700">{settingsData.itemsPerPage || 25}</div>
+        </div>
+      </div>
+    {:else}
+      <Spinner text="Loading settings..." />
+    {/if}
+  </Card>
+
+
+<!-- Typography -->
+  <Card hover={false}>
+    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
+      <span class="text-lg">{@html iconSvg('type', 20)}</span> Typography
+    </h3>
+    <p class="text-sm text-slate-400 mb-6">Choose your preferred reading font.</p>
+    <div class="flex gap-3">
+      <button
+        class="flex-1 p-4 rounded-lg border-2 text-center cursor-pointer transition-[border-color] {currentFont === 'sans' ? 'border-slate-700 bg-slate-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}"
+        style="font-family: 'Inter', sans-serif"
+        onclick={() => setFont('sans')}
+      >
+        <div class="text-xl font-semibold mb-1">Aa</div>
+        <div class="text-xs opacity-70">Inter</div>
+        <div class="text-xs opacity-50 mt-0.5">Sans-serif</div>
+      </button>
+      <button
+        class="flex-1 p-4 rounded-lg border-2 text-center cursor-pointer transition-[border-color] {currentFont === 'serif' ? 'border-slate-700 bg-slate-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}"
+        style="font-family: 'PT Serif', serif"
+        onclick={() => setFont('serif')}
+      >
+        <div class="text-xl font-semibold mb-1">Aa</div>
+        <div class="text-xs opacity-70">PT Serif</div>
+        <div class="text-xs opacity-50 mt-0.5">Serif</div>
+      </button>
+    </div>
+  </Card>
+
+
+  <div class="pt-2">
+    <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">Reference</h2>
+  </div>
+
+<!-- CLI Reference -->
   <Card hover={false}>
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">
       <span class="text-lg">{@html iconSvg('copy', 20)}</span> CLI Quick Reference
@@ -376,4 +453,5 @@ waypoint profile show
 waypoint categories list</pre>
     </div>
   </Card>
+
 </div>

@@ -266,6 +266,9 @@ func runAutopilotCycle(store db.Store, exaClient *exa.Client, openURL, reason st
 	if key := zen.ResolveKey(settings.ZenAPIKey); key != "" {
 		zcfg := zen.DefaultConfig()
 		zcfg.APIKey = key
+		if settings.ZenModel != "" {
+			zcfg.Model = settings.ZenModel // user's pick from Settings
+		}
 		zc = zen.New(zcfg)
 		zc.SetCompanySearcher(exaClient)
 	}

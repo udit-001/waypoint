@@ -44,6 +44,9 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 		if key := zen.ResolveKey(settings.ZenAPIKey); key != "" {
 			cfg := zen.DefaultConfig()
 			cfg.APIKey = key
+			if settings.ZenModel != "" {
+				cfg.Model = settings.ZenModel // user's pick from Settings
+			}
 			zc = zen.New(cfg)
 		} else {
 			fmt.Println("  ⚠  No zen API key — LLM curation will be skipped (postings escalated to manual review)")

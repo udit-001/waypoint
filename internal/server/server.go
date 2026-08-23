@@ -79,6 +79,7 @@ func newMuxWithBoards(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, load
 	mux.HandleFunc("POST /api/profile/import-linkedin", handleImportLinkedIn(store, li))
 	mux.HandleFunc("GET /api/settings", handleGetSettings(store))
 	mux.HandleFunc("PATCH /api/settings", handleUpdateSettings(store))
+	mux.HandleFunc("GET /api/zen/models", handleZenModels(store))
 
 	mux.HandleFunc("GET /api/candidates", handleListCandidates(store))
 	mux.HandleFunc("POST /api/candidates/{id}/add", handleAddCandidate(store, withBoards))
