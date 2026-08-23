@@ -191,7 +191,7 @@ import { setPage } from '../stores/page.svelte.js';
   ]);
 
   onMount(async () => {
-    setPage({ title: 'Profile' });
+    setPage({ title: 'Profile', byline: 'feeds your autopilot' });
 
     const onEsc = (e) => {
       if (e.key === 'Escape' && page.editing) setEditing(false);
@@ -294,7 +294,7 @@ import { setPage } from '../stores/page.svelte.js';
       bind:this={profileTabBtn}
       class="relative z-10 px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors cursor-pointer {tabs.current === 'profile' ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
       onclick={() => tabs.set('profile')}
-    >{@html iconSvg('user', 15)} Profile</button>
+    >{@html iconSvg('user', 15)} Details</button>
     <button
       type="button"
       bind:this={prefsTabBtn}
