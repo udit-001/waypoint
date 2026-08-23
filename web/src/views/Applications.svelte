@@ -49,34 +49,14 @@
   // checklist reads those live instead of trusting a stored "completed"
   // flag, so finishing a step elsewhere (CLI, assistant) checks off
   // here on the next visit.
-  let profileName = $state('');
-  let autopilotRan = $state(false);
-  let zenKeySet = $state(false);
+  import { setup } from '../lib/onboarding.svelte.js';
+
+  const setupDoneCount = $derived(
+    (profileName !== '' ? 1 : 0) + (autopilotRan ? 1 : 0) + (zenKeySet ? 1 : 0) + (allJobs.length > 0 ? 1 : 0)
+  );
+  const setupComplete = $derived(setupDoneCount === 4);
 
   // First-run onboarding (WP-119): the assistant drives the pipeline, so the
-  // welcome card hands the HUMAN a prompt for their assistant — never CLI
-  // commands. Dismissal is respected and never re-shown; once jobs exist the
-  // card is gone for good.
-  const WELCOME_PROMPT =
-    "Set up my job search on Waypoint.\n" +
-    "If you don't have the waypoint skill installed yet, install it first with `waypoint skills install`.\n" +
-    "Then interview me about what I'm looking for, save my profile, and start finding jobs for me to review.";
-  let onboardingDismissed = $state(
-    typeof localStorage !== 'undefined' && localStorage.getItem('wp_onboarding_dismissed') === '1',
-  );
-
-  function copyPrompt() {
-    try {
-      navigator.clipboard.writeText(WELCOME_PROMPT);
-      copiedPrompt = true;
-      setTimeout(() => { copiedPrompt = false; }, 1500);
-    } catch { /* clipboard blocked */ }
-  }
-
-  function dismissOnboarding() {
-    onboardingDismissed = true;
-    try { localStorage.setItem('wp_onboarding_dismissed', '1'); } catch { /* storage blocked */ }
-  }
 
   // Status identity (icon + color) is the canonical visual marker.
   // Sourced from lib/status.js STATUS_META — single source of truth.
@@ -154,45 +134,7 @@
     if (unsubLive) unsubLive();
   });
 
-  // Checklist: three steps to the aha moment (first scored matches).
-  // Each step's done-state reads a live signal, not a stored flag.
-  let setupSteps = $derived([
-    {
-      id: 'profile',
-      title: 'Save your profile',
-      why: 'The first thing your assistant reads — it drives matching.',
-      cta: 'Open Profile',
-      href: '/profile',
-      done: profileName !== '',
-    },
-    {
-      id: 'assistant',
-      title: 'Hand the setup prompt to your assistant',
-      why: 'Your assistant installs the skill and starts the search.',
-      cta: 'Copy prompt',
-      copy: true,
-      done: autopilotRan,
-    },
-    {
-      id: 'keys',
-      title: 'Connect scoring — paste your Zen key',
-      why: 'One free key makes autopilot judge every posting before it reaches Matches.',
-      cta: 'Open Settings',
-      href: '/settings',
-      done: zenKeySet,
-    },
-    {
-      id: 'review',
-      title: 'Review your first matches',
-      why: 'Autopilot files the best ones in Matches — you Add or Dismiss.',
-      cta: 'Open Matches',
-      href: '/found',
-      done: allJobs.length > 0,
-    },
-  ]);
-  let setupDone = $derived(setupSteps.filter(s => s.done).length);
-  let setupComplete = $derived(setupDone === setupSteps.length);
-
+  // Setup doorway signals — same live sources as the Get Started page.
   // Re-sync the page header as data loads / the byline shifts.
   $effect(() => { setPage({ title: 'Applications', byline: byline }); });
 
@@ -257,55 +199,19 @@
     </div>
   {/if}
 {:else if allJobs.length === 0}
-  {#if !onboardingDismissed && !setupComplete}
-    <!-- First-run: getting-started checklist (WP-119, revised). Three
-         steps to the aha moment, each with a live completion signal —
-         steps finished elsewhere (CLI, assistant) check off here.
-         Auto-hides once all three read done. -->
-    <div class="max-w-md mx-auto py-12 px-4">
-      <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-1">Set up your job search</h3>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Then Waypoint runs itself. Your assistant does the legwork.</p>
-
-      <div class="bg-white dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-xl divide-y divide-slate-100 dark:divide-slate-600">
-        {#each setupSteps as step, i (step.id)}
-          {@const isNext = !step.done && setupSteps.slice(0, i).every(s => s.done)}
-          <div class="flex items-start gap-3 px-4 py-3.5 {step.done || isNext ? '' : 'opacity-50'}">
-            {#if step.done}
-              <span class="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400">{@html iconSvg('check-circle', 18)}</span>
-            {:else}
-              <span class="shrink-0 mt-0.5 size-[18px] rounded-full border-2 {isNext ? 'border-slate-400 dark:border-slate-400' : 'border-slate-200 dark:border-slate-600'} flex items-center justify-center text-[10px] font-semibold text-slate-400">{i + 1}</span>
-            {/if}
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium {step.done ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-800 dark:text-slate-100'}">{step.title}</p>
-              <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{step.why}</p>
-            </div>
-            {#if !step.done && isNext}
-              {#if step.copy}
-                <button
-                  class="shrink-0 mt-0.5 px-3 py-1.5 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer {copiedPrompt ? 'emerald-check' : ''}"
-                  onclick={copyPrompt}
-                >{#if copiedPrompt}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 12)}Copied</span>{:else}{step.cta}{/if}</button>
-              {:else}
-                <a
-                  href={step.href}
-                  class="shrink-0 mt-0.5 px-3 py-1.5 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors"
-                >{step.cta}</a>
-              {/if}
-            {/if}
-          </div>
-        {/each}
-      </div>
-
-      <div class="flex items-center justify-between mt-4">
-        <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums">{setupDone} of {setupSteps.length} done</span>
-        <button
-          class="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer bg-transparent border-none p-0"
-          onclick={dismissOnboarding}
-        >Skip — I'll explore on my own.</button>
-      </div>
+  {#if !setup.dismissed && !setupComplete}
+    <!-- Setup in progress → doorway to the dedicated Get Started page. -->
+    <div class="text-center py-20 text-slate-400 dark:text-slate-500">
+      <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('sparkles', 48)}</div>
+      <p class="text-sm text-slate-600 dark:text-slate-300 font-medium mb-1">Finish setting up your job search</p>
+      <p class="text-xs mb-5">{4 - setupDoneCount} step(s) left — autopilot takes over after that.</p>
+      <a
+        href="/get-started"
+        class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 rounded-lg hover:opacity-90 transition-colors"
+      >{@html iconSvg('sparkles', 14)} Continue setup</a>
     </div>
   {:else}
-    <!-- Dismissed (WP-119): quiet line, no card, no CLI. -->
+    <!-- Dismissed or complete (WP-119): quiet line, no card, no CLI. -->
     <div class="text-center py-20 text-slate-400 dark:text-slate-500">
       <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('list', 48)}</div>
       <p class="text-sm">No applications yet — ask your assistant to find jobs for you.</p>

@@ -1,7 +1,8 @@
 <script>
   // WP-98 — 60px icon rail replacing the 15rem Sidebar.
-  // Pure collapsed state, no expand toggle. Six icons in two groups:
-  //   primary (top):    Applications, Artifacts
+  // Pure collapsed state, no expand toggle.
+  //   primary (top):    Get started (while active), Applications, Matches,
+  //                     Companies, Artifacts
   //   secondary (end):  Categories, Profile, AI Skills, Settings
   // Hover any icon → flyout tooltip with the label (pointer:fine only;
   // touch users tap to navigate, the icon is its own affordance).
@@ -10,6 +11,8 @@
   import { onMount } from 'svelte';
   import { getRouter } from '../stores/router.svelte.js';
   import { iconSvg } from '../lib/icons.js';
+  import * as api from '../stores/api.svelte.js';
+  import { setup } from '../lib/onboarding.svelte.js';
 
   const router = getRouter();
 
@@ -25,7 +28,25 @@
     }
   }
 
-  import * as api from '../stores/api.svelte.js';
+  // Get Started appears while the setup journey is active; retires
+  // when dismissed or completed. Cheap periodic signal check.
+  let setupActive = $state(false);
+  $effect(() => {
+    const check = () => {
+      const dismissed = localStorage.getItem('wp_onboarding_dismissed') === '1';
+      Promise.all([api.autopilot.ensure(), api.jobs.ensure(), api.profile.ensure()])
+        .then(() => {
+          const done = !!api.profile.value?.name
+            && !!api.autopilot.value?.lastRun
+            && (api.jobs.value || []).length > 0;
+          setupActive = !dismissed && !done;
+        })
+        .catch(() => {});
+    };
+    check();
+    const iv = setInterval(check, 4000);
+    return () => clearInterval(iv);
+  });
 
   const PRIMARY = [
     { view: 'applications', label: 'Applications', icon: 'briefcase' },
@@ -42,6 +63,7 @@
       unreviewedCount = (api.postings.value || []).filter(p => p.status === 'shortlisted').length;
     } catch {}
   });
+
   const SECONDARY = [
     { view: 'categories', label: 'Categories', icon: 'box' },
     { view: 'profile', label: 'Profile', icon: 'user' },
@@ -88,6 +110,22 @@
 
   <!-- Nav -->
   <nav class="flex flex-col flex-1 py-2 gap-0.5 px-2">
+    {#if setupActive}
+      <a
+        href="/get-started"
+        class="rail-item flex items-center justify-center rounded-lg p-2 transition-colors {router.current.route === 'get-started'
+          ? 'bg-slate-700 text-white'
+          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-100'}"
+        onclick={(e) => { e.preventDefault(); router.navigate('/get-started'); }}
+        aria-label="Get started"
+        aria-current={router.current.route === 'get-started' ? 'page' : undefined}
+      >
+        <span class="flex items-center justify-center">
+          {@html iconSvg('sparkles', 20, { duotone: false })}
+        </span>
+        <span class="tooltip">Get started</span>
+      </a>
+    {/if}
     {#each PRIMARY as item (item.view)}
       <a
         href="/{item.view}"

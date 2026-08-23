@@ -3,6 +3,7 @@
   import TopBar from './components/TopBar.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
   import Applications from './views/Applications.svelte';
+  import GetStarted from './views/GetStarted.svelte';
   import FoundJobs from './views/FoundJobs.svelte';
   import Companies from './views/Companies.svelte';
   import Categories from './views/Categories.svelte';
@@ -35,7 +36,9 @@
       <FilterBar />
     {/if}
     <div class="flex-1 p-6 overflow-y-auto">
-      {#if router.current.route === 'applications'}
+      {#if router.current.route === 'get-started'}
+        <GetStarted />
+      {:else if router.current.route === 'applications'}
         <Applications />
       {:else if router.current.route === 'found'}
         <FoundJobs />
