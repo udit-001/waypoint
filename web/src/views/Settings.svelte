@@ -194,7 +194,8 @@ import { setPage } from '../stores/page.svelte.js';
 </script>
 
 <div class="space-y-4">  <div class="pt-2">
-    <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">Your search</h2>
+    <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">Autopilot</h2>
+    <p class="text-xs text-slate-400 dark:text-slate-500 px-1 mt-1 mb-1">Watches your companies, judges new postings against your brief, and lands the best ones in Matches.</p>
   </div>
 
 <!-- Autopilot -->
@@ -202,7 +203,7 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
       {@html iconSvg('zap', 20)} Autopilot
     </h3>
-    <p class="text-sm text-slate-400 mb-4">Run your job search automatically in the background.</p>
+    <p class="text-sm text-slate-400 mb-4">Checks your companies and job boards on a schedule, then files the best matches in Matches.</p>
     {#if autopilotEnabled !== null}
       <div class="space-y-3">
         <div class="flex items-center justify-between">
@@ -271,7 +272,7 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
       {@html iconSvg('zap', 20)} Zen API key
     </h3>
-    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Powers match scoring. Without it, autopilot runs on rules only — matches land unscored.</p>
+    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Judges each posting against your brief before it reaches Matches. Without a key, autopilot still runs — matches arrive unscored.</p>
     {#if zenKeySet}
       <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
         {@html iconSvg('check-circle', 14)}
@@ -335,7 +336,7 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
       {@html iconSvg('search', 20)} Exa API key
     </h3>
-    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Powers company discovery: expands your brief into facets and enumerates companies per facet. Without it, discovery runs on the built-in starter list.</p>
+    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Optional. Lets autopilot discover new companies to watch when your list runs dry — it expands your brief and suggests candidates on the Companies page.</p>
     {#if exaKeySet}
       <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
         {@html iconSvg('check-circle', 14)}
