@@ -264,7 +264,7 @@
          Auto-hides once all three read done. -->
     <div class="max-w-md mx-auto py-12 px-4">
       <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-1">Set up your job search</h3>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Three steps — then Waypoint runs itself. Your assistant does the legwork.</p>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Then Waypoint runs itself. Your assistant does the legwork.</p>
 
       <div class="bg-white dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-xl divide-y divide-slate-100 dark:divide-slate-600">
         {#each setupSteps as step, i (step.id)}
