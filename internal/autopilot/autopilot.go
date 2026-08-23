@@ -266,6 +266,10 @@ For each posting (title, company, location, description):
 2. Call curate_posting with:
    - verdict: shortlist or dismiss
    - score: 0-100
+   - overview: 2-3 neutral sentences describing THIS posting only — what
+     the team builds, core stack/systems, work model and location. Facts
+     from the posting; never compare to the person (note/reasons do that).
+     This replaces the raw description on the review page. Max 60 words.
    - note: 1-2 sentences saying what the row doesn't — the stack and
      systems, the team's remit, the product, the hiring bar, or the
      real dealbreaker. The title/company/location/score/chips are
@@ -337,11 +341,12 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 			continue
 		}
 
-		// Apply verdict — store score, note, reasons in posting metadata.
+		// Apply verdict — store score, overview, note, reasons in posting metadata.
 		meta := map[string]string{
-			"score":   fmt.Sprintf("%d", v.Score),
-			"note":    v.Note,
-			"reasons": mustJSON(v.Reasons),
+			"score":    fmt.Sprintf("%d", v.Score),
+			"overview": v.Overview,
+			"note":     v.Note,
+			"reasons":  mustJSON(v.Reasons),
 		}
 		_ = cfg.Store.EnrichPosting(p.URL, "", meta)
 

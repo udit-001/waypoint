@@ -41,17 +41,32 @@ type fakeResponse struct {
 	toolCall bool // true: reply with a curate_posting tool call
 	decision string
 	score    int
+	note     string
+	overview string
 	reasons  []string // raw text fragments; serialized as {kind:match, field:role, text}
 }
 
 func toolCallBody(model, decision string, score int, reasons []string) map[string]any {
+	return toolCallBodyFull(model, decision, score, "", "", reasons)
+}
+
+// toolCallBodyFull builds a curate_posting tool-call response; note and
+// overview are optional (omitted from the wire when empty).
+func toolCallBodyFull(model, decision string, score int, note, overview string, reasons []string) map[string]any {
 	objs := make([]map[string]any, len(reasons))
 	for i, r := range reasons {
 		objs[i] = map[string]any{"kind": "match", "field": "role", "text": r}
 	}
-	args, _ := json.Marshal(map[string]any{
+	argsMap := map[string]any{
 		"verdict": decision, "score": score, "reasons": objs,
-	})
+	}
+	if note != "" {
+		argsMap["note"] = note
+	}
+	if overview != "" {
+		argsMap["overview"] = overview
+	}
+	args, _ := json.Marshal(argsMap)
 	return map[string]any{
 		"id":     "chatcmpl-fake",
 		"object": "chat.completion",
@@ -118,7 +133,7 @@ func (f *fakeZen) handler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(resp.status)
 		json.NewEncoder(w).Encode(errorBody("boom"))
 	case resp.toolCall:
-		json.NewEncoder(w).Encode(toolCallBody(model, resp.decision, resp.score, resp.reasons))
+		json.NewEncoder(w).Encode(toolCallBodyFull(model, resp.decision, resp.score, resp.note, resp.overview, resp.reasons))
 	default:
 		json.NewEncoder(w).Encode(plainBody("no tool call here"))
 	}
@@ -169,7 +184,7 @@ const briefPrompt = `BRIEF: {"facts":{"title":"Backend Engineer"}}`
 // ---- happy path -------------------------------------------------------------
 
 func TestCurate_sendsLockedWireShape(t *testing.T) {
-	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 88, reasons: []string{"Senior Go engineer role"}}}}
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 88, reasons: []string{"Senior Go engineer role"}, overview: "Backend platform team; Go stack. Remote-first."}}}
 	c := f.start(t)
 
 	sess := c.NewSession(briefPrompt)
@@ -252,7 +267,7 @@ func TestCurate_sendsLockedWireShape(t *testing.T) {
 }
 
 func TestCurate_freshConversationPerPosting(t *testing.T) {
-	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "dismiss", score: 20, reasons: []string{"wrong location"}}}}
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "dismiss", score: 20, reasons: []string{"wrong location"}, overview: "Backend platform team; Go stack. Remote-first."}}}
 	c := f.start(t)
 
 	sess := c.NewSession(briefPrompt)
@@ -280,7 +295,7 @@ func TestCurate_freshConversationPerPosting(t *testing.T) {
 }
 
 func TestCurate_truncatesMarkdown(t *testing.T) {
-	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"ok"}}}}
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"ok"}, overview: "Backend platform team; Go stack. Remote-first."}}}
 	c := f.start(t)
 
 	long := strings.Repeat("x", 10_000)
@@ -306,7 +321,7 @@ func TestCurate_retriesThenSucceeds(t *testing.T) {
 	f := &fakeZen{script: []fakeResponse{
 		{status: 500},
 		{status: 429},
-		{toolCall: true, decision: "shortlist", score: 70, reasons: []string{"fit"}},
+		{toolCall: true, decision: "shortlist", score: 70, reasons: []string{"fit"}, overview: "Backend platform team; Go stack. Remote-first."},
 	}}
 	c := f.start(t)
 
@@ -330,7 +345,7 @@ func TestCurate_fallbackModel(t *testing.T) {
 	sleeps := stubSleep(t)
 	f := &fakeZen{script: []fakeResponse{
 		{status: 500}, {status: 500}, {status: 500}, // primary exhausted
-		{toolCall: true, decision: "dismiss", score: 10, reasons: []string{"no"}},
+		{toolCall: true, decision: "dismiss", score: 10, reasons: []string{"no"}, overview: "Backend platform team; Go stack. Remote-first."},
 	}}
 	c := f.start(t)
 	c.fallbackModel = "fallback-model"
@@ -378,7 +393,7 @@ func TestCurate_allFailSelfHeals(t *testing.T) {
 
 	// Session self-heals: the failed turn is not in history, so the next
 	// posting's request is system + its own turn only.
-	f.script = []fakeResponse{{toolCall: true, decision: "shortlist", score: 60, reasons: []string{"fit"}}}
+	f.script = []fakeResponse{{toolCall: true, decision: "shortlist", score: 60, reasons: []string{"fit"}, overview: "Backend platform team; Go stack. Remote-first."}}
 	if _, err := sess.Curate(context.Background(), Posting{URL: "https://example.com/2", Markdown: "md"}); err != nil {
 		t.Fatalf("post-failure Curate: %v", err)
 	}
@@ -424,7 +439,7 @@ func TestCurate_noToolCallIsRetried(t *testing.T) {
 	f := &fakeZen{script: []fakeResponse{ // 200s without tool calls
 		{}, {}, {},
 		// fallback succeeds
-		{toolCall: true, decision: "shortlist", score: 55, reasons: []string{"ok"}},
+		{toolCall: true, decision: "shortlist", score: 55, reasons: []string{"ok"}, overview: "Backend platform team; Go stack. Remote-first."},
 	}}
 	c := f.start(t)
 	c.fallbackModel = "fallback-model"
@@ -441,8 +456,8 @@ func TestCurate_noToolCallIsRetried(t *testing.T) {
 func TestCurate_invalidVerdictRetried(t *testing.T) {
 	stubSleep(t)
 	f := &fakeZen{script: []fakeResponse{
-		{toolCall: true, decision: "maybe", score: 50, reasons: []string{"hmm"}},
-		{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"fit"}},
+		{toolCall: true, decision: "maybe", score: 50, reasons: []string{"hmm"}, overview: "Backend platform team; Go stack. Remote-first."},
+		{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"fit"}, overview: "Backend platform team; Go stack. Remote-first."},
 	}}
 	c := f.start(t)
 
@@ -456,7 +471,7 @@ func TestCurate_invalidVerdictRetried(t *testing.T) {
 }
 
 func TestCurate_clampsScore(t *testing.T) {
-	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 150, reasons: []string{"fit"}}}}
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 150, reasons: []string{"fit"}, overview: "Backend platform team; Go stack. Remote-first."}}}
 	c := f.start(t)
 
 	sess := c.NewSession(briefPrompt)
@@ -472,7 +487,7 @@ func TestCurate_clampsScore(t *testing.T) {
 // ---- client identity + config -------------------------------------------------
 
 func TestNew_sessionIDPerClient(t *testing.T) {
-	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 1, reasons: []string{"x"}}}}
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 1, reasons: []string{"x"}, overview: "Backend platform team; Go stack. Remote-first."}}}
 	c1 := f.start(t)
 	c2 := New(Config{BaseURL: c1.baseURL, APIKey: "k", Model: "m", UserAgent: "opencode/test"})
 
@@ -573,8 +588,8 @@ func TestProjectID(t *testing.T) {
 func TestCurate_emptyReasonsRetried(t *testing.T) {
 	stubSleep(t)
 	f := &fakeZen{script: []fakeResponse{
-		{toolCall: true, decision: "shortlist", score: 50},
-		{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"fit"}},
+		{toolCall: true, decision: "shortlist", score: 50, overview: "Backend platform team; Go stack. Remote-first."},
+		{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"fit"}, overview: "Backend platform team; Go stack. Remote-first."},
 	}}
 	c := f.start(t)
 
@@ -590,7 +605,7 @@ func TestCurate_emptyReasonsRetried(t *testing.T) {
 // TestCurate_runeSafeTruncation: truncation must not split a UTF-8
 // rune — the marshaled body must not contain U+FFFD.
 func TestCurate_runeSafeTruncation(t *testing.T) {
-	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"ok"}}}}
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"ok"}, overview: "Backend platform team; Go stack. Remote-first."}}}
 	c := f.start(t)
 
 	// Multibyte text that certainly truncates mid-rune at 3500 bytes.
@@ -648,7 +663,7 @@ func TestCurate_parallelToolCallsAllAnswered(t *testing.T) {
 							{"id": "call-1", "type": "function", "function": map[string]any{
 								"name": "search_company", "arguments": `{"company":"Algolia"}`}},
 							{"id": "call-2", "type": "function", "function": map[string]any{
-								"name": "curate_posting", "arguments": `{"verdict":"shortlist","score":72,"reasons":[{"kind":"match","field":"role","text":"search API backend role"}]}`}},
+								"name": "curate_posting", "arguments": `{"verdict":"shortlist","score":72,"note":"search API backend","overview":"Search API platform team; distributed backend systems. Remote-first.","reasons":[{"kind":"match","field":"role","text":"search API backend role"}]}`}},
 						},
 					},
 				}},
@@ -686,5 +701,54 @@ func TestCurate_parallelToolCallsAllAnswered(t *testing.T) {
 	}
 	if v.Decision != DecisionShortlist || v.Score != 72 {
 		t.Errorf("verdict = %+v", v)
+	}
+}
+
+// TestCurate_overviewParsed: the neutral overview rides the same tool
+// call and lands on the Verdict for the ledger to persist.
+func TestCurate_overviewParsed(t *testing.T) {
+	f := &fakeZen{script: []fakeResponse{{
+		toolCall: true, decision: "shortlist", score: 84,
+		note:     "the delta line",
+		overview: "Billing anomaly-detection team; Go/Ruby stack.",
+		reasons:  []string{"backend"},
+	}}}
+	c := f.start(t)
+
+	sess := c.NewSession(briefPrompt)
+	v, err := sess.Curate(context.Background(), Posting{URL: "https://example.com/1", Markdown: "md"})
+	if err != nil {
+		t.Fatalf("Curate: %v", err)
+	}
+	if v.Overview != "Billing anomaly-detection team; Go/Ruby stack." {
+		t.Errorf("Overview = %q, want the neutral summary", v.Overview)
+	}
+	if v.Note != "the delta line" {
+		t.Errorf("Note = %q, want unchanged", v.Note)
+	}
+}
+
+// Overview is required — a verdict without one is retried; the retry
+// that supplies it succeeds. (The review page renders the overview in
+// place of the raw posting body, so a missing one breaks the row.)
+func TestCurate_overviewRequiredRetried(t *testing.T) {
+	stubSleep(t)
+	f := &fakeZen{script: []fakeResponse{
+		// First attempt omits overview on purpose — must be retried.
+		{toolCall: true, decision: "dismiss", score: 20, reasons: []string{"off-brief"}},
+		{toolCall: true, decision: "dismiss", score: 20, note: "off-brief", overview: "Payments reconciliation platform; Java/Kafka. Hybrid, Mumbai.", reasons: []string{"off-brief"}},
+	}}
+	c := f.start(t)
+
+	sess := c.NewSession(briefPrompt)
+	v, err := sess.Curate(context.Background(), Posting{URL: "https://example.com/2", Markdown: "md"})
+	if err != nil {
+		t.Fatalf("Curate: %v", err)
+	}
+	if f.reqCount() != 2 {
+		t.Errorf("requests = %d, want 2 (missing overview retried)", f.reqCount())
+	}
+	if v.Overview == "" {
+		t.Error("final verdict still has no overview")
 	}
 }

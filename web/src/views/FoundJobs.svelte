@@ -579,12 +579,13 @@
                   </div>
                 </div>
 
-                {#if p.result.description}
+                {#if p.result.metadata?.overview}
+                  <!-- Neutral LLM overview replaces the verbatim posting
+                       body on this page (full text is one click away at
+                       the source). -->
                   <div class="mb-3">
-                    <span class="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px] font-semibold">Description</span>
-                    <!-- line-clamp keeps the review queue scannable; full text
-                         is one click away at the source. -->
-                    <div class="description-content text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed line-clamp-[12]">{@html renderMarkdown(p.result.description)}</div>
+                    <span class="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px] font-semibold">Overview</span>
+                    <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">{p.result.metadata.overview}</p>
                   </div>
                 {/if}
 

@@ -128,10 +128,11 @@ type Posting struct {
 
 // Verdict is the locked curation output.
 type Verdict struct {
-	Decision string   `json:"verdict"` // shortlist | dismiss
-	Score    int      `json:"score"`   // 0-100, ranks the queue (never gates)
-	Note     string   `json:"note"`    // scout's note: 1-2 sentences to the user, the skim layer
-	Reasons  []Reason `json:"reasons"` // 1-3 tagged facts, one per fit dimension
+	Decision string   `json:"verdict"`  // shortlist | dismiss
+	Score    int      `json:"score"`    // 0-100, ranks the queue (never gates)
+	Note     string   `json:"note"`     // scout's note: 1-2 sentences to the user, the skim layer
+	Overview string   `json:"overview"` // neutral 2-3 sentence summary of the posting itself (what/where/stack) — replaces the verbatim body on the review page
+	Reasons  []Reason `json:"reasons"`  // 1-3 tagged facts, one per fit dimension
 }
 
 // Reason is one skimmable fit fact. Kind says whether it supports the
@@ -203,6 +204,10 @@ var curateTool = map[string]any{
 					"type":        "string",
 					"description": "1-2 sentences the row doesn't already tell the user. The title, company, location, score, and reason chips are displayed elsewhere — surface what they can't: the stack and systems, the team's remit, the product it touches, the hiring bar, or the real dealbreaker behind a gap chip. Lead with the decisive fact. Max 200 chars.",
 				},
+				"overview": map[string]any{
+					"type":        "string",
+					"description": "Neutral 2-3 sentence summary of THIS posting only: what the team builds, core stack/systems, work model and location. Facts from the posting — no comparison to the person, no fit opinion (that's note/reasons). Max 60 words.",
+				},
 				"reasons": map[string]any{
 					"type": "array",
 					"items": map[string]any{
@@ -217,7 +222,7 @@ var curateTool = map[string]any{
 					"description": "1-3 fit facts: one per dimension (role, domain, level, location, company), each tagged match or gap",
 				},
 			},
-			"required": []string{"verdict", "score", "note", "reasons"},
+			"required": []string{"verdict", "score", "note", "overview", "reasons"},
 		},
 	},
 }
@@ -434,6 +439,9 @@ func (c *Client) call(ctx context.Context, model string, msgs []message) (messag
 		}
 		if len(v.Reasons) == 0 {
 			return message{}, Verdict{}, false, &Error{Msg: "verdict has no reasons"}
+		}
+		if strings.TrimSpace(v.Overview) == "" {
+			return message{}, Verdict{}, false, &Error{Msg: "verdict has no overview"}
 		}
 		// Normalize: clamp text, default unknown kinds/fields so a
 		// sloppy verdict still renders (legacy string reasons from older
