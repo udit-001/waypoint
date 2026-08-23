@@ -380,7 +380,7 @@
        a company decision widens what future sweeps even fetch. -->
   <div class="-mx-6 -mt-6 mb-6 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/60">
     <div class="flex items-center gap-2 px-6 py-2 border-b border-slate-100 dark:border-slate-700">
-      <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Discovered companies</span>
+      <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Discovered companies <span class="normal-case font-normal text-slate-400 dark:text-slate-500">· from your brief</span></span>
       <span class="bg-slate-200 dark:bg-slate-700 text-slate-600 rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums">{cands.length}</span>
     </div>
     {#if candError}<p class="px-6 pt-2 text-xs text-amber-700">⚠ {candError}</p>{/if}
@@ -439,7 +439,7 @@
         Scoring is off — <a href="/settings" class="underline">add your Zen API key in Settings</a> so matches arrive scored.
       </p>
     {/if}
-    <p class="text-xs mt-2 text-slate-400 dark:text-slate-600">Ask your assistant to run <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">waypoint autopilot run</code> for an immediate pass.</p>
+    <p class="text-xs mt-2 text-slate-400 dark:text-slate-600">Want some now? Ask your assistant to run <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">waypoint autopilot run</code>.</p>
   </div>
 {:else}
   <!-- ── LIST ────────────────────────────────────────── -->

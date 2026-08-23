@@ -139,7 +139,7 @@
 {:else}
   <div class="space-y-4">
     <p class="text-sm text-slate-600 mb-4">
-      Watched companies and their board health. Add one with <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono text-[11px]">waypoint boards add</code>.
+      Companies your autopilot watches. Add one with <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded font-mono text-[11px]">waypoint boards add</code>.
     </p>
 
     {#if error}

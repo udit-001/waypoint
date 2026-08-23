@@ -203,7 +203,6 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
       {@html iconSvg('zap', 20)} Autopilot
     </h3>
-    <p class="text-sm text-slate-400 mb-4">Checks your companies and job boards on a schedule, then files the best matches in Matches.</p>
     {#if autopilotEnabled !== null}
       <div class="space-y-3">
         <div class="flex items-center justify-between">
@@ -272,7 +271,7 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
       {@html iconSvg('zap', 20)} Zen API key
     </h3>
-    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Judges each posting against your brief before it reaches Matches. Without a key, autopilot still runs — matches arrive unscored.</p>
+    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Scores postings before they reach Matches. Without a key they arrive unscored.</p>
     {#if zenKeySet}
       <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
         {@html iconSvg('check-circle', 14)}
@@ -300,9 +299,7 @@ import { setPage } from '../stores/page.svelte.js';
     {/if}
     <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-600">
       <label class="wp-label" for="zen-model">Curation model</label>
-      <p class="text-xs text-slate-400 dark:text-slate-500 mb-2">
-        Which free model judges your matches. Different models, different taste — switch any time.
-      </p>
+      <p class="text-xs text-slate-400 dark:text-slate-500 mb-2">Free models judge your matches. Taste varies — switch any time.</p>
       <div class="flex gap-2">
         <select
           id="zen-model"
@@ -336,7 +333,7 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
       {@html iconSvg('search', 20)} Exa API key
     </h3>
-    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Optional. Lets autopilot discover new companies to watch when your list runs dry — it expands your brief and suggests candidates on the Companies page.</p>
+    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Suggests new companies to watch. Uses your Zen key too.</p>
     {#if exaKeySet}
       <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
         {@html iconSvg('check-circle', 14)}
@@ -362,7 +359,7 @@ import { setPage } from '../stores/page.svelte.js';
     {#if exaKeyError}
       <p class="text-xs text-red-600 mt-2">{exaKeyError}</p>
     {/if}
-    <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">Also needs a Zen API key — discovery expands the brief with Zen, then enumerates with Exa (~30–60 calls per run).</p>
+    <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">A discovery run makes ~30–60 paid lookups.</p>
   </Card>
 
 
@@ -379,7 +376,7 @@ import { setPage } from '../stores/page.svelte.js';
     {#if settingsData}
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Default View</label>
+          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Default view</label>
           <div class="text-sm text-slate-700">{settingsData.defaultView || 'dashboard'}</div>
         </div>
         <div>
@@ -391,7 +388,7 @@ import { setPage } from '../stores/page.svelte.js';
           <div class="text-sm text-slate-700">{settingsData.remindersEnabled ? 'Enabled' : 'Disabled'}</div>
         </div>
         <div>
-          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Items Per Page</label>
+          <label class="block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">Items per page</label>
           <div class="text-sm text-slate-700">{settingsData.itemsPerPage || 25}</div>
         </div>
       </div>
