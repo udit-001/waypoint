@@ -141,6 +141,10 @@
         await api.postings.ensure();
       }
       queue = (api.postings.value || []).filter(p => p.status === 'shortlisted');
+      // Hard guarantee for the keyed each blocks: duplicate URLs would
+      // throw each_key_duplicate and brick every interaction below.
+      const seenUrls = new Set();
+      queue = queue.filter(p => !seenUrls.has(p.result.url) && seenUrls.add(p.result.url));
       // Keep the reviewer's selection across live refetches — a background
       // sweep landing mid-review must not silently drop checked rows.
       // Selection only shrinks when its rows actually left the queue.
