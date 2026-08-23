@@ -16,6 +16,7 @@ type Job struct {
 	URL          string  `db:"url" json:"url"`
 	Notes        string  `db:"notes" json:"notes"`
 	ReminderDate *string `db:"reminder_date" json:"reminderDate,omitempty"`
+	ReviewJSON   string  `db:"review_json" json:"reviewJson,omitempty"` // autopilot review snapshot (see Promote)
 	CreatedAt    string  `db:"created_at" json:"createdAt"`
 	UpdatedAt    string  `db:"updated_at" json:"updatedAt"`
 }

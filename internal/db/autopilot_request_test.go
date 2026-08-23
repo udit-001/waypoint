@@ -1,6 +1,11 @@
 package db
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/udit-001/waypoint/internal/scraper"
+)
 
 // TestAutopilotRunRequest_roundTrip: a requested run is consumable
 // exactly once — the first Consume sees it, the second doesn't.
@@ -79,5 +84,39 @@ func TestZenModel_roundTrip(t *testing.T) {
 	}
 	if st.ZenModel != "mimo-v2.5-free" {
 		t.Errorf("ZenModel = %q, want mimo-v2.5-free", st.ZenModel)
+	}
+}
+
+// TestPromote_snapshotsReview: promoting carries the curation metadata
+// onto the job as review_json — the detail panel must survive ledger
+// pruning.
+func TestPromote_snapshotsReview(t *testing.T) {
+	s := sqliteStore(t)
+	if err := s.AddPostings([]scraper.Result{{
+		URL: "https://example.com/a", Title: "Engineer", Company: "Acme",
+		Metadata: map[string]string{
+			"overview": "Data platform team; Go stack.",
+			"note":     "strong brief fit",
+			"score":    "84",
+			"reasons":  `[{"kind":"match","field":"role","text":"backend"}]`,
+		},
+	}}); err != nil {
+		t.Fatalf("seed posting: %v", err)
+	}
+	_ = s.SetPostingStatus("https://example.com/a", StatusShortlisted)
+
+	job, err := s.Promote("https://example.com/a")
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	var rev struct {
+		Overview string `json:"overview"`
+		Score    string `json:"score"`
+	}
+	if err := json.Unmarshal([]byte(job.ReviewJSON), &rev); err != nil {
+		t.Fatalf("review_json invalid: %v", err)
+	}
+	if rev.Overview != "Data platform team; Go stack." || rev.Score != "84" {
+		t.Errorf("snapshot = %+v", rev)
 	}
 }

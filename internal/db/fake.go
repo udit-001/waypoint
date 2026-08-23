@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -622,7 +623,7 @@ func (f *FakeStore) HasPosting(url string) (bool, error) {
 }
 
 func (f *FakeStore) AddPostings(results []scraper.Result) error {
-	now := time.Now().UTC().Format("2006-01-02")
+	now := time.Now().UTC().Format(time.RFC3339)
 	for _, r := range results {
 		if _, ok := f.Postings[r.URL]; ok {
 			continue
@@ -669,7 +670,7 @@ func (f *FakeStore) PrunePostings(days int) (int, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
 	removed := 0
 	for url, p := range f.Postings {
-		if p.FirstSeen < cutoff {
+		if p.FirstSeen < cutoff && p.Status != "promoted" {
 			delete(f.Postings, url)
 			removed++
 		}
@@ -743,11 +744,12 @@ func (f *FakeStore) Promote(url string) (Job, error) {
 	if !exists {
 		// Create the job via IntakeAddJob (defaults, timestamps, history).
 		job = Job{
-			Company:  p.Result.Company,
-			Position: p.Result.Title,
-			URL:      p.Result.URL,
-			Location: p.Result.Location,
-			Date:     dates.NormalizeDate(p.Result.Date),
+			ReviewJSON: reviewSnapshot(p),
+			Company:    p.Result.Company,
+			Position:   p.Result.Title,
+			URL:        p.Result.URL,
+			Location:   p.Result.Location,
+			Date:       dates.NormalizeDate(p.Result.Date),
 		}
 		job, err = IntakeAddJob(f, job)
 		if err != nil {
@@ -912,4 +914,23 @@ func (f *FakeStore) DiscoveryLastRun() (string, string, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.lastDiscovery.hash, f.lastDiscovery.at, f.lastDiscovery.has, nil
+}
+
+// reviewSnapshot marshals the curation metadata worth keeping on the
+// job after promotion (empty string when nothing to keep).
+func reviewSnapshot(p Posting) string {
+	md := p.Result.Metadata
+	if len(md) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(map[string]string{
+		"overview": md["overview"],
+		"note":     md["note"],
+		"score":    md["score"],
+		"reasons":  md["reasons"],
+	})
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

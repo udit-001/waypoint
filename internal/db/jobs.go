@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const jobColumns = `j.id, j.company, j.position, j.date, j.applied_date, j.status, COALESCE(j.category_id, 0), COALESCE(c.name, ''), j.salary, j.location, j.contact, j.url, j.notes, j.reminder_date, j.created_at, j.updated_at`
+const jobColumns = `j.id, j.company, j.position, j.date, j.applied_date, j.status, COALESCE(j.category_id, 0), COALESCE(c.name, ''), j.salary, j.location, j.contact, j.url, j.notes, j.reminder_date, j.created_at, j.updated_at, j.review_json`
 
 // scanJob scans a single job row from a Row (includes JOIN on categories).
 func scanJob(row interface{ Scan(...any) error }) (Job, error) {
@@ -14,6 +14,7 @@ func scanJob(row interface{ Scan(...any) error }) (Job, error) {
 		&j.ID, &j.Company, &j.Position, &j.Date, &j.AppliedDate,
 		&j.Status, &j.CategoryID, &j.CategoryName, &j.Salary, &j.Location, &j.Contact,
 		&j.URL, &j.Notes, &j.ReminderDate, &j.CreatedAt, &j.UpdatedAt,
+		&j.ReviewJSON,
 	)
 	return j, err
 }

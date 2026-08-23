@@ -91,7 +91,7 @@ func (s *SQLiteStore) HasPosting(url string) (bool, error) {
 // AddPostings inserts new results with status "new". Results whose URL
 // is already in the ledger are skipped (idempotent).
 func (s *SQLiteStore) AddPostings(results []scraper.Result) error {
-	now := time.Now().UTC().Format("2006-01-02")
+	now := time.Now().UTC().Format(time.RFC3339)
 	for _, r := range results {
 		metaJSON, err := marshalPostingMeta(r.Metadata)
 		if err != nil {
@@ -161,8 +161,10 @@ func (s *SQLiteStore) SetPostingStatus(url, status string) error {
 
 // PrunePostings removes entries older than days. Returns count removed.
 func (s *SQLiteStore) PrunePostings(days int) (int, error) {
-	cutoff := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
-	result, err := s.Exec("DELETE FROM postings WHERE first_seen < ?", cutoff)
+	cutoff := time.Now().UTC().AddDate(0, 0, -days).Format(time.RFC3339)
+	// Promoted rows are exempt: the ledger is their permanent record and
+	// JobDetail's review panel reads from it.
+	result, err := s.Exec("DELETE FROM postings WHERE first_seen < ? AND status != 'promoted'", cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("prune postings: %w", err)
 	}
@@ -290,12 +292,24 @@ func (s *SQLiteStore) Promote(url string) (Job, error) {
 				CreatedAt: now,
 				UpdatedAt: now,
 			}
+			// Snapshot the autopilot review so the job's detail panel
+			// survives ledger pruning.
+			if len(p.Result.Metadata) > 0 {
+				if rev, err := json.Marshal(map[string]string{
+					"overview": p.Result.Metadata["overview"],
+					"note":     p.Result.Metadata["note"],
+					"score":    p.Result.Metadata["score"],
+					"reasons":  p.Result.Metadata["reasons"],
+				}); err == nil {
+					job.ReviewJSON = string(rev)
+				}
+			}
 			result, err := tx.Exec(
-				`INSERT INTO jobs (company, position, date, applied_date, status, category_id, salary, location, contact, url, notes, reminder_date, created_at, updated_at)
-				 VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				`INSERT INTO jobs (company, position, date, applied_date, status, category_id, salary, location, contact, url, notes, reminder_date, created_at, updated_at, review_json)
+				 VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				job.Company, job.Position, job.Date, job.AppliedDate, job.Status,
 				job.Salary, job.Location, job.Contact, job.URL, job.Notes,
-				job.ReminderDate, job.CreatedAt, job.UpdatedAt,
+				job.ReminderDate, job.CreatedAt, job.UpdatedAt, job.ReviewJSON,
 			)
 			if err != nil {
 				return fmt.Errorf("insert promoted job: %w", err)

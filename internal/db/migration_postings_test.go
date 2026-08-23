@@ -83,6 +83,11 @@ func TestMigration00008_existingDB(t *testing.T) {
 		`DELETE FROM goose_db_version WHERE version_id = 12`,
 		`DELETE FROM goose_db_version WHERE version_id = 13`,
 		`DELETE FROM goose_db_version WHERE version_id = 14`,
+		// V16 added jobs.review_json; ADD COLUMN can't be un-applied by
+		// deleting the version row — drop the column itself.
+		`ALTER TABLE jobs DROP COLUMN review_json`,
+		`DELETE FROM goose_db_version WHERE version_id = 15`,
+		`DELETE FROM goose_db_version WHERE version_id = 16`,
 	} {
 		if _, err := raw.Exec(stmt); err != nil {
 			t.Fatalf("revert to V7 (%q): %v", stmt, err)

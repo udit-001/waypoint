@@ -39,10 +39,15 @@
     history = await api.getJobHistory(job.id);
     loading = false;
 
-    // The autopilot review that produced this job (when it came from
-    // Matches): overview, score, note — looked up by URL, works for
-    // every promoted posting still in the ledger.
-    if (job.url) {
+    // The autopilot review that produced this job: prefer the snapshot
+    // taken at promote time; fall back to a ledger lookup for jobs
+    // promoted before snapshots existed.
+    if (job.reviewJson) {
+      try {
+        const md = JSON.parse(job.reviewJson);
+        if (md.overview || md.note || md.score) review = md;
+      } catch { /* malformed snapshot → no panel */ }
+    } else if (job.url) {
       try {
         const res = await fetch('/api/postings/by-url?url=' + encodeURIComponent(job.url));
         if (res.ok) {
