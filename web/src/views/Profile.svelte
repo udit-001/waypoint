@@ -617,6 +617,11 @@ import { setPage } from '../stores/page.svelte.js';
             {#if saveError}
               <span class="text-red-600 dark:text-red-400">{saveError}</span>
             {/if}
+          {:else}
+            <button
+              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+              onclick={() => setEditing(true)}
+            >{@html iconSvg('edit', 12)} Edit</button>
           {/if}
         </div>
       </div>
@@ -774,7 +779,11 @@ import { setPage } from '../stores/page.svelte.js';
           {/if}
         </div>
         {#if !briefData.constraints.visa_sponsorship && !(briefData.constraints.salary_floor ?? []).length}
-          <p class="text-sm text-slate-400 dark:text-slate-500">No constraints set yet.</p>
+          <p class="text-sm text-slate-400 dark:text-slate-500">
+            None — every posting that matches your preferences counts.
+            <button class="text-blue-600 hover:text-blue-700 dark:text-blue-300 underline cursor-pointer bg-transparent border-none p-0 text-sm" onclick={() => setEditing(true)}>Add limits</button>
+            (visa, salary floor) if you want fewer results.
+          </p>
         {/if}
         {/if}
       </section>
