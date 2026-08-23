@@ -560,25 +560,6 @@
                   </div>
                 {/if}
 
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-3">
-                  <div>
-                    <span class="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px] font-semibold">Score</span>
-                    <p class="text-slate-700 dark:text-slate-200 mt-0.5">{score}/100 · {band.label} match</p>
-                  </div>
-                  <div>
-                    <span class="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px] font-semibold">Location</span>
-                    <p class="text-slate-700 dark:text-slate-200 mt-0.5">{p.result.location || 'Not specified'}</p>
-                  </div>
-                  <div>
-                    <span class="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px] font-semibold">Posted</span>
-                    <p class="text-slate-700 dark:text-slate-200 mt-0.5">{formatDateFull(p.result.date) || 'Unknown'}</p>
-                  </div>
-                  <div>
-                    <span class="text-slate-400 dark:text-slate-500 uppercase tracking-wide text-[10px] font-semibold">Found</span>
-                    <p class="text-slate-700 dark:text-slate-200 mt-0.5">{formatDateFull(p.first_seen)}</p>
-                  </div>
-                </div>
-
                 {#if p.result.metadata?.overview}
                   <!-- Neutral LLM overview replaces the verbatim posting
                        body on this page (full text is one click away at
@@ -589,19 +570,9 @@
                   </div>
                 {/if}
 
-                <div class="flex items-center gap-2">
-                  <a
-                    href={p.result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 rounded-lg hover:opacity-90 transition-colors"
-                    onclick={(e) => e.stopPropagation()}
-                  >
-                    {@html iconSvg('external-link', 12)}
-                    View job posting
-                  </a>
+                <div class="flex items-center gap-2 mt-1">
                   <button
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-800 dark:hover:text-emerald-200 transition-colors cursor-pointer"
+                    class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer"
                     onclick={(e) => { e.stopPropagation(); addOne(p); }}
                   >
                     {@html iconSvg('check', 12)}
@@ -614,8 +585,23 @@
                     {@html iconSvg('x', 12)}
                     Dismiss
                   </button>
+                  <span class="flex-1"></span>
+                  <a
+                    href={p.result.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 underline underline-offset-2 hover:text-slate-700 dark:hover:text-slate-200"
+                    onclick={(e) => e.stopPropagation()}
+                  >
+                    full posting ↗
+                  </a>
                 </div>
+
+                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-3">
+                  Posted {formatDateFull(p.result.date) || 'unknown'} · found by autopilot {formatDateFull(p.first_seen)}
+                </p>
               </div>
+
             {/if}
           </div>
         {/each}
