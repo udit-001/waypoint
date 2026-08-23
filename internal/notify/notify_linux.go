@@ -40,6 +40,14 @@ var sendDBus = func(title, body string, onClick func()) error {
 		actions = []string{"default", "Open Waypoint"}
 	}
 
+	// Group at the system level: replace the previous Waypoint banner
+	// instead of stacking a new one each cycle, and claim an app
+	// identity so DEs can associate icon/name.
+	hints := map[string]dbus.Variant{
+		"desktop-entry": dbus.MakeVariant("waypoint"),
+	}
+	replacesID := lastID.Load() // 0 on first send → daemon creates new
+
 	// Explicit bound: a hung bus must not stall cycle end (the default
 	// daemon timeout is ~25s).
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -47,8 +55,8 @@ var sendDBus = func(title, body string, onClick func()) error {
 
 	obj := conn.Object(dbusName, dbusPath)
 	call := obj.CallWithContext(ctx, dbusIface+".Notify", 0,
-		appName, uint32(0), "", title, body, actions,
-		map[string]dbus.Variant{}, int32(-1))
+		appName, replacesID, "", title, body, actions,
+		hints, int32(-1))
 	if call.Err != nil {
 		return fmt.Errorf("notify call: %w", call.Err)
 	}
