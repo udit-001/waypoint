@@ -9,8 +9,6 @@ import { setPage } from '../stores/page.svelte.js';
 
   let settingsData = $state(null);
   let currentFont = $state('sans');
-  let cliPre = $state(null);
-  let copiedCli = $state(false);
   let autopilotEnabled = $state(null);
   let autopilotCadence = $state(6);
   let lastRun = $state(null);
@@ -185,12 +183,6 @@ import { setPage } from '../stores/page.svelte.js';
     localStorage.setItem('waypoint_font', font);
   }
 
-  async function copyCli() {
-    if (!cliPre) return;
-    await navigator.clipboard.writeText(cliPre.textContent);
-    copiedCli = true;
-    setTimeout(() => copiedCli = false, 1500);
-  }
 </script>
 
 <div class="space-y-4">  <div class="pt-2">
@@ -374,7 +366,6 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
       {@html iconSvg('sliders', 20)} App Settings
     </h3>
-    <p class="text-sm text-slate-400 mb-6">Set these with the <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-xs">waypoint</code> CLI.</p>
     {#if settingsData}
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -428,30 +419,5 @@ import { setPage } from '../stores/page.svelte.js';
     </div>
   </Card>
 
-
-  <div class="pt-2">
-    <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">Reference</h2>
-  </div>
-
-<!-- CLI Reference -->
-  <Card hover={false}>
-    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-3">
-      <span class="text-lg">{@html iconSvg('copy', 20)}</span> CLI Quick Reference
-    </h3>
-    <div class="relative">
-      <button
-        class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedCli ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
-        onclick={copyCli}
-      >{#if copiedCli}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 12)}Copied</span>{:else}Copy{/if}</button>
-      <pre bind:this={cliPre} class="bg-slate-50 p-4 pr-20 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint jobs add "Company" "Position" --status Applied --category Tech
-waypoint jobs list --status Applied
-waypoint jobs update 42 --status Offer --notes "Got the offer!"
-waypoint jobs delete 42
-waypoint jobs stats
-waypoint jobs get 42 --history
-waypoint profile show
-waypoint categories list</pre>
-    </div>
-  </Card>
 
 </div>
