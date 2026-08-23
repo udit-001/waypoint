@@ -2,6 +2,7 @@ package autopilot
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -200,5 +201,49 @@ func TestCycle_PanicClosesRunRow(t *testing.T) {
 	}
 	if !strings.Contains(entry.Errors, "panic") {
 		t.Errorf("errors = %q, want panic recorded", entry.Errors)
+	}
+}
+
+// TestCycle_NoZenCapsUnscored: without a Zen client every surviving
+// posting would escalate to shortlisted — a fresh install floods
+// Matches with hundreds of unscored rows. The cycle must escalate
+// only the freshest slice per run.
+func TestCycle_NoZenCapsUnscored(t *testing.T) {
+	stubDiscovery(t)
+	f := db.NewFakeStore()
+
+	// Seed 40 backlog postings, oldest first so newest-first ordering
+	// is observable in WHICH urls got escalated.
+	var results []scraper.Result
+	for i := 0; i < 40; i++ {
+		results = append(results, scraper.Result{
+			URL:   fmt.Sprintf("https://example.com/%02d", i),
+			Title: fmt.Sprintf("Role %02d", i),
+		})
+	}
+	if err := f.AddPostings(results); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	entry := Run(context.Background(), CycleConfig{
+		Store:     f,
+		ExaCap:    0,
+		Recency:   14,
+		ZenClient: nil, // degraded mode
+	})
+
+	if entry.PostingsShortlisted != 25 {
+		t.Fatalf("shortlisted = %d, want capped at 25", entry.PostingsShortlisted)
+	}
+
+	// The escalated ones must be the NEWEST (30..39 by our seed order —
+	// later inserts sort first under RFC3339 DESC ties broken by rowid).
+	shortlisted := map[string]bool{}
+	postings, _ := f.ListPostings(db.StatusShortlisted)
+	for _, p := range postings {
+		shortlisted[p.Result.URL] = true
+	}
+	if len(shortlisted) != 25 {
+		t.Fatalf("ledger shortlisted rows = %d, want 25", len(shortlisted))
 	}
 }

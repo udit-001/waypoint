@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,6 +25,13 @@ import (
 	"github.com/udit-001/waypoint/internal/scraper"
 	"github.com/udit-001/waypoint/internal/zen"
 )
+
+// UnscoredCapPerCycle bounds the degraded path: without a Zen client
+// every surviving posting would escalate to shortlisted, flooding
+// Matches on fresh installs. Only the freshest slice per cycle is
+// escalated; the rest stay queued for later cycles (or for scoring
+// once a key lands).
+const UnscoredCapPerCycle = 25
 
 // sleep is the test seam for backoff pauses.
 var sleep = time.Sleep
@@ -106,6 +114,19 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	allPostings := append(newPostings, backlog...)
 	if cfg.Limit > 0 && len(allPostings) > cfg.Limit {
 		allPostings = allPostings[:cfg.Limit]
+	}
+
+	// Degraded mode (no Zen client): cap escalations to the freshest
+	// slice so a keyless fresh install doesn't flood Matches with
+	// hundreds of unscored rows in one cycle.
+	if cfg.ZenClient == nil {
+		sort.SliceStable(allPostings, func(i, k int) bool {
+			return allPostings[i].Date > allPostings[k].Date
+		})
+		if len(allPostings) > UnscoredCapPerCycle {
+			log.Printf("autopilot: no zen key — escalating newest %d of %d (unscored cap)", UnscoredCapPerCycle, len(allPostings))
+			allPostings = allPostings[:UnscoredCapPerCycle]
+		}
 	}
 
 	// Stage 2: Detail — enrich postings with full job body.

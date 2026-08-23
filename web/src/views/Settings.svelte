@@ -263,7 +263,7 @@ import { setPage } from '../stores/page.svelte.js';
       {@html iconSvg('zap', 20)} Zen API key
     </h3>
     {#if !zenKeySet}
-    <p class="text-sm text-amber-600 dark:text-amber-400 mb-4">No Zen key — matches will arrive unscored until you add one below.</p>
+    <p class="text-sm text-amber-600 dark:text-amber-400 mb-4">No Zen key — the 25 freshest postings per cycle arrive unscored. Add a key below to score everything.</p>
     {/if}
     {#if zenKeySet}
       <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
