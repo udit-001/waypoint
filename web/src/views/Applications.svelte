@@ -17,6 +17,7 @@
 
   import { onMount, onDestroy } from 'svelte';
   import { fly } from 'svelte/transition';
+  import { expoOut } from 'svelte/easing';
   import { getRouter } from '../stores/router.svelte.js';
   import { setPage } from '../stores/page.svelte.js';
   import { getFilter } from '../stores/filter.svelte.js';
@@ -328,7 +329,7 @@
        with an inline count, and cards below. Tight gutters, flat, dense.
        Container has fixed height + overflow-y-hidden so only the card
        list scrolls within each column — headers stay pinned. -->
-  <div class="-mx-6 px-6 -mb-6 flex gap-3 h-[calc(100vh-3.5rem)] pb-4 pt-6 overflow-x-auto overflow-y-hidden">
+  <div class="-mx-6 px-6 -mb-6 flex gap-3 h-[calc(100vh-3.5rem)] pb-4 pt-6 overflow-x-auto overflow-y-hidden" in:fly={{ y: 6, duration: 170, easing: expoOut }}>
     {#each STATUSES as status}
       {@const colJobs = jobsByStatus(status)}
       <div class="flex flex-col flex-1 min-w-[260px] max-w-[300px] h-full overflow-hidden">
@@ -382,7 +383,7 @@
        No -mt-6 here: the chart wrapper above already pulled up, and the
        list follows in normal flow. Sticky headers use -top-6 to stick
        at the visible top (24px above the scrollport = content box top). -->
-  <div class="-mx-6">
+  <div class="-mx-6" in:fly={{ y: 6, duration: 170, easing: expoOut }}>
     {#each groups as g, gi (g.status)}
       <div
         class="sticky -top-6 z-20 flex items-center gap-2 px-6 py-1.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 cursor-pointer select-none"

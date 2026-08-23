@@ -211,11 +211,11 @@ import { setPage } from '../stores/page.svelte.js';
             aria-checked={!!autopilotEnabled}
             aria-label="Autopilot enabled"
             disabled={autopilotToggling}
-            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer disabled:opacity-50 {autopilotEnabled ? 'bg-slate-800' : 'bg-slate-300'}"
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-[120ms] ease-[var(--ease-in-out)] cursor-pointer disabled:opacity-50 {autopilotEnabled ? 'bg-slate-800' : 'bg-slate-300'}"
             onclick={toggleAutopilot}
           >
             <span
-              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {autopilotEnabled ? 'translate-x-6' : 'translate-x-1'}"
+              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-[120ms] ease-[var(--ease-in-out)] active:scale-90 {autopilotEnabled ? 'translate-x-6' : 'translate-x-1'}"
             />
           </button>
         </div>

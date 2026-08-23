@@ -128,7 +128,7 @@
            inset-track + active-button style. -->
       <div class="flex items-center gap-0.5 p-0.5 rounded-md bg-slate-100 dark:bg-slate-700 shadow-[inset_0_1px_2px_rgba(0,0,0,0.10)]">
         <button
-          class="px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors {layoutStore.current === 'list' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
+          class="px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors duration-[120ms] ease-[var(--ease-in-out)] {layoutStore.current === 'list' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
           onclick={() => layoutStore.set('list')}
           aria-pressed={layoutStore.current === 'list'}
         >
@@ -136,7 +136,7 @@
           <span>List</span>
         </button>
         <button
-          class="px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors {layoutStore.current === 'kanban' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
+          class="px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors duration-[120ms] ease-[var(--ease-in-out)] {layoutStore.current === 'kanban' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
           onclick={() => layoutStore.set('kanban')}
           aria-pressed={layoutStore.current === 'kanban'}
         >
