@@ -198,3 +198,41 @@ func TestPromotePostingIdempotent(t *testing.T) {
 		t.Errorf("second promote: status = %d, want 200", w.Code)
 	}
 }
+
+func TestPostingByURL(t *testing.T) {
+	f := db.NewFakeStore()
+	seedPostings(f)
+	_ = f.SetPostingStatus("https://example.com/a", db.StatusShortlisted)
+	_ = f.EnrichPosting("https://example.com/a", "", map[string]string{
+		"overview": "Data platform team; Go stack.",
+		"score":    "81",
+	})
+	mux := newMuxWithLinkedIn(f, nil, nil)
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/postings/by-url?url=https%3A%2F%2Fexample.com%2Fa", nil))
+	if w.Code != 200 {
+		t.Fatalf("status = %d", w.Code)
+	}
+	var p db.Posting
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if p.Result.Metadata["overview"] != "Data platform team; Go stack." {
+		t.Errorf("overview = %q", p.Result.Metadata["overview"])
+	}
+
+	// Unknown URL → 404.
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/postings/by-url?url=https%3A%2F%2Fmissing.example.com%2Fx", nil))
+	if w.Code != 404 {
+		t.Errorf("missing url status = %d, want 404", w.Code)
+	}
+
+	// Missing parameter → 400.
+	w = httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/postings/by-url", nil))
+	if w.Code != 400 {
+		t.Errorf("no-param status = %d, want 400", w.Code)
+	}
+}

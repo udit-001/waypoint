@@ -28,6 +28,7 @@
   let job = $state(null);
   let history = $state([]);
   let linkedArtifacts = $state([]);
+  let review = $state(null); // originating posting's curation metadata
   let loading = $state(true);
   let copiedId = $state(false);
 
@@ -37,6 +38,20 @@
     if (!job) { router.navigate('/'); return; }
     history = await api.getJobHistory(job.id);
     loading = false;
+
+    // The autopilot review that produced this job (when it came from
+    // Matches): overview, score, note — looked up by URL, works for
+    // every promoted posting still in the ledger.
+    if (job.url) {
+      try {
+        const res = await fetch('/api/postings/by-url?url=' + encodeURIComponent(job.url));
+        if (res.ok) {
+          const p = await res.json();
+          const md = p.result?.metadata || {};
+          if (md.overview || md.note || md.score) review = md;
+        }
+      } catch { /* panel is optional chrome */ }
+    }
 
     // Filter artifacts linked to this job
     await api.artifacts.ensure();
@@ -82,6 +97,23 @@
       <div class="mb-6">
         <span class="block text-[11px] uppercase tracking-wide text-slate-400 font-semibold">URL</span>
         <a href={job.url} target="_blank" rel="noopener noreferrer" class="text-sm text-slate-600 hover:text-slate-500 break-all">{job.url}</a>
+      </div>
+    {/if}
+
+    {#if review}
+      <!-- The autopilot's verdict, carried over from Matches -->
+      <div class="mb-6">
+        <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200 dark:border-slate-600 pb-2 mb-3 flex items-center gap-2">
+          {@html iconSvg('zap', 14)} Why your autopilot picked this
+        </h4>
+        <div class="bg-slate-50 dark:bg-slate-700/40 rounded-lg p-4 text-sm">
+          {#if review.overview}
+            <p class="text-slate-700 dark:text-slate-200 leading-relaxed">{review.overview}</p>
+          {/if}
+          {#if review.note}
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-2 italic">{review.note}</p>
+          {/if}
+        </div>
       </div>
     {/if}
 

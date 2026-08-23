@@ -97,6 +97,7 @@ func newMuxWithBoards(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, load
 
 	// Postings review queue
 	mux.HandleFunc("GET /api/postings", handleListPostings(store))
+	mux.HandleFunc("GET /api/postings/by-url", handlePostingByURL(store))
 	mux.HandleFunc("POST /api/postings/{url}/promote", handlePromotePosting(store))
 	mux.HandleFunc("POST /api/postings/{url}/dismiss", handleDismissPosting(store))
 
@@ -535,5 +536,28 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 		}
 
 		jsonResponse(w, resp)
+	}
+}
+
+// handlePostingByURL returns one ledger posting by its URL — the join
+// that lets a promoted job's detail page show the autopilot review
+// (overview, score, note) that produced it.
+func handlePostingByURL(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rawURL := r.URL.Query().Get("url")
+		if rawURL == "" {
+			jsonError(w, "url parameter required", http.StatusBadRequest)
+			return
+		}
+		posting, ok, err := store.GetPosting(rawURL)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			jsonError(w, "no posting with that URL", http.StatusNotFound)
+			return
+		}
+		jsonResponse(w, posting)
 	}
 }
