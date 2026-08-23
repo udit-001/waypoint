@@ -1,6 +1,8 @@
 <script>
   import Field from './Field.svelte';
 
+  const uid = $props.id();
+
   let { label, value = '', placeholder = '', type = 'text', oncommit, ...rest } = $props();
   let draft = $state(value ?? '');
   let focused = $state(false);
@@ -16,8 +18,9 @@
   }
 </script>
 
-<Field {label}>
+<Field {label} forId={uid}>
   <input
+    id={uid}
     class="wp-input w-full"
     {type}
     {placeholder}

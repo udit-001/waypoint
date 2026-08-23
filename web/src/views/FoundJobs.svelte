@@ -439,7 +439,11 @@
         Scoring is off — <a href="/settings" class="underline">add your Zen API key in Settings</a> so matches arrive scored.
       </p>
     {/if}
-    <p class="text-xs mt-2 text-slate-400 dark:text-slate-600">Want some now? Ask your assistant to run <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">waypoint autopilot run</code>.</p>
+    {#if autopilotData?.enabled}
+      <p class="text-xs mt-2 text-slate-400 dark:text-slate-600">Want some now? Ask your assistant to run <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-[11px]">waypoint autopilot run</code>.</p>
+    {:else}
+      <p class="text-xs mt-2 text-slate-400 dark:text-slate-600">Turn autopilot on in <a href="/settings" class="underline">Settings</a> and it fills this queue on its own.</p>
+    {/if}
   </div>
 {:else}
   <!-- ── LIST ────────────────────────────────────────── -->

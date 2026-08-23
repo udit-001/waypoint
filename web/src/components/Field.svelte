@@ -1,8 +1,10 @@
 <script>
-  let { label, children, ...rest } = $props();
+  const uid = $props.id();
+
+  let { label, forId = uid, children } = $props();
 </script>
 
-<div {...rest}>
-  <label class="wp-label">{label}</label>
+<div>
+  <label class="wp-label" for={forId}>{label}</label>
   {@render children()}
 </div>
