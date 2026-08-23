@@ -195,7 +195,6 @@ import { setPage } from '../stores/page.svelte.js';
 
 <div class="space-y-4">  <div class="pt-2">
     <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">Autopilot</h2>
-    <p class="text-xs text-slate-400 dark:text-slate-500 px-1 mt-1 mb-1">Watches your companies, judges new postings against your brief, and lands the best ones in Matches.</p>
   </div>
 
 <!-- Autopilot -->
@@ -271,7 +270,11 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
       {@html iconSvg('zap', 20)} Zen API key
     </h3>
-    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Scores postings before they reach Matches. Without a key they arrive unscored.</p>
+    {#if !zenKeySet}
+    <p class="text-sm text-amber-600 dark:text-amber-400 mb-4">No Zen key — matches will arrive unscored until you add one below.</p>
+    {:else}
+    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Scores postings before they reach Matches.</p>
+    {/if}
     {#if zenKeySet}
       <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
         {@html iconSvg('check-circle', 14)}
@@ -299,7 +302,6 @@ import { setPage } from '../stores/page.svelte.js';
     {/if}
     <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-600">
       <label class="wp-label" for="zen-model">Curation model</label>
-      <p class="text-xs text-slate-400 dark:text-slate-500 mb-2">Free models judge your matches. Taste varies — switch any time.</p>
       <div class="flex gap-2">
         <select
           id="zen-model"
@@ -333,7 +335,9 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
       {@html iconSvg('search', 20)} Exa API key
     </h3>
-    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Suggests new companies to watch. Uses your Zen key too.</p>
+    {#if !exaKeySet}
+    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Optional — suggests new companies to watch. Uses your Zen key.</p>
+    {/if}
     {#if exaKeySet}
       <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
         {@html iconSvg('check-circle', 14)}
