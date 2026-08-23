@@ -17,8 +17,7 @@
   let activeVariant = $state(0);
   let loading = $state(true);
   let copied = $state(false);
-  let cliPre = $state(null);
-  let copiedCli = $state(false);
+  let copiedId = $state(false);
 
   onMount(async () => {
     loading = true;
@@ -52,11 +51,10 @@
     setTimeout(() => copied = false, 1500);
   }
 
-  async function copyCli() {
-    if (!cliPre) return;
-    await navigator.clipboard.writeText(cliPre.textContent);
-    copiedCli = true;
-    setTimeout(() => copiedCli = false, 1500);
+  async function copyId() {
+    await navigator.clipboard.writeText(`Waypoint artifact ${art.id}`);
+    copiedId = true;
+    setTimeout(() => copiedId = false, 1500);
   }
 </script>
 
@@ -107,18 +105,17 @@
       </Card>
     {/if}
 
-    <!-- CLI -->
-    <div class="mt-6">
-      <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2 mb-3">CLI</h4>
-      <div class="relative">
-        <button
-          class="absolute top-2 right-2 px-2.5 py-1 rounded text-xs font-medium cursor-pointer transition-colors {copiedCli ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}"
-          onclick={copyCli}
-        >{#if copiedCli}<span class="inline-flex items-center gap-1">{@html iconSvg('check', 12)}Copied</span>{:else}Copy{/if}</button>
-        <pre bind:this={cliPre} class="bg-slate-50 p-4 pr-20 rounded-lg text-sm text-slate-600 leading-relaxed overflow-x-auto font-mono">waypoint artifacts get {art.id}
-waypoint artifacts archive {art.id}
-waypoint artifacts delete {art.id}</pre>
-      </div>
+    <!-- Hand-off: a reference your assistant can resolve -->
+    <div class="mt-6 flex items-center gap-3 flex-wrap">
+      <span class="text-xs text-slate-400 dark:text-slate-500">Update this artifact through your assistant — it knows:</span>
+      <button
+        class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 font-mono text-xs text-slate-700 dark:text-slate-200 hover:border-slate-400 cursor-pointer transition-colors"
+        onclick={copyId}
+        title="Copies 'Waypoint artifact {art.id}' — paste it into your assistant chat"
+      >
+        ARTIFACT&nbsp;{art.id}
+        {#if copiedId}<span class="text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-0.5 font-sans">{@html iconSvg('check', 11)}Copied</span>{/if}
+      </button>
     </div>
   </div>
 {/if}
