@@ -5,7 +5,10 @@
   import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import * as api from '../stores/api.svelte.js';
+  import { getRouter } from '../stores/router.svelte.js';
   import { setup, dismissSetup } from '../lib/onboarding.svelte.js';
+
+  const router = getRouter();
 
   let profileName = $state('');
   let autopilotRan = $state(false);
@@ -68,8 +71,10 @@
     setPage({ title: 'Get started', byline: `${setupDone} of ${setupSteps.length} done` });
   });
 
-  // Completion retires the surface for good — same seen-state as skip.
+  // Retire the surface the moment it stops applying — skip or full
+  // completion both hand back to Applications.
   $effect(() => {
+    if (setup.dismissed) router.navigate('/applications');
     if (setupComplete) dismissSetup();
   });
 
