@@ -300,7 +300,7 @@ import { setPage } from '../stores/page.svelte.js';
       bind:this={prefsTabBtn}
       class="relative z-10 px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors cursor-pointer {tabs.current === 'preferences' ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
       onclick={() => tabs.set('preferences')}
-    >{@html iconSvg('target', 15)} Job Search Preferences
+    >{@html iconSvg('target', 15)} Preferences
       {#if briefData && !prefsStatus.complete}
         <span class="rounded-full px-1.5 text-[10px] font-semibold tabular-nums bg-slate-700 dark:bg-slate-900 text-white">{prefsStatus.openCount}</span>
       {/if}
