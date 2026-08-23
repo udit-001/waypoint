@@ -51,6 +51,7 @@
   // here on the next visit.
   let profileName = $state('');
   let autopilotRan = $state(false);
+  let zenKeySet = $state(false);
 
   // First-run onboarding (WP-119): the assistant drives the pipeline, so the
   // welcome card hands the HUMAN a prompt for their assistant — never CLI
@@ -129,7 +130,10 @@
       await Promise.all([
         api.jobs.ensure(),
         api.profile.ensure().then(() => { profileName = api.profile.value?.name || ''; }),
-        api.autopilot.ensure().then(() => { autopilotRan = !!api.autopilot.value?.lastRun; }),
+        api.autopilot.ensure().then(() => {
+          autopilotRan = !!api.autopilot.value?.lastRun;
+          zenKeySet = !!api.autopilot.value?.zenKeySet;
+        }),
       ]);
     } catch { /* checklist signals degrade to unchecked */ }
     allJobs = api.jobs.value || [];
@@ -170,9 +174,17 @@
       done: autopilotRan,
     },
     {
+      id: 'keys',
+      title: 'Connect scoring — paste your Zen key',
+      why: 'One free key makes autopilot judge every posting before it reaches Matches.',
+      cta: 'Open Settings',
+      href: '/settings',
+      done: zenKeySet,
+    },
+    {
       id: 'review',
       title: 'Review your first matches',
-      why: 'Autopilot puts scored matches in Matches — you Add or Dismiss.',
+      why: 'Autopilot files the best ones in Matches — you Add or Dismiss.',
       cta: 'Open Matches',
       href: '/found',
       done: allJobs.length > 0,
@@ -285,7 +297,7 @@
       </div>
 
       <div class="flex items-center justify-between mt-4">
-        <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums">{setupDone} of 3 done</span>
+        <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums">{setupDone} of {setupSteps.length} done</span>
         <button
           class="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer bg-transparent border-none p-0"
           onclick={dismissOnboarding}
