@@ -216,26 +216,52 @@ func (ps *profileParser) educationLine(trimmed string) {
 	if isCompanyBlurb(trimmed, e.Institution) {
 		return
 	}
+	// Some profiles render their skill list INSIDE an education entry
+	// ("Skills: R · Power BI · SQL") with no ## Skills section at all.
+	// Route it to Skills, not the education description.
+	if strings.HasPrefix(strings.ToLower(trimmed), "skills:") {
+		ps.addSkills(trimmed)
+		return
+	}
 	e.Description = joinDesc(e.Description, trimmed)
 }
 
 // skillsLine collects skill names: bullet ("•") and newline separated, with
 // LinkedIn boilerplate filtered out.
 func (ps *profileParser) skillsLine(trimmed string) {
-	for _, raw := range regexp.MustCompile(`\s*•\s*|\n+`).Split(trimmed, -1) {
-		s := strings.TrimSpace(raw)
-		if s == "" || isSkillNoise(s) {
+	ps.addSkills(trimmed)
+}
+
+// addSkills splits a raw skills blob ("Skills: A · B · C", bullets,
+// newlines…) into individual names, filtering boilerplate and dups.
+func (ps *profileParser) addSkills(raw string) {
+	raw = strings.TrimLeftFunc(raw, func(r rune) bool {
+		return r == ' ' || r == '\t'
+	})
+	if len(raw) >= 7 && strings.EqualFold(raw[:7], "skills:") {
+		raw = strings.TrimSpace(raw[7:])
+	}
+	for _, s := range regexp.MustCompile(`\s*•\s*|\n+`).Split(raw, -1) {
+		s = strings.TrimSpace(s)
+		if s == "" {
 			continue
 		}
-		dup := false
-		for _, have := range ps.p.Skills {
-			if strings.EqualFold(have, s) {
-				dup = true
-				break
+		// "A · B · C" comma-form arrives as one chunk — split further.
+		for _, part := range regexp.MustCompile(`\s*,\s*|\s·\s`).Split(s, -1) {
+			s2 := strings.TrimSpace(part)
+			if s2 == "" || isSkillNoise(s2) {
+				continue
 			}
-		}
-		if !dup {
-			ps.p.Skills = append(ps.p.Skills, s)
+			dup := false
+			for _, have := range ps.p.Skills {
+				if strings.EqualFold(have, s2) {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				ps.p.Skills = append(ps.p.Skills, s2)
+			}
 		}
 	}
 }
