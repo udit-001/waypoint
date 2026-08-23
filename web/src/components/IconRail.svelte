@@ -102,7 +102,7 @@
         <span class="flex items-center justify-center relative">
           {@html iconSvg(item.icon, 20, { duotone: false })}
           {#if item.badge && unreviewedCount > 0}
-            <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+            <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-600 dark:bg-red-600 ring-2 ring-slate-50 dark:ring-slate-800 text-white text-[9px] font-semibold rounded-full flex items-center justify-center">
               {unreviewedCount > 9 ? '9+' : unreviewedCount}
             </span>
           {/if}
