@@ -272,8 +272,6 @@ import { setPage } from '../stores/page.svelte.js';
     </h3>
     {#if !zenKeySet}
     <p class="text-sm text-amber-600 dark:text-amber-400 mb-4">No Zen key — matches will arrive unscored until you add one below.</p>
-    {:else}
-    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Scores postings before they reach Matches.</p>
     {/if}
     {#if zenKeySet}
       <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
@@ -407,7 +405,7 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
       <span class="text-lg">{@html iconSvg('type', 20)}</span> Typography
     </h3>
-    <p class="text-sm text-slate-400 mb-6">Choose your preferred reading font.</p>
+    
     <div class="flex gap-3">
       <button
         class="flex-1 p-4 rounded-lg border-2 text-center cursor-pointer transition-[border-color] {currentFont === 'sans' ? 'border-slate-700 bg-slate-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}"

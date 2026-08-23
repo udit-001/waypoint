@@ -43,7 +43,7 @@ import { setPage } from '../stores/page.svelte.js';
 {:else}
   <div class="space-y-4">
   <p class="text-sm text-slate-400 mb-4">
-    Organize your applications into categories. Manage them via the CLI.
+    Group applications by track. Managed via the CLI.
   </p>
 
   <!-- All Categories -->
