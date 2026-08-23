@@ -20,6 +20,14 @@ import { setPage } from '../stores/page.svelte.js';
   // brief. The active tab persists to ?tab= + localStorage (lib/profileTabs).
   const tabs = getProfileTabs();
   const prefsStatus = $derived(briefStatus(briefData));
+  // Sliding thumb for the tab pills — same pattern as TopBar's List/Kanban.
+  let profileTabBtn = $state(null);
+  let prefsTabBtn = $state(null);
+  let tabThumb = $state({ x: 0, w: 0 });
+  $effect(() => {
+    const btn = tabs.current === 'profile' ? profileTabBtn : prefsTabBtn;
+    if (btn) tabThumb = { x: btn.offsetLeft, w: btn.offsetWidth };
+  });
   // Whole-tab empty: nothing settled in preferences OR constraints. Read
   // mode then shows one proper empty state instead of two hollow sections.
   const briefEmpty = $derived(
@@ -275,15 +283,22 @@ import { setPage } from '../stores/page.svelte.js';
   <!-- Tabs: profile (identity) vs job-search preferences (brief config).
        The active tab persists via ?tab= + localStorage. Pill styling matches
        the Applications view's List/Kanban toggle (TopBar). -->
-  <div class="flex items-center gap-0.5 p-0.5 rounded-md bg-slate-100 dark:bg-slate-700 shadow-[inset_0_1px_2px_rgba(0,0,0,0.10)] w-fit">
+  <div class="relative flex items-center gap-0.5 p-0.5 rounded-md bg-slate-100 dark:bg-slate-700 shadow-[inset_0_1px_2px_rgba(0,0,0,0.10)] w-fit">
+    <span
+      class="absolute top-0.5 bottom-0.5 rounded-md bg-white dark:bg-slate-600 shadow-sm transition-all duration-[200ms] ease-[var(--ease-in-out)]"
+      style="left: {tabThumb.x}px; width: {tabThumb.w}px"
+      aria-hidden="true"
+    ></span>
     <button
       type="button"
-      class="px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors cursor-pointer {tabs.current === 'profile' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
+      bind:this={profileTabBtn}
+      class="relative z-10 px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors cursor-pointer {tabs.current === 'profile' ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
       onclick={() => tabs.set('profile')}
     >{@html iconSvg('user', 15)} Profile</button>
     <button
       type="button"
-      class="px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors cursor-pointer {tabs.current === 'preferences' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
+      bind:this={prefsTabBtn}
+      class="relative z-10 px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors cursor-pointer {tabs.current === 'preferences' ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
       onclick={() => tabs.set('preferences')}
     >{@html iconSvg('target', 15)} Job Search Preferences
       {#if briefData && !prefsStatus.complete}

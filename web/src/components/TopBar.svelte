@@ -15,6 +15,17 @@
   const filter = getFilter();
   const palette = getCommandPalette();
   const layoutStore = getLayout();
+
+  // Sliding thumb for the List/Kanban segmented control: one pill
+  // glides behind the labels instead of each tab repainting itself.
+  let listPill = $state(null);
+  let kanbanPill = $state(null);
+  let pillThumb = $state({ x: 0, w: 0 });
+  $effect(() => {
+    // reads both the active tab and the button refs — remeasures on switch
+    const btn = layoutStore.current === 'list' ? listPill : kanbanPill;
+    if (btn) pillThumb = { x: btn.offsetLeft, w: btn.offsetWidth };
+  });
   const chartsOpen = getChartsOpen();
 
   let isDark = $state(false);
@@ -126,9 +137,15 @@
            onboarding welcome is the only thing that matters (WP-119). -->
       <!-- WP-95: List|Kanban segmented toggle. Matches the WP-93 prototype's
            inset-track + active-button style. -->
-      <div class="flex items-center gap-0.5 p-0.5 rounded-md bg-slate-100 dark:bg-slate-700 shadow-[inset_0_1px_2px_rgba(0,0,0,0.10)]">
+      <div class="relative flex items-center gap-0.5 p-0.5 rounded-md bg-slate-100 dark:bg-slate-700 shadow-[inset_0_1px_2px_rgba(0,0,0,0.10)]">
+        <span
+          class="absolute top-0.5 bottom-0.5 rounded-md bg-white dark:bg-slate-600 shadow-sm transition-all duration-[200ms] ease-[var(--ease-in-out)]"
+          style="left: {pillThumb.x}px; width: {pillThumb.w}px"
+          aria-hidden="true"
+        ></span>
         <button
-          class="px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors duration-[120ms] ease-[var(--ease-in-out)] {layoutStore.current === 'list' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
+          bind:this={listPill}
+          class="relative z-10 px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors duration-[120ms] ease-[var(--ease-in-out)] {layoutStore.current === 'list' ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
           onclick={() => layoutStore.set('list')}
           aria-pressed={layoutStore.current === 'list'}
         >
@@ -136,7 +153,8 @@
           <span>List</span>
         </button>
         <button
-          class="px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors duration-[120ms] ease-[var(--ease-in-out)] {layoutStore.current === 'kanban' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
+          bind:this={kanbanPill}
+          class="relative z-10 px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors duration-[120ms] ease-[var(--ease-in-out)] {layoutStore.current === 'kanban' ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}"
           onclick={() => layoutStore.set('kanban')}
           aria-pressed={layoutStore.current === 'kanban'}
         >
