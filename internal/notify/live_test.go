@@ -38,8 +38,8 @@ func TestLiveClickActionRoundTrip(t *testing.T) {
 		t.Fatal("no notification id recorded")
 	}
 	if err := conn.Emit("/org/freedesktop/Notifications",
-		dbusIface+".Activated", id, "default"); err != nil {
-		t.Fatalf("emit Activated: %v", err)
+		dbusIface+".ActionInvoked", id, "default"); err != nil {
+		t.Fatalf("emit ActionInvoked: %v", err)
 	}
 
 	select {

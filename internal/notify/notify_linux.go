@@ -77,9 +77,9 @@ func deliver(title, body string, onClick func()) error {
 func watchActivations(conn *dbus.Conn) {
 	if err := conn.AddMatchSignal(
 		dbus.WithMatchInterface(dbusIface),
-		dbus.WithMatchMember("Activated"),
+		dbus.WithMatchMember("ActionInvoked"),
 	); err != nil {
-		log.Printf("notify: match Activated: %v", err)
+		log.Printf("notify: match ActionInvoked: %v", err)
 		return
 	}
 	ch := make(chan *dbus.Signal, 8)
