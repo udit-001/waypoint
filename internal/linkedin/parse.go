@@ -323,7 +323,16 @@ func isCompanyBlurb(line, name string) bool {
 	return re.MatchString(line)
 }
 
+// bulletPrefixRe matches the list markers LinkedIn content carries
+// ("- ", "• ", "* ") — they become visual bullets at render time, so
+// keeping them in storage double-marks every line.
+var bulletPrefixRe = regexp.MustCompile(`^[\s]*[-•*▪◦‣]+\s+`)
+
 func joinDesc(existing, line string) string {
+	line = strings.TrimSpace(bulletPrefixRe.ReplaceAllString(line, ""))
+	if line == "" {
+		return existing
+	}
 	if existing == "" {
 		return line
 	}

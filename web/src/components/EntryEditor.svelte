@@ -100,7 +100,8 @@
             {/if}
             {#if row.description}
               <ul class="mt-1 space-y-0.5 text-sm text-slate-600 dark:text-slate-300">
-                {#each row.description.split('\n').filter((l) => l.trim()) as line}
+                {#each row.description.split('\n').filter((l) => l.trim()) as rawLine}
+                  {@const line = rawLine.replace(/^\s*[-•*▪◦‣]+\s+/, '')}
                   <li class="flex gap-1.5"><span class="text-slate-400 select-none">•</span><span>{line}</span></li>
                 {/each}
               </ul>
