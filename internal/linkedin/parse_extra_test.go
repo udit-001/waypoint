@@ -29,15 +29,15 @@ func TestJoinDesc_stripsBulletMarkers(t *testing.T) {
 }
 
 // Some public profiles render their skill list INSIDE an education entry
-// ("Skills: A · B · C") and have no ## Skills section at all — Mohit
-// Mittal's being the reported case. Those lines must populate Skills,
+// ("Skills: A · B · C") and have no ## Skills section at all (reported
+// against a real import). Those lines must populate Skills,
 // not glue onto the education description.
 func TestParse_skillsLineInsideEducation(t *testing.T) {
 	md := `# Test Candidate
 
 ## Education
 
-### Master of Business Administration - MBA at Delhi University
+### Master of Business Administration - MBA at State University
 
 2021 - 2023 (2 years) in New Delhi, Delhi, India
 
@@ -67,8 +67,8 @@ Department of Business Economics is an educational institution.
 	}
 }
 
-// Regression guard for testuser: education-only profile, no Skills
-// section in the source at all — parse must not crash or invent entries.
+// Education-only profile with no Skills section in the source at all:
+// parse must not crash or invent entries.
 func TestParse_educationOnlyProfile(t *testing.T) {
 	md := `# Test User
 
@@ -76,13 +76,13 @@ M.Sc. Biotechnology 2nd year | Illustrator
 
 ## Education
 
-### M.Sc. Biotechnology at Thapar Institute
+### M.Sc. Biotechnology at State Institute
 
 2023 - Present in India
 
-Thapar Institute of Engineering & Technology is a higher education institution.
+State Institute of Engineering & Technology is a higher education institution.
 
-### Bachelor of Science - BS at Delhi University
+### Bachelor of Science - BS at City College
 
 2021 - 2023 (2 years) in Delhi
 `
