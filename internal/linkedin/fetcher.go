@@ -28,6 +28,11 @@ const maxFetchChars = 12000
 // It is stateless — each FetchProfile performs its own initialize + tool call.
 type Fetcher struct {
 	endpoint string
+	// apiKey resolves the Exa credential per fetch. Dynamic by design: the
+	// key lives in settings and can be saved after the server started, so a
+	// func (not a string) keeps long-lived fetchers current. Nil/empty =
+	// anonymous free tier — the hosted MCP serves it, tightly rate-limited.
+	apiKey func() string
 	// callTool is the seam under which the MCP protocol lives. Tests inject a
 	// fake returning fixture markdown; production wires it to the MCP client
 	// (initialize → call web_fetch_exa), mirroring how the income-tracker
@@ -46,6 +51,13 @@ func WithCallTool(fn func(ctx context.Context, tool string, args map[string]any)
 	return func(f *Fetcher) { f.callTool = fn }
 }
 
+// WithAPIKeyFunc resolves the Exa API key at fetch time. Called once per
+// FetchProfile; empty/whitespace results fetch anonymously. Trimming here
+// (not at the caller) keeps every entry point on one rule.
+func WithAPIKeyFunc(fn func() string) Option {
+	return func(f *Fetcher) { f.apiKey = fn }
+}
+
 // New creates a Fetcher against the hosted Exa MCP server.
 func New(opts ...Option) *Fetcher {
 	f := &Fetcher{endpoint: defaultEndpoint}
@@ -54,7 +66,7 @@ func New(opts ...Option) *Fetcher {
 	}
 	if f.callTool == nil {
 		f.callTool = func(ctx context.Context, tool string, args map[string]any) (string, error) {
-			return callExaTool(ctx, f.endpoint, tool, args)
+			return callExaTool(ctx, f.endpoint, tool, args, f.authHeaders())
 		}
 	}
 	return f
@@ -107,13 +119,16 @@ func ValidateURL(rawURL string) (string, error) {
 
 // callExaTool runs the real MCP round trip: initialize (negotiates protocol
 // and any session), then call the tool echoing the session header back.
-func callExaTool(ctx context.Context, endpoint, tool string, args map[string]any) (string, error) {
+func callExaTool(ctx context.Context, endpoint, tool string, args map[string]any, auth map[string]string) (string, error) {
 	client := mcp.New(endpoint, mcp.WithTimeout(50*time.Second))
-	init, err := client.Initialize(ctx, nil)
+	init, err := client.Initialize(ctx, auth)
 	if err != nil {
 		return "", fmt.Errorf("initialize: %w", err)
 	}
 	headers := map[string]string{}
+	for k, v := range auth {
+		headers[k] = v
+	}
 	if init.SessionID != "" {
 		headers["Mcp-Session-Id"] = init.SessionID
 	}
@@ -122,4 +137,18 @@ func callExaTool(ctx context.Context, endpoint, tool string, args map[string]any
 		return "", fmt.Errorf("tools/call %q: %w", tool, err)
 	}
 	return text, nil
+}
+
+// authHeaders returns the Bearer header when a resolvable key exists,
+// nil otherwise — mirroring internal/exa's rule: send credentials only
+// when a real one exists (an invalid Bearer is worse than none).
+func (f *Fetcher) authHeaders() map[string]string {
+	if f.apiKey == nil {
+		return nil
+	}
+	key := strings.TrimSpace(f.apiKey())
+	if key == "" {
+		return nil
+	}
+	return map[string]string{"Authorization": "Bearer " + key}
 }

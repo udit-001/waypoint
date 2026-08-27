@@ -156,6 +156,14 @@ export async function updateBrief(fields) {
 
 // ─── Settings ───────────────────────────────────────────
 
+/**
+ * Save a single settings key — the seam for all settings writes.
+ * Callers say what; this hides how (PATCH /api/settings).
+ */
+export async function saveSetting(key, value) {
+  return apiMutate('PATCH', '/settings', { [key]: value });
+}
+
 export const settings = createStore(async () => {
   const s = await api('/settings');
   if (!s) return { theme: 'light', remindersEnabled: true, defaultView: 'dashboard', itemsPerPage: 25 };

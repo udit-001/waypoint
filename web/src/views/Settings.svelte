@@ -28,27 +28,39 @@ import { setPage } from '../stores/page.svelte.js';
   let exaKeySaved = $state(false);
   let exaKeyError = $state(null);
   let autopilotToggling = $state(false);
+  let briefComplete = $state(null);
+  let briefOpenCount = $state(0);
 
   onMount(async () => {
     setPage({ title: 'Settings' });
 
     await api.settings.ensure();
     settingsData = api.settings.value;
-    zenModel = settingsData.zenModel || '';
+    zenModel = settingsData.zenModel || 'mimo-v2.5-free';
     currentFont = document.documentElement.dataset.font || localStorage.getItem('waypoint_font') || 'sans';
 
-    // Load autopilot data.
+    // Load autopilot data + brief status.
     try {
-      const res = await fetch('/api/autopilot');
-      if (res.ok) {
-        const data = await res.json();
+      const [autopRes, briefRes] = await Promise.all([
+        fetch('/api/autopilot'),
+        fetch('/api/brief'),
+      ]);
+      if (autopRes.ok) {
+        const data = await autopRes.json();
         autopilotEnabled = data.enabled;
         autopilotCadence = data.cadence || 6;
         lastRun = data.lastRun;
         zenKeySet = !!data.zenKeySet;
         exaKeySet = !!data.exaKeySet;
       }
-    } catch {}
+      if (briefRes.ok) {
+        const b = await briefRes.json();
+        briefComplete = !!b.complete;
+        briefOpenCount = (b.open || []).length;
+      } else {
+        briefComplete = false;
+      }
+    } catch { briefComplete = false; }
   });
 
   async function saveExaKey() {
@@ -196,14 +208,23 @@ import { setPage } from '../stores/page.svelte.js';
     </h3>
     {#if autopilotEnabled !== null}
       <div class="space-y-3">
+        {#if briefComplete === false && !autopilotEnabled}
+          <div class="flex items-start gap-2 p-3 bg-tint-amber border border-warning rounded-lg">
+            <span class="text-warning-strong mt-0.5">{@html iconSvg('alert-circle', 14)}</span>
+            <div class="text-xs text-warning leading-relaxed">
+              <span class="font-medium text-warning-strong">Curation brief incomplete</span> — complete your preferences first (location, remote, salary, etc.) before enabling autopilot.
+              <a href="/get-started" class="underline ml-1 text-link">Open wizard →</a>
+            </div>
+          </div>
+        {/if}
         <div class="flex items-center justify-between">
           <span class="text-sm text-slate-700">Enabled</span>
           <button
             role="switch"
             aria-checked={!!autopilotEnabled}
             aria-label="Autopilot enabled"
-            disabled={autopilotToggling}
-            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-[120ms] ease-[var(--ease-in-out)] cursor-pointer disabled:opacity-50 {autopilotEnabled ? 'bg-slate-800' : 'bg-slate-300'}"
+            disabled={autopilotToggling || (briefComplete === false && !autopilotEnabled)}
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-[120ms] ease-[var(--ease-in-out)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 {autopilotEnabled ? 'bg-slate-800' : 'bg-slate-300'}"
             onclick={toggleAutopilot}
           >
             <span
@@ -262,9 +283,7 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
       {@html iconSvg('zap', 20)} Zen API key
     </h3>
-    {#if !zenKeySet}
-    <p class="text-sm text-amber-600 dark:text-amber-400 mb-4">No Zen key — the 25 freshest postings per cycle arrive unscored. Add a key below to score everything.</p>
-    {/if}
+
     {#if zenKeySet}
       <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
         {@html iconSvg('check-circle', 14)}
@@ -290,6 +309,9 @@ import { setPage } from '../stores/page.svelte.js';
     {#if zenKeyError}
       <p class="text-xs text-red-600 mt-2">{zenKeyError}</p>
     {/if}
+    {#if !zenKeySet}
+      <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">No Zen key — the 25 freshest postings per cycle arrive unscored. Add a key to score everything.</p>
+    {/if}
     <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-600">
       <label class="wp-label" for="zen-model">Curation model</label>
       <div class="flex gap-2">
@@ -298,7 +320,7 @@ import { setPage } from '../stores/page.svelte.js';
           bind:value={zenModel}
           class="flex-1 min-w-0 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-slate-400"
         >
-          <option value="">Default (x-preview-f-free)</option>
+          <option value="">Default (mimo-v2.5-free)</option>
           {#each zenModels as m}
             <option value={m}>{m}</option>
           {/each}
@@ -315,7 +337,7 @@ import { setPage } from '../stores/page.svelte.js';
       </div>
     </div>
     <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">
-      Get one at <a href="https://opencode.ai/auth" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-300 underline">opencode.ai/auth</a> → Billing → copy the key (starts with <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">oc_</code>). Prepaid credits, pay per request.
+      Sign up at <a href="https://opencode.ai/auth" target="_blank" rel="noopener noreferrer" class="text-link underline">opencode.ai/auth</a> → open <span class="font-medium">Billing</span> → copy your key (starts with <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">oc_</code>) and paste it above. Uses free-tier models.
     </p>
   </Card>
 
@@ -353,7 +375,10 @@ import { setPage } from '../stores/page.svelte.js';
     {#if exaKeyError}
       <p class="text-xs text-red-600 mt-2">{exaKeyError}</p>
     {/if}
-    <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">A discovery run makes ~30–60 paid lookups.</p>
+    <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">
+      Create a free account at <a href="https://dashboard.exa.ai" target="_blank" rel="noopener noreferrer" class="text-link underline">dashboard.exa.ai</a> (no credit card needed), then copy a key from <span class="font-medium">API Keys</span> and paste it above.
+    </p>
+    <p class="text-xs text-slate-400 dark:text-slate-500 mt-2 leading-relaxed">A discovery run makes ~30–60 paid lookups.</p>
   </Card>
 
 

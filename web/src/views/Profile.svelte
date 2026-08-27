@@ -781,7 +781,7 @@ import { setPage } from '../stores/page.svelte.js';
         {#if !briefData.constraints.visa_sponsorship && !(briefData.constraints.salary_floor ?? []).length}
           <p class="text-sm text-slate-400 dark:text-slate-500">
             None — every posting that matches your preferences counts.
-            <button class="text-blue-600 hover:text-blue-700 dark:text-blue-300 underline cursor-pointer bg-transparent border-none p-0 text-sm" onclick={() => setEditing(true)}>Add limits</button>
+            <button class="text-link hover:text-link-hover underline cursor-pointer bg-transparent border-none p-0 text-sm" onclick={() => setEditing(true)}>Add limits</button>
             (visa, salary floor) if you want fewer results.
           </p>
         {/if}

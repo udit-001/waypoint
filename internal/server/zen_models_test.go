@@ -17,7 +17,7 @@ func TestZenModels_liveGatewayFiltered(t *testing.T) {
 			t.Errorf("missing bearer token")
 		}
 		json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{
-			{"id": "x-preview-f-free"},
+			{"id": "mimo-v2.5-free"},
 			{"id": "deepseek-v4-flash-free"},
 			{"id": "claude-haiku-4-5"}, // paid — filtered out
 		}})

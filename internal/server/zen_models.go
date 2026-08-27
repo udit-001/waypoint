@@ -15,8 +15,7 @@ import (
 // requires auth for /v1/models). Refreshed by hand when the free tier
 // changes; the live list wins whenever a key exists.
 var fallbackFreeModels = []string{
-	"x-preview-f-free",
-	"mimo-v2.5-free",
+	"mimo-v2.5-free", // default curation model (x-preview-f-free retired upstream)
 	"hy3-free",
 	"nemotron-3-ultra-free",
 	"nemotron-3.5-lightning-free",

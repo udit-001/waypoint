@@ -83,3 +83,28 @@ func TestUpdateSettingsOtherFieldsNoRunRequest(t *testing.T) {
 		t.Error("theme change requested an autopilot run")
 	}
 }
+
+// The Settings UI's Exa card PATCHes exa_api_key — the handler must accept
+// it (it was missing from the allow-list, so saving a key from the web 400'd)
+// and the saved key must round-trip into settings where discovery and the
+// LinkedIn import resolver read it.
+func TestUpdateSettingsAcceptsExaAPIKey(t *testing.T) {
+	f := db.NewFakeStore()
+	mux := newMuxWithLinkedIn(f, nil, nil)
+
+	req := httptest.NewRequest("PATCH", "/api/settings",
+		strings.NewReader(`{"exa_api_key": "exa-test-key"}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("status = %d (%s), want 200", w.Code, w.Body.String())
+	}
+	stored, err := f.GetSettings()
+	if err != nil {
+		t.Fatalf("get settings: %v", err)
+	}
+	if stored.ExaAPIKey != "exa-test-key" {
+		t.Errorf("stored ExaAPIKey = %q, want exa-test-key", stored.ExaAPIKey)
+	}
+}

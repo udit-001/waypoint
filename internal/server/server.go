@@ -43,10 +43,24 @@ type Config struct {
 // newMux creates the HTTP mux with API routes, PWA routes, and static file
 // serving. Extracted from Start for testability — tests can create a mux and
 // make requests against it via httptest without binding to a port.
+// linkedinFetcherFor builds the production LinkedIn fetcher against the
+// hosted Exa MCP server, resolving the saved Exa API key per fetch — a key
+// pasted into Settings after startup upgrades imports from the anonymous
+// free tier (tightly rate-limited) to the account's quota with no restart.
+func linkedinFetcherFor(store db.Store) *linkedin.Fetcher {
+	return linkedin.New(linkedin.WithAPIKeyFunc(func() string {
+		s, err := store.GetSettings()
+		if err != nil {
+			return "" // anonymous fallback; the fetcher treats this as no key
+		}
+		return s.ExaAPIKey
+	}))
+}
+
 // newMux builds the mux with the default LinkedIn fetcher (hosted Exa MCP).
 // Tests that need to stub the fetch use newMuxWithLinkedIn.
 func newMux(store db.Store, staticFS fs.FS) http.Handler {
-	return newMuxWithBoards(store, staticFS, linkedin.New(), nil, nil)
+	return newMuxWithBoards(store, staticFS, linkedinFetcherFor(store), nil, nil)
 }
 
 // newMuxWithLinkedIn builds the mux with an injected LinkedIn fetcher and
@@ -128,7 +142,7 @@ func Start(cfg Config) error {
 		return fmt.Errorf("static subfs: %w", err)
 	}
 
-	mux := newMuxWithBoards(cfg.DB, staticFS, linkedin.New(), cfg.LoadBoards, cfg.WithBoards)
+	mux := newMuxWithBoards(cfg.DB, staticFS, linkedinFetcherFor(cfg.DB), cfg.LoadBoards, cfg.WithBoards)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", cfg.Port)
 	server := &http.Server{

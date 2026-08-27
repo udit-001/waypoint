@@ -74,7 +74,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		BaseURL:   "https://opencode.ai/zen",
-		Model:     "x-preview-f-free",
+		Model:     "mimo-v2.5-free",
 		UserAgent: "opencode/" + version.Version,
 	}
 }

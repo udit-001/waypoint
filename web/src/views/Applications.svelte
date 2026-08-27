@@ -44,21 +44,27 @@
   let copiedPrompt = $state(false);
   let collapsedGroups = $state(new Set());
 
-  // Getting-started signals: the app already knows how far setup has
-  // come — profile saved, autopilot has run, first match promoted. The
-  // checklist reads those live instead of trusting a stored "completed"
-  // flag, so finishing a step elsewhere (CLI, assistant) checks off
-  // here on the next visit.
+  // Getting-started signals: profile loaded, brief preferences set, zen/exa
+  // keys saved, autopilot toggled on. Reads live from the API so completing
+  // a step elsewhere (CLI, assistant) checks off here on the next visit.
   import { setup } from '../lib/onboarding.svelte.js';
+  import { briefStatus } from '../lib/brief.js';
 
   let profileName = $state('');
-  let autopilotRan = $state(false);
+  let briefComplete = $state(false);
   let zenKeySet = $state(false);
+  let exaKeySet = $state(false);
+  let autopilotEnabled = $state(false);
 
-  const setupDoneCount = $derived(
-    (profileName !== '' ? 1 : 0) + (autopilotRan ? 1 : 0) + (zenKeySet ? 1 : 0) + (allJobs.length > 0 ? 1 : 0)
-  );
-  const setupComplete = $derived(setupDoneCount === 4);
+  const setupSteps = $derived([
+    profileName !== '',
+    briefComplete,
+    zenKeySet,
+    exaKeySet,
+    autopilotEnabled,
+  ]);
+  const setupDoneCount = $derived(setupSteps.filter(Boolean).length);
+  const setupComplete = $derived(setupDoneCount === 5);
 
   // First-run onboarding (WP-119): the assistant drives the pipeline, so the
 
@@ -112,11 +118,17 @@
     filter.sync();
     try {
       await Promise.all([
-        api.jobs.ensure(),
+        // refresh, not ensure: the store may have been loaded long ago
+        // (e.g. Get Started's checklist) — landing here must show jobs
+        // promoted since, not the boot-time snapshot. Live-sync below
+        // covers changes while the page stays open.
+        api.jobs.refresh(),
         api.profile.ensure().then(() => { profileName = api.profile.value?.name || ''; }),
+        api.brief.ensure().then(() => { briefComplete = briefStatus(api.brief.value).complete; }),
         api.autopilot.ensure().then(() => {
-          autopilotRan = !!api.autopilot.value?.lastRun;
           zenKeySet = !!api.autopilot.value?.zenKeySet;
+          exaKeySet = !!api.autopilot.value?.exaKeySet;
+          autopilotEnabled = !!api.autopilot.value?.enabled;
         }),
       ]);
     } catch { /* checklist signals degrade to unchecked */ }
@@ -208,7 +220,7 @@
     <div class="text-center py-20 text-slate-400 dark:text-slate-500">
       <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('sparkles', 48)}</div>
       <p class="text-sm text-slate-600 dark:text-slate-300 font-medium mb-1">Finish setting up your job search</p>
-      <p class="text-xs mb-5">{4 - setupDoneCount} step(s) left — autopilot takes over after that.</p>
+      <p class="text-xs mb-5">{5 - setupDoneCount} step(s) left — autopilot takes over after that.</p>
       <a
         href="/get-started"
         class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 rounded-lg hover:opacity-90 transition-colors"
@@ -234,7 +246,7 @@
     <div class="text-4xl mb-4 flex items-center justify-center">{@html iconSvg('filter', 48)}</div>
     <h3 class="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-1">No applications match these filters</h3>
     <button
-      class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200 underline cursor-pointer bg-transparent border-none p-0 mt-2"
+      class="text-sm text-link hover:text-link-hover underline cursor-pointer bg-transparent border-none p-0 mt-2"
       onclick={() => filter.clear()}
     >Clear all</button>
   </div>

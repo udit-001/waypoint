@@ -16,8 +16,39 @@
   import FilterBar from './components/FilterBar.svelte';
   import { getRouter } from './stores/router.svelte.js';
   import { setPage } from './stores/page.svelte.js';
+  import { setup } from './lib/onboarding.svelte.js';
+  import { briefStatus } from './lib/brief.js';
+  import * as api from './stores/api.svelte.js';
 
   const router = getRouter();
+
+  // First-run redirect: if onboarding hasn't been dismissed, check whether
+  // setup is actually complete (profile, preferences, keys, autopilot). If
+  // any piece is missing, send the user to the wizard.
+  $effect(() => {
+    if (!setup.dismissed && router.current.route === 'applications') {
+      const check = async () => {
+        try {
+          const [profile, brief, autopilot] = await Promise.all([
+            api.profile.ensure().then(() => api.profile.value),
+            api.brief.ensure().then(() => api.brief.value),
+            api.autopilot.ensure().then(() => api.autopilot.value),
+          ]);
+
+          const profileDone = !!(profile?.name || (profile?.skills?.length ?? 0) > 0 || (profile?.experience?.length ?? 0) > 0);
+          const prefsDone = briefStatus(brief).complete;
+          const zenDone = !!autopilot?.zenKeySet;
+          const exaDone = !!autopilot?.exaKeySet;
+          const autopilotDone = !!autopilot?.enabled;
+
+          if (!(profileDone && prefsDone && zenDone && exaDone && autopilotDone)) {
+            router.replace('/get-started');
+          }
+        } catch { /* server down — stay on applications */ }
+      };
+      check();
+    }
+  });
 
   // Set correct page title immediately — before any view mounts
   const routeTitles = {

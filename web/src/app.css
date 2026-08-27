@@ -15,6 +15,21 @@
 @utility bg-tint-amber {
   background-color: var(--color-tint-amber);
 }
+@utility text-link {
+  color: var(--color-link);
+}
+@utility text-link-hover {
+  color: var(--color-link-hover);
+}
+@utility text-warning {
+  color: var(--color-warning-text);
+}
+@utility text-warning-strong {
+  color: var(--color-warning-text-strong);
+}
+@utility border-warning {
+  border-color: var(--color-warning-border);
+}
 
 /* ── Brief form primitives ──
  * Single source of truth for the profile-brief card's repeated field markup:
@@ -57,6 +72,8 @@
   --color-red-600:   #bf616a;   /* nord11 */
   --color-blue-100:  #e3edf7;
   --color-blue-700:  #5e81ac;   /* nord9 */
+  --color-link:      #1d4ed8;   /* AA link on nord5 (5.81:1) */
+  --color-link-hover: #1e40af;  /* AA link hover on nord5 (7.57:1) */
   --color-emerald-100: #e6f0e6;
   --color-emerald-600: #a3be8c; /* nord14 */
   --color-emerald-700: #047857; /* AA text on nord5 — pinned tailwind default */
@@ -68,6 +85,9 @@
   /* Row tint backgrounds — actual red/amber in both themes */
   --color-tint-red:   #fce4e4;
   --color-tint-amber: #fff4e0;
+  --color-warning-text: #9a3412;       /* AA on tint-amber (nord12-ish) */
+  --color-warning-text-strong: #7c2d12; /* bold emphasis */
+  --color-warning-border: #fed7aa;
 
   /* ── Motion tokens ──
    * Easing curves + durations referenced by all transitions/animations.
@@ -110,7 +130,6 @@
   --color-emerald-700: #8fbcbb;  /* nord7 */
 
   --color-amber-100: #434c5e;
-  --color-amber-200: #4c566a;
   --color-amber-500: #ebcb8b;  /* nord13 */
   --color-amber-600: #d08770;  /* nord12 */
   --color-amber-700: #ebcb8b;  /* AA warning text on polar night (nord12 is 3.9:1) */
@@ -121,10 +140,15 @@
 
   --color-blue-100: #4c566a;
   --color-blue-700: #81a1c1;   /* nord10 */
+  --color-link:      #88c0d0;  /* nord8 — AA link on polar night (5.60:1) */
+  --color-link-hover: #a9d8e6; /* lighter nord8 — AA link hover (7.28:1) */
 
   /* Row tint backgrounds — warm dark tones with red/amber undertone */
   --color-tint-red:   #433540;
   --color-tint-amber: #433c35;
+  --color-warning-text: #ebcb8b;       /* nord13 — AA on polar night */
+  --color-warning-text-strong: #d08770; /* nord12 — bolder emphasis */
+  --color-warning-border: #5a4a35;
 }
 
 /* ── Reduced motion ──
