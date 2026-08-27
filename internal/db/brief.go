@@ -85,14 +85,13 @@ func getBrief(p Profile) Brief {
 	// never enter `open` and never gate `Complete` — a missing fact means the
 	// seed has not arrived, not that the user must be interviewed.
 	//
-	// The gate covers the *essential* search brief: remote, location,
-	// companies, keywords. `dealbreakers` and `avoid_companies` are optional
+	// The gate covers the *essential* search brief: location, companies,
+	// keywords. `remote` is optional (empty = "any", matching the scraper
+	// convention), `dealbreakers` and `avoid_companies` are optional
 	// refinements — an empty value is a valid settled answer ("none"), so they
 	// are surfaced in the brief but never gate `Complete`.
 	open := []string{}
-	if prefs.Remote == "" {
-		open = append(open, "remote")
-	}
+
 	if len(prefs.LocationPref) == 0 {
 		open = append(open, "location_preference")
 	}

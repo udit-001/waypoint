@@ -12,7 +12,7 @@ func TestGetBrief_emptyProfile(t *testing.T) {
 		t.Fatalf("GetBrief error: %v", err)
 	}
 
-	wantOpen := []string{"companies", "keywords", "location_preference", "remote"}
+	wantOpen := []string{"companies", "keywords", "location_preference"}
 	if !reflect.DeepEqual(b.Open, wantOpen) {
 		t.Errorf("empty Open = %v, want %v", b.Open, wantOpen)
 	}

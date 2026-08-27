@@ -608,7 +608,7 @@
           <div class="flex items-start gap-2 p-3 bg-tint-amber border border-warning rounded-lg mb-4">
             <span class="text-warning-strong mt-0.5">{@html iconSvg('alert-circle', 14)}</span>
             <div class="text-xs text-warning leading-relaxed">
-              <span class="font-medium text-warning-strong">Curation brief incomplete</span> — complete your preferences (location, remote, salary, etc.) before enabling autopilot. Go back to step 2 to finish.
+              <span class="font-medium text-warning-strong">Curation brief incomplete</span> — still need: {briefData?.open?.join(', ') || 'preferences'}. Go back to step 2 to finish.
             </div>
           </div>
         {/if}
