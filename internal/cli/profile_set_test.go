@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -103,14 +104,15 @@ func TestProfileSetFromFileClear(t *testing.T) {
 		t.Errorf("Companies = %q, want []", p.Companies)
 	}
 
-	// Clearing flips it back to open in the brief.
+	// Clearing a gated preference flips it back to open in the brief.
 	b, _ := fake.GetBrief()
-	for _, o := range b.Open {
-		if o == "remote" {
-			return
-		}
+	if !slices.Contains(b.Open, "companies") {
+		t.Errorf("expected 'companies' back in brief open after clear, got %v", b.Open)
 	}
-	t.Errorf("expected 'remote' back in brief open after clear, got %v", b.Open)
+	// `remote` is optional (empty = "any") and never gates the brief frontier.
+	if slices.Contains(b.Open, "remote") {
+		t.Errorf("remote must not gate the brief frontier, got %v", b.Open)
+	}
 }
 
 // TestProfileSetFromFileSalaryFloor: the [{region, amount}] doc form; region
