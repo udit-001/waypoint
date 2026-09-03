@@ -38,11 +38,7 @@ func TestCycle_FirstRunTriggersDiscovery(t *testing.T) {
 	}
 	t.Cleanup(func() { runAutoDiscovery = origRun })
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 	if calls != 1 {
 		t.Errorf("discovery ran %d time(s), want exactly 1 on first run", calls)
 	}
@@ -57,7 +53,7 @@ func TestCycle_FirstRunTriggersDiscovery(t *testing.T) {
 
 	// Second cycle with unchanged brief and fresh state must skip.
 	calls = 0
-	Run(context.Background(), CycleConfig{Store: f, Scrapers: []scraper.Scraper{s}, Recency: 14})
+	Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 	if calls != 0 {
 		t.Errorf("discovery re-fired without a trigger (%d runs)", calls)
 	}
@@ -75,11 +71,7 @@ func TestCycle_DiscoveryFailureDoesNotBlock(t *testing.T) {
 	}
 	t.Cleanup(func() { runAutoDiscovery = origRun })
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 	if entry.PostingsNew != 1 {
 		t.Errorf("cycle blocked by discovery failure: new=%d", entry.PostingsNew)
 	}

@@ -25,9 +25,61 @@ func (f *fixtureScraper) Search(ctx context.Context, opts scraper.SearchOpts) ([
 	return f.results, nil
 }
 
+// fakeFetcher satisfies detail.Fetcher without touching the network. It
+// records the URLs it was asked to fetch so tests can assert the detail
+// stage used the injected fetcher (and therefore made no live HTTP call).
+type fakeFetcher struct {
+	urls []string
+}
+
+func (f *fakeFetcher) Fetch(ctx context.Context, url string) (string, error) {
+	f.urls = append(f.urls, url)
+	return "<html><body><p>software engineer at acme</p></body></html>", nil
+}
+
+// newCycle builds a CycleConfig for tests with the network guard wired
+// in — a fake Direct fetcher so the detail stage never makes a live
+// HTTP call. Callers set extra fields (Notifier, ZenClient, ...) after.
+func newCycle(f db.Store, scrapers []scraper.Scraper) CycleConfig {
+	return CycleConfig{
+		Store:    f,
+		Scrapers: scrapers,
+		ExaCap:   0,
+		Recency:  14,
+		Direct:   &fakeFetcher{},
+	}
+}
+
 // --- tests ---
 
+// TestCycle_UsesInjectedDirectFetcher: the detail stage must use the
+// injected fetcher instead of making a live HTTP call — so tests stay
+// offline and the seam is exercised.
+func TestCycle_UsesInjectedDirectFetcher(t *testing.T) {
+	stubDiscovery(t)
+	f := db.NewFakeStore()
+	s := &fixtureScraper{
+		name: "test-scraper",
+		results: []scraper.Result{
+			{URL: "https://example.com/a", Title: "Engineer", Company: "Acme"},
+		},
+	}
+	ff := &fakeFetcher{}
+
+	cfg := newCycle(f, []scraper.Scraper{s})
+	cfg.Direct = ff
+	Run(context.Background(), cfg)
+
+	if len(ff.urls) == 0 {
+		t.Fatal("injected Direct fetcher was never used")
+	}
+	if ff.urls[0] != "https://example.com/a" {
+		t.Errorf("fetched %q, want https://example.com/a", ff.urls[0])
+	}
+}
+
 func TestCycle_SweepAddPostings(t *testing.T) {
+	stubDiscovery(t)
 	f := db.NewFakeStore()
 	s := &fixtureScraper{
 		name: "test-scraper",
@@ -37,12 +89,7 @@ func TestCycle_SweepAddPostings(t *testing.T) {
 		},
 	}
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0, // no Exa
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 
 	if entry.PostingsNew != 2 {
 		t.Errorf("postingsNew = %d, want 2", entry.PostingsNew)
@@ -56,6 +103,7 @@ func TestCycle_SweepAddPostings(t *testing.T) {
 }
 
 func TestCycle_DedupAgainstExisting(t *testing.T) {
+	stubDiscovery(t)
 	f := db.NewFakeStore()
 	// Pre-seed one posting.
 	_ = f.AddPostings([]scraper.Result{
@@ -70,12 +118,7 @@ func TestCycle_DedupAgainstExisting(t *testing.T) {
 		},
 	}
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0,
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 
 	if entry.PostingsNew != 1 {
 		t.Errorf("postingsNew = %d, want 1 (dedup)", entry.PostingsNew)
@@ -83,6 +126,7 @@ func TestCycle_DedupAgainstExisting(t *testing.T) {
 }
 
 func TestCycle_DedupAgainstJobs(t *testing.T) {
+	stubDiscovery(t)
 	f := db.NewFakeStore()
 	// Pre-seed a job with the same URL.
 	f.Jobs[1] = db.Job{URL: "https://example.com/a", Position: "Tracked"}
@@ -95,12 +139,7 @@ func TestCycle_DedupAgainstJobs(t *testing.T) {
 		},
 	}
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0,
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 
 	if entry.PostingsNew != 1 {
 		t.Errorf("postingsNew = %d, want 1 (dedup against jobs)", entry.PostingsNew)
@@ -108,6 +147,7 @@ func TestCycle_DedupAgainstJobs(t *testing.T) {
 }
 
 func TestCycle_PrefilterAvoidCompany(t *testing.T) {
+	stubDiscovery(t)
 	f := db.NewFakeStore()
 	// Set up avoid list.
 	_ = f.UpsertProfile(map[string]any{
@@ -122,12 +162,7 @@ func TestCycle_PrefilterAvoidCompany(t *testing.T) {
 		},
 	}
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0,
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 
 	if entry.PostingsNew != 2 {
 		t.Errorf("postingsNew = %d, want 2", entry.PostingsNew)
@@ -153,6 +188,7 @@ func TestCycle_PrefilterAvoidCompany(t *testing.T) {
 }
 
 func TestCycle_PrefilterTargetCompany(t *testing.T) {
+	stubDiscovery(t)
 	f := db.NewFakeStore()
 	_ = f.UpsertProfile(map[string]any{
 		"companies": `["google"]`,
@@ -165,12 +201,7 @@ func TestCycle_PrefilterTargetCompany(t *testing.T) {
 		},
 	}
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0,
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 
 	p, _, _ := f.GetPosting("https://example.com/a")
 	if p.Status != db.StatusShortlisted {
@@ -182,6 +213,7 @@ func TestCycle_PrefilterTargetCompany(t *testing.T) {
 }
 
 func TestCycle_NoZenEscalatesToShortlist(t *testing.T) {
+	stubDiscovery(t)
 	f := db.NewFakeStore()
 	s := &fixtureScraper{
 		name: "test-scraper",
@@ -191,12 +223,7 @@ func TestCycle_NoZenEscalatesToShortlist(t *testing.T) {
 	}
 
 	// No zen client — should escalate to shortlist for manual review.
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0,
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 
 	p, _, _ := f.GetPosting("https://example.com/a")
 	if p.Status != db.StatusShortlisted {
@@ -208,18 +235,14 @@ func TestCycle_NoZenEscalatesToShortlist(t *testing.T) {
 }
 
 func TestCycle_RunLogRecorded(t *testing.T) {
+	stubDiscovery(t)
 	f := db.NewFakeStore()
 	s := &fixtureScraper{
 		name:    "test-scraper",
 		results: []scraper.Result{},
 	}
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0,
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 
 	// Store the run log.
 	id, err := f.AddRunLog(entry)
@@ -260,6 +283,7 @@ func TestCycle_RunLogRecorded(t *testing.T) {
 }
 
 func TestCycle_ContextCancellation(t *testing.T) {
+	stubDiscovery(t)
 	f := db.NewFakeStore()
 	s := &fixtureScraper{
 		name: "test-scraper",
@@ -271,12 +295,7 @@ func TestCycle_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	entry := Run(ctx, CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0,
-		Recency:  14,
-	})
+	entry := Run(ctx, newCycle(f, []scraper.Scraper{s}))
 
 	// Should still complete (sweep may add postings before checking context).
 	if entry.StartedAt == "" {
@@ -285,6 +304,7 @@ func TestCycle_ContextCancellation(t *testing.T) {
 }
 
 func TestCycle_MultipleScrapers(t *testing.T) {
+	stubDiscovery(t)
 	f := db.NewFakeStore()
 	s1 := &fixtureScraper{
 		name:    "scraper-1",
@@ -295,12 +315,7 @@ func TestCycle_MultipleScrapers(t *testing.T) {
 		results: []scraper.Result{{URL: "https://b.com/2", Title: "Job 2"}},
 	}
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s1, s2},
-		ExaCap:   0,
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s1, s2}))
 
 	if entry.PostingsNew != 2 {
 		t.Errorf("postingsNew = %d, want 2 (from 2 scrapers)", entry.PostingsNew)

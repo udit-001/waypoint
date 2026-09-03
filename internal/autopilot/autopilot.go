@@ -53,6 +53,10 @@ type CycleConfig struct {
 	Recency   int           // days for recency filter (default 14)
 	Cadence   time.Duration // time between cycles
 	Limit     int           // max new postings to curate (0 = all)
+	// Direct overrides the detail stage's tier-3 HTTP fetcher. When nil,
+	// the cycle falls back to a real scraper.HTTPFetcher. Tests inject a
+	// fake so the cycle never touches the network.
+	Direct detail.Fetcher
 }
 
 // Run executes one full autopilot cycle. It is safe to call from a
@@ -231,7 +235,11 @@ func stageDetail(ctx context.Context, cfg CycleConfig, postings []scraper.Result
 	// Tier 3: direct HTTP fetch (free). Tier 4: shared Exa client — its
 	// internal budget spans detail fetches AND zen company research, so
 	// the chain-level cap is left unset here.
-	chain.Direct = &scraper.HTTPFetcher{}
+	// Accept the injected fetcher (test seam); fall back to the real one.
+	chain.Direct = cfg.Direct
+	if chain.Direct == nil {
+		chain.Direct = &scraper.HTTPFetcher{}
+	}
 	chain.Exa = cfg.ExaClient
 
 	for i := range postings {

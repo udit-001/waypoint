@@ -51,13 +51,9 @@ func TestCycle_NotifierCalledOnceOnShortlist(t *testing.T) {
 	}
 	n := &recordingNotifier{}
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0,
-		Recency:  14,
-		Notifier: n,
-	})
+	cfg := newCycle(f, []scraper.Scraper{s})
+	cfg.Notifier = n
+	entry := Run(context.Background(), cfg)
 
 	if entry.PostingsShortlisted != 3 {
 		t.Fatalf("shortlisted = %d, want 3", entry.PostingsShortlisted)
@@ -80,13 +76,9 @@ func TestCycle_NoShortlistNoNotify(t *testing.T) {
 	f := db.NewFakeStore()
 	n := &recordingNotifier{}
 
-	Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: nil, // nothing swept, backlog empty
-		ExaCap:   0,
-		Recency:  14,
-		Notifier: n,
-	})
+	cfg := newCycle(f, nil)
+	cfg.Notifier = n
+	Run(context.Background(), cfg)
 
 	if n.calls != 0 {
 		t.Errorf("notifier calls = %d, want 0", n.calls)
@@ -104,13 +96,7 @@ func TestCycle_NilNotifierIsNoop(t *testing.T) {
 	}
 
 	// Must not panic with nil notifier.
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0,
-		Recency:  14,
-		Notifier: nil,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 
 	if entry.PostingsShortlisted != 1 {
 		t.Errorf("shortlisted = %d, want 1", entry.PostingsShortlisted)
@@ -128,13 +114,9 @@ func TestCycle_NotifierFailureNeverBlocksCycle(t *testing.T) {
 	}
 	n := &recordingNotifier{err: context.DeadlineExceeded}
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{s},
-		ExaCap:   0,
-		Recency:  14,
-		Notifier: n,
-	})
+	cfg := newCycle(f, []scraper.Scraper{s})
+	cfg.Notifier = n
+	entry := Run(context.Background(), cfg)
 
 	// Cycle completes normally; failure recorded in the run log errors.
 	if entry.FinishedAt == "" {
@@ -189,12 +171,7 @@ func TestCycle_PanicClosesRunRow(t *testing.T) {
 	stubDiscovery(t)
 	f := db.NewFakeStore()
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:    f,
-		Scrapers: []scraper.Scraper{panickyScraper{}},
-		ExaCap:   0,
-		Recency:  14,
-	})
+	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{panickyScraper{}}))
 
 	if entry.FinishedAt == "" {
 		t.Fatal("panicked cycle left FinishedAt empty — scheduler would hot-refire every poll")
@@ -225,12 +202,9 @@ func TestCycle_NoZenCapsUnscored(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	entry := Run(context.Background(), CycleConfig{
-		Store:     f,
-		ExaCap:    0,
-		Recency:   14,
-		ZenClient: nil, // degraded mode
-	})
+	cfg := newCycle(f, nil)
+	cfg.ZenClient = nil // degraded mode
+	entry := Run(context.Background(), cfg)
 
 	if entry.PostingsShortlisted != 25 {
 		t.Fatalf("shortlisted = %d, want capped at 25", entry.PostingsShortlisted)
