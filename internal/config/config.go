@@ -10,8 +10,10 @@ import (
 
 // Config is the waypoint configuration stored as TOML in the OS config dir.
 type Config struct {
-	DataDir string `toml:"data_dir"`
-	Port    int    `toml:"port"`
+	DataDir          string `toml:"data_dir"`
+	Port             int    `toml:"port"`
+	SkillsInstalled  bool   `toml:"skills_installed,omitempty"`
+	ServiceInstalled bool   `toml:"service_installed,omitempty"`
 }
 
 // DefaultPort is the default HTTP server port.

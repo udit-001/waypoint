@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/config"
 )
 
 // osService is the seam for OS service operations. Production uses
@@ -155,7 +156,10 @@ Examples:
 // offerServiceInstall prompts the user to install the Waypoint service
 // at the end of `waypoint init`. The offer is skipped when the platform
 // doesn't support user-context services (newOSService is nil).
-func offerServiceInstall() {
+func offerServiceInstall(cfg *config.Config) {
+	if cfg.ServiceInstalled {
+		return
+	}
 	if newOSService == nil {
 		return
 	}
@@ -180,6 +184,7 @@ func offerServiceInstall() {
 		fmt.Printf("    Service install failed: %v\n", err)
 		return
 	}
+	cfg.ServiceInstalled = true
 	fmt.Println()
 	fmt.Println("    ✓ Waypoint will start when you log in.")
 }

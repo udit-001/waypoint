@@ -82,11 +82,16 @@ Examples:
 		// Step 3: Offer skill installation.
 		noSkills, _ := cmd.Flags().GetBool("no-skills")
 		if !noSkills {
-			offerSkillInstall()
+			offerSkillInstall(cfg)
 		}
 
 		// Step 4: Offer service installation.
-		offerServiceInstall()
+		offerServiceInstall(cfg)
+
+		// Persist any state changes from the offer steps.
+		if err := config.Save(cfg); err != nil {
+			return fmt.Errorf("save config: %w", err)
+		}
 
 		fmt.Println()
 		fmt.Println("  Next steps:")

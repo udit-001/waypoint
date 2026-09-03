@@ -157,3 +157,51 @@ func TestSaveCreatesConfigDir(t *testing.T) {
 		t.Fatalf("config file not created in nested dir: %v", err)
 	}
 }
+
+func TestSaveAndLoadRoundTripWithInstalledFlags(t *testing.T) {
+	withTempConfigDir(t)
+
+	original := &Config{
+		DataDir:          "/custom/data",
+		Port:             9999,
+		SkillsInstalled:  true,
+		ServiceInstalled: true,
+	}
+	if err := Save(original); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("Load() returned nil config after Save")
+	}
+	if loaded.SkillsInstalled != true {
+		t.Errorf("SkillsInstalled = %v, want true", loaded.SkillsInstalled)
+	}
+	if loaded.ServiceInstalled != true {
+		t.Errorf("ServiceInstalled = %v, want true", loaded.ServiceInstalled)
+	}
+}
+
+func TestInstalledFlagsDefaultToFalse(t *testing.T) {
+	withTempConfigDir(t)
+
+	// Save a config without the flags set
+	if err := Save(&Config{DataDir: "/data", Port: 8080}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.SkillsInstalled != false {
+		t.Errorf("SkillsInstalled = %v, want false (default)", loaded.SkillsInstalled)
+	}
+	if loaded.ServiceInstalled != false {
+		t.Errorf("ServiceInstalled = %v, want false (default)", loaded.ServiceInstalled)
+	}
+}

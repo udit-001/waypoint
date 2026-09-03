@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/skills"
 )
 
@@ -506,7 +507,10 @@ func isSkillInstalled(baseDir string) bool {
 
 // --- Startup hooks ---
 
-func offerSkillInstall() {
+func offerSkillInstall(cfg *config.Config) {
+	if cfg.SkillsInstalled {
+		return
+	}
 	detected := detectProviders()
 	if len(detected) == 0 {
 		return
@@ -524,6 +528,7 @@ func offerSkillInstall() {
 		}
 	}
 	if allCurrent {
+		cfg.SkillsInstalled = true
 		return
 	}
 	fmt.Println()
@@ -540,6 +545,7 @@ func offerSkillInstall() {
 		return
 	}
 	installFamilies(avail, false)
+	cfg.SkillsInstalled = true
 }
 
 func offerSkillUpgrade() {
