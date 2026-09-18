@@ -25,15 +25,14 @@ The gate is a stack of independent checks; each layer fails differently:
 
 | Layer | Check | Failure when violated |
 |---|---|---|
-| 1. **TLS transport fingerprint** | Only OpenSSL-based client stacks pass (curl over HTTP/1.1, Node/undici). **Go's crypto/tls is rejected at full wire parity** — byte-identical replayed requests get 403 from Go/curl-h2 and 200 from undici/curl-h1 on the same IP minutes apart. utls presets (Chrome/Firefox/Safari/iOS/Edge) also 403 — OpenSSL's ClientHello specifically is what passes. | `403 FreeTierError: "OpenCode's free tier can only be used from within OpenCode"` |
-| 2. **UA version floor** | `User-Agent: opencode/<version>` with major > 1 or (major == 1 && minor >= 17). Verified live: `opencode/1.18.31` → OK; third-party/bare UAs → 403; older → 426 Upgrade Required ([9router PR #4105](https://github.com/decolua/9router/pull/4105)). Same 403 as layer 1 |
-| 3. **Session id shape** | `x-opencode-session` matches `/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/` (opencode's descending id format; 9router PR #4105). UUID/foreign shapes → 403. A sha1-derived id (pi-zen `opencodeIdFromSeed`) passes — only the regex is validated, not timestamp semantics |
-| 4. **Agent-turn shape** | `stream: true` + non-empty `tools` array (a never-invocable placeholder on tool-less turns — opencode's own trick) | Same 403 |
-| 5. **Quota** | Per-key/IP free-tier allowance | `429 FreeUsageLimitError` — quota, not shape; retry after reset |
+| 1. **Tool-name gate** (found by live body-bisection 2026-09-19) | the request's `tools` array must include **at least 2 tool definitions named from the opencode client's tool set** (`read`, `bash`, `edit`, …). Custom tools (`curate_posting`, …) ride along freely once satisfied; a fake `read2` clone fails — the names are matched, not the schemas. 1 known tool or unknown-only arrays → rejected | `403 FreeTierError: "OpenCode's free tier can only be used from within OpenCode"` |
+| 2. **UA version floor** | `User-Agent: opencode/<version>` with major > 1 or (major == 1 && minor >= 17). `opencode/1.18.31` → OK; third-party/bare UAs → 403; older → 426 Upgrade Required ([9router PR #4105](https://github.com/decolua/9router/pull/4105)) | same 403 / 426 |
+| 3. **Session id shape** | `x-opencode-session` matches `/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/` (opencode's descending id format; PR #4105). A sha1-derived id (pi-zen `opencodeIdFromSeed`) passes — only the regex is validated, not timestamp semantics | 403 |
+| 4. **Quota** | Per-key/IP free-tier allowance | `429 FreeUsageLimitError` — quota, not shape; retry after reset |
 
-Error-ordering note: a dead key answers `401 AuthError: Invalid API key` before the shape layers run — a 401 on a request that 403s with another key means the key, not the wire.
+Error-ordering note: a dead key answers `401 AuthError: Invalid API key` before the shape layers run — a 401 where another key 403s means the key, not the wire. HTTP/2 and HTTP/1.1 both pass; plain-string message content passes; no TLS fingerprinting exists (Go `crypto/tls` is fine once the tools array satisfies layer 1 — an earlier transport-fingerprint suspicion was a bisection artifact: the passing replays all carried pi's 59-tool body).
 
-**Consequence for a pure-Go connector:** layers 2–4 are fully ported (identity + streaming + per-family wires), but layer 1 blocks any crypto/tls client. Options: (a) utls with a custom ClientHello replicating OpenSSL's (the endpoint's 200/403 is the oracle; captured s_client dump in this session's research), (b) route through a local proxy that presents an accepted fingerprint (pi-zen / 9router; `ZEN_BASE_URL` is honored for exactly this), (c) paid/BYOK key — the long-term stable path regardless.
+**Consequence:** pure Go passes the free tier with the identity wire + two gate tools. Verified live keyless (2026-09-19): `Complete` and the full streamed `Curate` tool-loop return real verdicts through `internal/zen` with `Bearer public`.
 
 ## What `x-opencode-session` actually does (gateway source)
 

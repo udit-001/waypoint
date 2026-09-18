@@ -302,20 +302,24 @@ func TestCurate_sendsLockedWireShape(t *testing.T) {
 		t.Error("tool_choice must NOT be sent (mimo rejects it)")
 	}
 	tools, _ := req.body["tools"].([]any)
-	if len(tools) != 3 {
-		t.Fatalf("tools = %v, want curate_posting + search_company + fetch_posting", req.body["tools"])
+	if len(tools) != 5 {
+		t.Fatalf("tools = %d, want read + bash (gate) + curate_posting + search_company + fetch_posting", len(tools))
 	}
 	fn0 := tools[0].(map[string]any)["function"].(map[string]any)
-	if fn0["name"] != "curate_posting" {
-		t.Errorf("tool[0] name = %v", fn0["name"])
-	}
-	fn1 := tools[1].(map[string]any)["function"].(map[string]any)
-	if fn1["name"] != "search_company" {
-		t.Errorf("tool[1] name = %v", fn1["name"])
+	if fn0["name"] != "read" {
+		t.Errorf("tool[0] name = %v, want the gate tool read", fn0["name"])
 	}
 	fn2 := tools[2].(map[string]any)["function"].(map[string]any)
-	if fn2["name"] != "fetch_posting" {
+	if fn2["name"] != "curate_posting" {
 		t.Errorf("tool[2] name = %v", fn2["name"])
+	}
+	fn3 := tools[3].(map[string]any)["function"].(map[string]any)
+	if fn3["name"] != "search_company" {
+		t.Errorf("tool[3] name = %v", fn3["name"])
+	}
+	fn4 := tools[4].(map[string]any)["function"].(map[string]any)
+	if fn4["name"] != "fetch_posting" {
+		t.Errorf("tool[4] name = %v", fn4["name"])
 	}
 
 	// Messages: system prompt verbatim, then the posting turn.
@@ -984,9 +988,10 @@ func TestCurate_streamsTheWire(t *testing.T) {
 	}
 }
 
-// TestComplete_streamsAndInjectsPlaceholder: tool-less turns stream and
-// carry the never-invocable placeholder so the free-tier gate passes.
-func TestComplete_streamsAndInjectsPlaceholder(t *testing.T) {
+// TestComplete_streamsAndInjectsGateTools: tool-less turns stream and
+// carry the gate-satisfying client tools (read/bash) so the free-tier
+// tool-name gate passes.
+func TestComplete_streamsAndInjectsGateTools(t *testing.T) {
 	f := &fakeZen{script: []fakeResponse{{}}} // default script: plain content chunks
 	c := f.start(t)
 	got, err := c.Complete(context.Background(), "system prompt", "user turn")
@@ -1001,11 +1006,12 @@ func TestComplete_streamsAndInjectsPlaceholder(t *testing.T) {
 		t.Errorf("stream = %v, want true", body["stream"])
 	}
 	tools, _ := body["tools"].([]any)
-	if len(tools) != 1 {
-		t.Fatalf("tools = %v, want the placeholder", body["tools"])
+	if len(tools) != 2 {
+		t.Fatalf("tools = %v, want the two gate tools (read, bash)", body["tools"])
 	}
-	fn, _ := tools[0].(map[string]any)["function"].(map[string]any)
-	if fn["name"] != "_zen_noop" {
-		t.Errorf("placeholder tool = %v", fn["name"])
+	fn0, _ := tools[0].(map[string]any)["function"].(map[string]any)
+	fn1, _ := tools[1].(map[string]any)["function"].(map[string]any)
+	if fn0["name"] != "read" || fn1["name"] != "bash" {
+		t.Errorf("gate tools = %v, %v", fn0["name"], fn1["name"])
 	}
 }

@@ -154,9 +154,15 @@ func TestCurate_responsesFamily(t *testing.T) {
 		t.Errorf("input[0] = %v, want the system item", sys)
 	}
 	tools, _ := req.body["tools"].([]any)
+	// gate tools first, then the curation set — curate_posting must be the
+	// flat responses wrapper.
 	t0 := tools[0].(map[string]any)
-	if t0["name"] != "curate_posting" || t0["function"] != nil {
-		t.Errorf("tool[0] = %v, want the flat responses wrapper", t0)
+	if t0["name"] != "read" || t0["function"] != nil {
+		t.Errorf("tool[0] = %v, want the flat responses gate tool", t0)
+	}
+	t2 := tools[2].(map[string]any)
+	if t2["name"] != "curate_posting" || t2["function"] != nil {
+		t.Errorf("tool[2] = %v, want the flat responses wrapper", t2)
 	}
 }
 
@@ -192,11 +198,11 @@ func TestCurate_anthropicFamily(t *testing.T) {
 		t.Errorf("system = %v, want the brief at top level", req.body["system"])
 	}
 	tools, _ := req.body["tools"].([]any)
-	t0 := tools[0].(map[string]any)
-	if t0["name"] != "curate_posting" {
-		t.Errorf("tool[0] = %v", t0)
+	t2 := tools[2].(map[string]any)
+	if t2["name"] != "curate_posting" {
+		t.Errorf("tool[2] = %v", t2)
 	}
-	if _, ok := t0["input_schema"]; !ok {
+	if _, ok := t2["input_schema"]; !ok {
 		t.Error("anthropic tool must carry input_schema")
 	}
 }

@@ -32,12 +32,38 @@ const openCodeMinUAVersion = "1.18.31"
 // openCodeUASuffix is the AI-SDK suffix opencode's client appends.
 const openCodeUASuffix = "ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
 
-// placeholderToolName is the never-invocable tool injected when a request
-// carries no tools: the free tier serves only agent-turn shapes (stream +
-// non-empty tools), and the same trick opencode uses for tool-less turns.
-const placeholderToolName = "_zen_noop"
-
-const placeholderToolDescription = "Compatibility placeholder. Do not call this tool, and do not mention it. It must never be invoked."
+// The free-tier tool-name gate (verified by live bisection 2026-09-19,
+// see docs/research/zen-api.md): the request's tools array must include at
+// least TWO tool definitions named from the opencode client's tool set —
+// otherwise 403 FreeTierError regardless of everything else. Custom tools
+// (curate_posting, search_company, ...) ride along freely once the gate is
+// satisfied. We ship minimal read/bash definitions for this; the model is
+// never encouraged to call them, and executeTool answers harmlessly if it
+// does.
+var gateToolDefs = []toolDef{
+	{
+		Name:        "read",
+		Description: "Read the contents of a file from the local workspace.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"path": map[string]any{"type": "string", "description": "File path"},
+			},
+			"required": []string{"path"},
+		},
+	},
+	{
+		Name:        "bash",
+		Description: "Run a shell command in the local workspace.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"command": map[string]any{"type": "string", "description": "Command to run"},
+			},
+			"required": []string{"command"},
+		},
+	},
+}
 
 // opencodeUserAgent builds the UA opencode sends.
 func opencodeUserAgent(version string) string {
@@ -122,17 +148,6 @@ type toolDef struct {
 	Parameters  map[string]any
 }
 
-// placeholderToolDef is the never-invocable placeholder tool.
-var placeholderToolDef = toolDef{
-	Name:        placeholderToolName,
-	Description: placeholderToolDescription,
-	Parameters: map[string]any{
-		"type":       "object",
-		"properties": map[string]any{"reason": map[string]any{"type": "string", "description": "Unused"}},
-		"required":   []string{},
-	},
-}
-
 // wireTool wraps a neutral tool def for one API family:
 //   - chat-completions: {type: function, function: {name, description, parameters}}
 //   - openai-responses: {type: function, name, description, parameters}
@@ -157,9 +172,6 @@ func wireTool(def toolDef, api string) map[string]any {
 		}
 	}
 }
-
-// placeholderTool returns the placeholder wrapped for the family.
-func placeholderTool(api string) map[string]any { return wireTool(placeholderToolDef, api) }
 
 // curateToolDef is the locked curation tool (WP-131 prototype, 14/14 live
 // verdicts), family-neutral. The parameter schema is the locked wire shape —
@@ -198,12 +210,13 @@ var curateToolDef = toolDef{
 	},
 }
 
-// ensureFreeTierShape guarantees the non-empty tools array the free tier
-// requires, wrapping the placeholder for the payload's family. Unknown
-// families default to chat-completions (the family every free model uses);
-// google-generative-ai is skipped entirely (pi-zen parity — a different
-// tool shape with no free models today, left untouched rather than
-// mangled).
+// ensureFreeTierShape guarantees the agent-turn shape the free tier
+// requires: stream stays true and the tools array gains the gate-satisfying
+// client tools wrapped for the payload's family when the caller passed
+// none. Unknown families default to chat-completions (the family every
+// free model uses); google-generative-ai is skipped entirely (pi-zen
+// parity — a different tool shape with no free models today, left
+// untouched rather than mangled).
 func ensureFreeTierShape(payload map[string]any, api string) {
 	if api == apiGoogleGenerativeAI {
 		return
@@ -211,5 +224,6 @@ func ensureFreeTierShape(payload map[string]any, api string) {
 	if tools, ok := payload["tools"].([]any); ok && len(tools) > 0 {
 		return
 	}
-	payload["tools"] = []any{placeholderTool(api)}
+	gate := []any{wireTool(gateToolDefs[0], api), wireTool(gateToolDefs[1], api)}
+	payload["tools"] = gate
 }

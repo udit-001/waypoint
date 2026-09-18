@@ -119,29 +119,30 @@ func TestValidOpencodeVersion(t *testing.T) {
 	}
 }
 
-// TestPlaceholderToolPerFamily: same tool name across families, different
-// wire wrappers (chat-completions nests under function; responses and
-// anthropic are flat).
-func TestPlaceholderToolPerFamily(t *testing.T) {
-	chat := placeholderTool(apiChatCompletions)
-	resp := placeholderTool(apiOpenAIResponses)
-	anth := placeholderTool(apiAnthropicMessages)
+// TestGateToolsPerFamily: the gate-satisfying client tools (read, bash)
+// wrap per family — chat-completions nests under function; responses and
+// anthropic are flat.
+func TestGateToolsPerFamily(t *testing.T) {
+	for _, def := range gateToolDefs {
+		chat := wireTool(def, apiChatCompletions)
+		resp := wireTool(def, apiOpenAIResponses)
+		anth := wireTool(def, apiAnthropicMessages)
 
-	name := "_zen_noop"
-	if got, _ := chat["function"].(map[string]any)["name"].(string); got != name {
-		t.Errorf("chat wrapper name = %v", got)
-	}
-	if got, _ := resp["name"].(string); got != name {
-		t.Errorf("responses wrapper name = %v", got)
-	}
-	if got, _ := anth["name"].(string); got != name {
-		t.Errorf("anthropic wrapper name = %v", got)
-	}
-	if _, ok := resp["function"]; ok {
-		t.Error("responses wrapper must be flat (no function nesting)")
-	}
-	if _, ok := anth["input_schema"]; !ok {
-		t.Error("anthropic wrapper must carry input_schema")
+		if got, _ := chat["function"].(map[string]any)["name"].(string); got != def.Name {
+			t.Errorf("chat wrapper name = %v", got)
+		}
+		if got, _ := resp["name"].(string); got != def.Name {
+			t.Errorf("responses wrapper name = %v", got)
+		}
+		if got, _ := anth["name"].(string); got != def.Name {
+			t.Errorf("anthropic wrapper name = %v", got)
+		}
+		if _, ok := resp["function"]; ok {
+			t.Error("responses wrapper must be flat (no function nesting)")
+		}
+		if _, ok := anth["input_schema"]; !ok {
+			t.Error("anthropic wrapper must carry input_schema")
+		}
 	}
 }
 
@@ -151,8 +152,13 @@ func TestEnsureFreeTierShape(t *testing.T) {
 	payload := map[string]any{"model": "m"}
 	ensureFreeTierShape(payload, apiChatCompletions)
 	tools, _ := payload["tools"].([]any)
-	if len(tools) != 1 {
-		t.Fatalf("tools = %v, want the placeholder", payload["tools"])
+	if len(tools) != 2 {
+		t.Fatalf("tools = %v, want the two gate tools", payload["tools"])
+	}
+	fn0, _ := tools[0].(map[string]any)["function"].(map[string]any)
+	fn1, _ := tools[1].(map[string]any)["function"].(map[string]any)
+	if fn0["name"] != "read" || fn1["name"] != "bash" {
+		t.Errorf("gate tools = %v, %v, want read + bash", fn0["name"], fn1["name"])
 	}
 
 	populated := map[string]any{"tools": []any{wireTool(curateToolDef, apiChatCompletions)}}
@@ -165,8 +171,8 @@ func TestEnsureFreeTierShape(t *testing.T) {
 	// skipped entirely (pi-zen parity — different tool shape, no free models).
 	unknown := map[string]any{}
 	ensureFreeTierShape(unknown, "some-unknown-family")
-	if got, _ := unknown["tools"].([]any); len(got) != 1 {
-		t.Errorf("unknown family tools = %v, want chat-completions placeholder", unknown["tools"])
+	if got, _ := unknown["tools"].([]any); len(got) != 2 {
+		t.Errorf("unknown family tools = %v, want the two chat-completions gate tools", unknown["tools"])
 	}
 	google := map[string]any{}
 	ensureFreeTierShape(google, apiGoogleGenerativeAI)
