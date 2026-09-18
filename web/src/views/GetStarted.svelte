@@ -541,9 +541,9 @@
               >
                 <option value="">Default (mimo-v2.5-free)</option>
                 {#each zenModels as m}
-                  <option value={m}>{m}</option>
+                  <option value={m.id}>{m.name || m.id}</option>
                 {/each}
-                {#if zenModel && !zenModels.includes(zenModel)}
+                {#if zenModel && !zenModels.some((x) => x.id === zenModel)}
                   <option value={zenModel}>{zenModel}</option>
                 {/if}
               </select>

@@ -18,6 +18,7 @@ import (
 	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/linkedin"
+	"github.com/udit-001/waypoint/internal/zen"
 	"github.com/udit-001/waypoint/web"
 )
 
@@ -93,7 +94,7 @@ func newMuxWithBoards(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, load
 	mux.HandleFunc("POST /api/profile/import-linkedin", handleImportLinkedIn(store, li))
 	mux.HandleFunc("GET /api/settings", handleGetSettings(store))
 	mux.HandleFunc("PATCH /api/settings", handleUpdateSettings(store))
-	mux.HandleFunc("GET /api/zen/models", handleZenModels(store))
+	mux.HandleFunc("GET /api/zen/models", handleZenModels(zen.NewCatalog(zen.CatalogConfig{URL: zenCatalogURL})))
 
 	mux.HandleFunc("GET /api/candidates", handleListCandidates(store))
 	mux.HandleFunc("POST /api/candidates/{id}/add", handleAddCandidate(store, withBoards))

@@ -1,67 +1,27 @@
 package server
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
-	"strings"
-	"time"
 
-	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/zen"
 )
 
-// fallbackFreeModels ships when no API key is stored (the gateway
-// requires auth for /v1/models). Refreshed by hand when the free tier
-// changes; the live list wins whenever a key exists.
-var fallbackFreeModels = []string{
-	"mimo-v2.5-free", // default curation model (x-preview-f-free retired upstream)
-	"hy3-free",
-	"nemotron-3-ultra-free",
-	"nemotron-3.5-lightning-free",
-	"laguna-s-2.1-free",
-	"deepseek-v4-flash-free",
-}
+// zenCatalogURL is the test seam for the catalog's upstream.
+var zenCatalogURL = zen.FreeModelsCDNURL
 
-// zenModelsURL is the test seam for the gateway call.
-var zenModelsURL = zen.DefaultConfig().BaseURL + "/v1/models"
-
-// handleZenModels lists curation-model choices: the gateway's free-tier
-// ids when a key is stored, the static fallback otherwise.
-func handleZenModels(store db.Store) http.HandlerFunc {
+// handleZenModels serves the curated free-models list from the catalog
+// (stale-while-revalidate over the pi-zen CDN). The fetch is anonymous —
+// no key gate, no hardcoded fallback (decision 2026-09-19: a static list
+// goes stale exactly like the one this replaces). When the catalog has no
+// last-known-good and the CDN is unreachable, the endpoint answers 502
+// and the web dropdown degrades to the saved selection.
+func handleZenModels(catalog *zen.Catalog) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		settings, err := store.GetSettings()
+		models, err := catalog.Models(r.Context())
 		if err != nil {
-			jsonError(w, err.Error(), http.StatusInternalServerError)
+			jsonError(w, "curated model list unavailable: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		if key := settings.ZenAPIKey; key != "" {
-			client := &http.Client{Timeout: 10 * time.Second}
-			req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, zenModelsURL, nil)
-			req.Header.Set("Authorization", "Bearer "+key)
-			if resp, err := client.Do(req); err == nil {
-				defer resp.Body.Close()
-				if body, err := io.ReadAll(resp.Body); err == nil && resp.StatusCode == 200 {
-					var parsed struct {
-						Data []struct {
-							ID string `json:"id"`
-						} `json:"data"`
-					}
-					if json.Unmarshal(body, &parsed) == nil {
-						free := []string{}
-						for _, m := range parsed.Data {
-							if strings.HasSuffix(m.ID, "-free") {
-								free = append(free, m.ID)
-							}
-						}
-						if len(free) > 0 {
-							jsonResponse(w, map[string]any{"models": free, "source": "gateway"})
-							return
-						}
-					}
-				}
-			}
-		}
-		jsonResponse(w, map[string]any{"models": fallbackFreeModels, "source": "fallback"})
+		jsonResponse(w, map[string]any{"models": models, "source": "cdn"})
 	}
 }
