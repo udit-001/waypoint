@@ -3,6 +3,7 @@ import { setPage } from '../stores/page.svelte.js';
   import { iconSvg } from '../lib/icons.js';
   import { onMount } from 'svelte';
   import Spinner from '../components/Spinner.svelte';
+  import ZenModelPicker from '../components/ZenModelPicker.svelte';
   import Card from '../components/Card.svelte';
   import { formatDateTime } from '../lib/format.js';
   import * as api from '../stores/api.svelte.js';
@@ -36,7 +37,7 @@ import { setPage } from '../stores/page.svelte.js';
 
     await api.settings.ensure();
     settingsData = api.settings.value;
-    zenModel = settingsData.zenModel || 'mimo-v2.5-free';
+    zenModel = settingsData.zenModel || ''; // empty = shipped default (big-pickle)
     currentFont = document.documentElement.dataset.font || localStorage.getItem('waypoint_font') || 'sans';
 
     // Load autopilot data + brief status.
@@ -315,19 +316,7 @@ import { setPage } from '../stores/page.svelte.js';
     <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-600">
       <label class="wp-label" for="zen-model">Curation model</label>
       <div class="flex gap-2">
-        <select
-          id="zen-model"
-          bind:value={zenModel}
-          class="flex-1 min-w-0 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-slate-400"
-        >
-          <option value="">Default (mimo-v2.5-free)</option>
-          {#each zenModels as m}
-            <option value={m.id}>{m.name || m.id}</option>
-          {/each}
-          {#if zenModel && !zenModels.some((x) => x.id === zenModel)}
-            <option value={zenModel}>{zenModel}</option>
-          {/if}
-        </select>
+        <ZenModelPicker bind:value={zenModel} />
         <button
           class="px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"
           disabled={zenModelSaving || !zenKeySet}

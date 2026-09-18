@@ -47,7 +47,8 @@ var enumerateFacets = func(ctx context.Context, store db.Store) ([]discovery.Fac
 
 	zcfg := zen.DefaultConfig().WithSharedCatalog() // UA version + family routing from the curated metadata
 	zcfg.APIKey = zen.ResolveKey(settings.ZenAPIKey)
-	zcfg.ProjectID = zen.ProjectID(storePath) // stable per-install session
+	zcfg.ProjectID = zen.ProjectID(storePath)        // stable per-install session
+	zcfg.Model = zen.ResolveModel(settings.ZenModel) // user's pick wins, else the shipped default
 	zenClient := zen.New(zcfg)
 	facets, err := discovery.ExpandFacets(ctx, text, zenClient, maxExpandFacets)
 	if err != nil {

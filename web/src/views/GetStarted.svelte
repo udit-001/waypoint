@@ -9,6 +9,7 @@
   import { getRouter } from '../stores/router.svelte.js';
   import { setup, dismissSetup } from '../lib/onboarding.svelte.js';
   import { createLinkedInImport } from '../lib/linkedinImport.svelte.js';
+  import ZenModelPicker from '../components/ZenModelPicker.svelte';
   import { briefStatus } from '../lib/brief.js';
   import Spinner from '../components/Spinner.svelte';
   import EntryEditor from '../components/EntryEditor.svelte';
@@ -113,7 +114,7 @@
     // Load current zen model + available models
     try {
       await api.settings.ensure();
-      zenModel = api.settings.value?.zenModel || 'mimo-v2.5-free';
+      zenModel = api.settings.value?.zenModel || ''; // empty = shipped default (big-pickle)
     } catch {}
     loadZenModels();
   }
@@ -534,19 +535,7 @@
           <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-600">
             <label class="wp-label" for="gs-zen-model">Curation model</label>
             <div class="flex gap-2">
-              <select
-                id="gs-zen-model"
-                bind:value={zenModel}
-                class="flex-1 min-w-0 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-slate-400"
-              >
-                <option value="">Default (mimo-v2.5-free)</option>
-                {#each zenModels as m}
-                  <option value={m.id}>{m.name || m.id}</option>
-                {/each}
-                {#if zenModel && !zenModels.some((x) => x.id === zenModel)}
-                  <option value={zenModel}>{zenModel}</option>
-                {/if}
-              </select>
+              <ZenModelPicker id="gs-zen-model" bind:value={zenModel} />
               <button
                 class="px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"
                 disabled={zenModelSaving}

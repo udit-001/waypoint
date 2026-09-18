@@ -590,8 +590,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.BaseURL != "https://opencode.ai/zen" {
 		t.Errorf("BaseURL = %q", cfg.BaseURL)
 	}
-	if cfg.Model != "mimo-v2.5-free" {
-		t.Errorf("Model = %q (default must be the free tier)", cfg.Model)
+	if cfg.Model != "big-pickle" {
+		t.Errorf("Model = %q (default must be the shipped big-pickle)", cfg.Model)
 	}
 	if cfg.FallbackModel != "" {
 		t.Errorf("FallbackModel = %q, want empty (paid fallback is opt-in)", cfg.FallbackModel)
@@ -1045,5 +1045,24 @@ func TestCurate_followUpTurnsCarryAssistantRole(t *testing.T) {
 	}
 	if _, ok := asst["tool_calls"]; !ok {
 		t.Errorf("follow-up assistant carries no tool_calls: %v", asst)
+	}
+}
+
+// ---- WP-163: shipped default model + precedence -----------------------------
+
+// TestResolveModel: a saved pick always wins; the shipped default is
+// big-pickle (the curated chat-completions model), never the CDN default.
+func TestResolveModel(t *testing.T) {
+	if got := ResolveModel(""); got != DefaultModel {
+		t.Errorf("ResolveModel(\"\") = %q, want the shipped default %q", got, DefaultModel)
+	}
+	if DefaultModel != "big-pickle" {
+		t.Errorf("shipped DefaultModel = %q, want big-pickle", DefaultModel)
+	}
+	if got := ResolveModel("ling-3.0-flash-fin-free"); got != "ling-3.0-flash-fin-free" {
+		t.Errorf("saved pick overridden: %q", got)
+	}
+	if got := ResolveModel("   "); got != DefaultModel {
+		t.Errorf("whitespace-only pick = %q, want the default", got)
 	}
 }

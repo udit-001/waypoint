@@ -66,6 +66,21 @@ type Config struct {
 	HTTPClient    *http.Client
 }
 
+// DefaultModel is the shipped curation model (decision 2026-09-18): a
+// curated chat-completions model, so it works on the plain wire without
+// per-family routing. A saved zen_model pick always wins (ResolveModel);
+// the CDN's defaultModel field is deliberately not consumed (spec WP-160).
+const DefaultModel = "big-pickle"
+
+// ResolveModel applies the model precedence: a saved pick wins; empty or
+// whitespace-only falls back to the shipped default.
+func ResolveModel(saved string) string {
+	if m := strings.TrimSpace(saved); m != "" {
+		return m
+	}
+	return DefaultModel
+}
+
 // DefaultConfig returns the shipped configuration: the zen gateway,
 // free-tier default model, no paid fallback.
 //
@@ -82,7 +97,7 @@ func DefaultConfig() Config {
 	}
 	return Config{
 		BaseURL:   baseURL,
-		Model:     "mimo-v2.5-free",
+		Model:     DefaultModel,
 		UserAgent: opencodeUserAgent(openCodeMinUAVersion),
 	}
 }

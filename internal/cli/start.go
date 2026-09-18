@@ -266,10 +266,8 @@ func runAutopilotCycle(store db.Store, exaClient *exa.Client, openURL, reason st
 	if key := zen.ResolveKey(settings.ZenAPIKey); key != "" {
 		zcfg := zen.DefaultConfig().WithSharedCatalog() // UA version + family routing from the curated metadata
 		zcfg.APIKey = key
-		zcfg.ProjectID = zen.ProjectID(storePath) // stable per-install session (sticky routing survives restarts)
-		if settings.ZenModel != "" {
-			zcfg.Model = settings.ZenModel // user's pick from Settings
-		}
+		zcfg.ProjectID = zen.ProjectID(storePath)        // stable per-install session (sticky routing survives restarts)
+		zcfg.Model = zen.ResolveModel(settings.ZenModel) // user's pick wins, else the shipped default
 		zc = zen.New(zcfg)
 		zc.SetCompanySearcher(exaClient)
 	}

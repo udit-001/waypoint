@@ -44,10 +44,8 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 		if key := zen.ResolveKey(settings.ZenAPIKey); key != "" {
 			cfg := zen.DefaultConfig().WithSharedCatalog() // UA version + family routing from the curated metadata
 			cfg.APIKey = key
-			cfg.ProjectID = zen.ProjectID(storePath) // stable per-install session
-			if settings.ZenModel != "" {
-				cfg.Model = settings.ZenModel // user's pick from Settings
-			}
+			cfg.ProjectID = zen.ProjectID(storePath)        // stable per-install session
+			cfg.Model = zen.ResolveModel(settings.ZenModel) // user's pick wins, else the shipped default
 			zc = zen.New(cfg)
 		} else {
 			fmt.Println("  ⚠  No zen API key — LLM curation will be skipped (postings escalated to manual review)")
