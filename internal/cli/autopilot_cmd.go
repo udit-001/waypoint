@@ -42,9 +42,9 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 		var zc *zen.Client
 		exaClient := exa.New("", nil)
 		if key := zen.ResolveKey(settings.ZenAPIKey); key != "" {
-			cfg := zen.DefaultConfig()
+			cfg := zen.DefaultConfig().WithSharedCatalog() // UA version + family routing from the curated metadata
 			cfg.APIKey = key
-			cfg.Catalog = zen.SharedCatalog() // UA version + family routing from the curated metadata
+			cfg.ProjectID = zen.ProjectID(storePath) // stable per-install session
 			if settings.ZenModel != "" {
 				cfg.Model = settings.ZenModel // user's pick from Settings
 			}

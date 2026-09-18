@@ -48,6 +48,7 @@ func decodeSSEChat(r io.Reader, msg *message) (string, *Error) {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 1<<20) // argument deltas can be long
 
+	msg.Role = "assistant" // the assembled message is the assistant turn
 	finish := ""
 	var order []int
 	calls := map[int]*toolCall{}

@@ -87,6 +87,14 @@ func DefaultConfig() Config {
 	}
 }
 
+// WithSharedCatalog attaches the process-wide catalog so the UA version
+// and model→family routing come from the curated metadata. Production
+// construction sites use this; tests inject their own catalogs.
+func (c Config) WithSharedCatalog() Config {
+	c.Catalog = SharedCatalog()
+	return c
+}
+
 // Client is one OpenAI-compatible chat-completions client. One per
 // daemon process: it owns the process-stable session identity used
 // for provider stickiness.
@@ -132,7 +140,7 @@ func New(cfg Config) *Client {
 // catalog is attached, the chat-completions default otherwise.
 func (c *Client) family(model string) string {
 	if c.cfg.Catalog != nil {
-		return c.cfg.Catalog.API(model)
+		return c.cfg.Catalog.Family(model)
 	}
 	return apiChatCompletions
 }
@@ -379,6 +387,52 @@ func truncateChars(s string, n int) string {
 	return s
 }
 
+// sendWire performs one wire request: marshals the family-built payload,
+// sends it with the full identity header set, and classifies non-200
+// responses into the error ladder (401/402/403 fatal). Shared by every
+// request path; the caller owns the 200 body (streamed or not).
+func (c *Client) sendWire(ctx context.Context, wire familyWire, body map[string]any) (*http.Response, *Error) {
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return nil, &Error{Msg: "marshal request: " + err.Error()}
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST",
+		c.baseURL+wire.endpoint(), bytes.NewReader(raw))
+	if err != nil {
+		return nil, &Error{Msg: "build request: " + err.Error()}
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", c.authorization())
+	req.Header.Set("User-Agent", c.userAgent()) // free-tier gate
+	req.Header.Set("x-opencode-client", "cli")
+	req.Header.Set("x-opencode-session", c.sessionID)
+	req.Header.Set("x-opencode-request", c.nextRequestID())
+	if c.cfg.ProjectID != "" {
+		req.Header.Set("x-opencode-project", c.cfg.ProjectID)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, &Error{Msg: "request: " + err.Error()}
+	}
+
+	// Classify by status BEFORE decoding the body: a proxy returning an
+	// HTML error page on 401/402 must not downgrade into a retryable
+	// decode error.
+	if resp.StatusCode != 200 {
+		defer resp.Body.Close()
+		var out completionResponse
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out) // best effort
+		msg := "request failed"
+		if out.Error != nil && out.Error.Message != "" {
+			msg = out.Error.Message
+		}
+		fatal := resp.StatusCode == 401 || resp.StatusCode == 402 || resp.StatusCode == 403
+		return nil, &Error{Status: resp.StatusCode, Fatal: fatal, Msg: msg}
+	}
+	return resp, nil
+}
+
 // call performs one streamed request, routed by the model's API family
 // (from the catalog metadata), and returns the assembled assistant message
 // (all tool calls intact — models may batch parallel tool calls), plus the
@@ -396,45 +450,11 @@ func (c *Client) call(ctx context.Context, model string, msgs []message) (messag
 	if err != nil {
 		return message{}, Verdict{}, false, &Error{Msg: "build request: " + err.Error()}
 	}
-	raw, err := json.Marshal(body)
-	if err != nil {
-		return message{}, Verdict{}, false, &Error{Msg: "marshal request: " + err.Error()}
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST",
-		c.baseURL+wire.endpoint(), bytes.NewReader(raw))
-	if err != nil {
-		return message{}, Verdict{}, false, &Error{Msg: "build request: " + err.Error()}
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", c.authorization())
-	req.Header.Set("User-Agent", c.userAgent()) // free-tier gate
-	req.Header.Set("x-opencode-client", "cli")
-	req.Header.Set("x-opencode-session", c.sessionID)
-	req.Header.Set("x-opencode-request", c.nextRequestID())
-	if c.cfg.ProjectID != "" {
-		req.Header.Set("x-opencode-project", c.cfg.ProjectID)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return message{}, Verdict{}, false, &Error{Msg: "request: " + err.Error()}
+	resp, serr := c.sendWire(ctx, wire, body)
+	if serr != nil {
+		return message{}, Verdict{}, false, serr
 	}
 	defer resp.Body.Close()
-
-	// Classify by status BEFORE decoding the body: a proxy returning an
-	// HTML error page on 401/402 must not downgrade into a retryable
-	// decode error.
-	if resp.StatusCode != 200 {
-		var out completionResponse
-		_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out) // best effort
-		msg := "request failed"
-		if out.Error != nil && out.Error.Message != "" {
-			msg = out.Error.Message
-		}
-		fatal := resp.StatusCode == 401 || resp.StatusCode == 402 || resp.StatusCode == 403
-		return message{}, Verdict{}, false, &Error{Status: resp.StatusCode, Fatal: fatal, Msg: msg}
-	}
 
 	var msg message
 	finish := ""
@@ -639,19 +659,24 @@ func ProjectID(dbPath string) string {
 // is nondeterministic model behavior, not a wire problem — retry once
 // internally before surfacing it.
 func (c *Client) Complete(ctx context.Context, system, user string) (string, error) {
+	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
-		content, err := c.completeOnce(ctx, system, user)
-		if err != nil {
-			if attempt == 0 {
-				if ze, ok := err.(*Error); ok && !ze.Fatal && ze.Msg == "empty completion" {
-					continue // the model called a gate tool instead of answering
-				}
+		if attempt > 0 {
+			if err := ctx.Err(); err != nil {
+				return "", &Error{Msg: "context done: " + err.Error()}
 			}
-			return "", err
+			sleep(2 * time.Second)
 		}
-		return content, nil
+		content, err := c.completeOnce(ctx, system, user)
+		if err == nil {
+			return content, nil
+		}
+		if ze, ok := err.(*Error); ok && ze.Fatal {
+			return "", err // bad key / credits / gate rejection — retrying can't help
+		}
+		lastErr = err // recoverable: gate-tool detour, provider flake
 	}
-	return "", &Error{Msg: "unreachable"}
+	return "", lastErr
 }
 
 func (c *Client) completeOnce(ctx context.Context, system, user string) (string, error) {
@@ -667,41 +692,11 @@ func (c *Client) completeOnce(ctx context.Context, system, user string) (string,
 	// Tool-less turn: buildBody guarantees the free-tier shape with the
 	// gate client tools (read/bash). A stray gate-tool call resolves
 	// harmlessly: it is ignored below.
-	raw, err := json.Marshal(body)
-	if err != nil {
-		return "", &Error{Msg: "marshal request: " + err.Error()}
-	}
-	req, err := http.NewRequestWithContext(ctx, "POST",
-		c.baseURL+wire.endpoint(), bytes.NewReader(raw))
-	if err != nil {
-		return "", &Error{Msg: "build request: " + err.Error()}
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", c.authorization())
-	req.Header.Set("User-Agent", c.userAgent())
-	req.Header.Set("x-opencode-client", "cli")
-	req.Header.Set("x-opencode-session", c.sessionID)
-	req.Header.Set("x-opencode-request", c.nextRequestID())
-	if c.cfg.ProjectID != "" {
-		req.Header.Set("x-opencode-project", c.cfg.ProjectID)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", &Error{Msg: "request: " + err.Error()}
+	resp, serr := c.sendWire(ctx, wire, body)
+	if serr != nil {
+		return "", serr
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		var out completionResponse
-		_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out)
-		msg := "request failed"
-		if out.Error != nil && out.Error.Message != "" {
-			msg = out.Error.Message
-		}
-		fatal := resp.StatusCode == 401 || resp.StatusCode == 402 || resp.StatusCode == 403
-		return "", &Error{Status: resp.StatusCode, Fatal: fatal, Msg: msg}
-	}
 
 	var content string
 	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {

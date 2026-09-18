@@ -105,13 +105,13 @@ func newFamilyClient(t *testing.T, sseURL string, cat *Catalog) *Client {
 	})
 }
 
-// TestCatalog_API: known model → its family; unknown → chat-completions.
-func TestCatalog_API(t *testing.T) {
+// TestCatalog_Family: known model → its family; unknown → chat-completions.
+func TestCatalog_Family(t *testing.T) {
 	cat := familyCatalog(t, apiAnthropicMessages)
-	if got := cat.API("union-alpha-free"); got != apiAnthropicMessages {
+	if got := cat.Family("union-alpha-free"); got != apiAnthropicMessages {
 		t.Errorf("API = %q, want anthropic-messages", got)
 	}
-	if got := cat.API("nope"); got != apiChatCompletions {
+	if got := cat.Family("nope"); got != apiChatCompletions {
 		t.Errorf("unknown model API = %q, want the chat-completions default", got)
 	}
 }

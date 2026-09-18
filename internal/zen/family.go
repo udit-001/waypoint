@@ -133,6 +133,7 @@ func (responsesWire) decodeStream(r io.Reader, msg *message) (string, *Error) {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 1<<20)
 
+	msg.Role = "assistant" // the assembled message is the assistant turn
 	finish := ""
 	argDeltas := map[string]*strings.Builder{} // item_id → arguments (fallback path)
 	var order []string
@@ -308,6 +309,7 @@ func (anthropicWire) decodeStream(r io.Reader, msg *message) (string, *Error) {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 1<<20)
 
+	msg.Role = "assistant" // the assembled message is the assistant turn
 	finish := ""
 	var blocks []struct {
 		id, name, args string

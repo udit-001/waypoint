@@ -264,9 +264,9 @@ func runAutopilotCycle(store db.Store, exaClient *exa.Client, openURL, reason st
 	// Build zen client from stored or env API key.
 	var zc *zen.Client
 	if key := zen.ResolveKey(settings.ZenAPIKey); key != "" {
-		zcfg := zen.DefaultConfig()
+		zcfg := zen.DefaultConfig().WithSharedCatalog() // UA version + family routing from the curated metadata
 		zcfg.APIKey = key
-		zcfg.Catalog = zen.SharedCatalog() // UA version + family routing from the curated metadata
+		zcfg.ProjectID = zen.ProjectID(storePath) // stable per-install session (sticky routing survives restarts)
 		if settings.ZenModel != "" {
 			zcfg.Model = settings.ZenModel // user's pick from Settings
 		}

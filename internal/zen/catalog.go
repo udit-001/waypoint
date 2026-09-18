@@ -327,10 +327,10 @@ func parseFreeModels(raw []byte) ([]Model, string, error) {
 	return models, file.OpencodeVersion, nil
 }
 
-// API returns the endpoint family for a model from the last-known-good
+// Family returns the endpoint family for a model from the last-known-good
 // list. Unknown models default to the chat-completions family — the family
 // every other curated model uses (pi-zen parity). Passive: no network.
-func (c *Catalog) API(model string) string {
+func (c *Catalog) Family(model string) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.entry != nil {
@@ -357,6 +357,12 @@ var (
 func SharedCatalog() *Catalog {
 	sharedCatalogOnce.Do(func() {
 		sharedCatalog = NewCatalog(CatalogConfig{})
+		// Warm in the background: the first client request wants the fresh
+		// UA version and family routing without paying the CDN latency, and
+		// the SWR cache makes the warm-up free for the picker later.
+		go func() {
+			_, _ = sharedCatalog.Models(context.Background())
+		}()
 	})
 	return sharedCatalog
 }

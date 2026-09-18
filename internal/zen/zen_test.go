@@ -39,7 +39,8 @@ type capturedRequest struct {
 
 type fakeResponse struct {
 	status      int
-	toolCall    bool // true: reply with a curate_posting tool call
+	toolCall    bool   // true: reply with a tool call
+	toolName    string // tool name override (research detours); default curate_posting
 	decision    string
 	score       int
 	note        string
@@ -145,11 +146,15 @@ func (f *fakeZen) handler(w http.ResponseWriter, r *http.Request) {
 		args, _ := json.Marshal(toolCallArgs(resp))
 		half := len(args) / 2
 		// Role + tool-call head (id, name, first argument fragment).
+		name := resp.toolName
+		if name == "" {
+			name = "curate_posting"
+		}
 		sse(w, chunk(map[string]any{
 			"role": "assistant",
 			"tool_calls": []map[string]any{{
 				"index": 0, "id": "call-fake-1", "type": "function",
-				"function": map[string]any{"name": "curate_posting", "arguments": string(args[:half])},
+				"function": map[string]any{"name": name, "arguments": string(args[:half])},
 			}},
 		}, ""))
 		// Argument tail assembled across chunks.
@@ -1013,5 +1018,32 @@ func TestComplete_streamsAndInjectsGateTools(t *testing.T) {
 	fn1, _ := tools[1].(map[string]any)["function"].(map[string]any)
 	if fn0["name"] != "read" || fn1["name"] != "bash" {
 		t.Errorf("gate tools = %v, %v", fn0["name"], fn1["name"])
+	}
+}
+
+// TestCurate_followUpTurnsCarryAssistantRole (live 400 regression): the
+// SSE-assembled assistant message must be role-tagged — the router 400s
+// "text content parts must carry a string text" on roleless follow-up
+// turns.
+func TestCurate_followUpTurnsCarryAssistantRole(t *testing.T) {
+	f := &fakeZen{script: []fakeResponse{
+		{toolCall: true, toolName: "search_company", decision: "shortlist", score: 70, reasons: []string{"ok"}, overview: "o"},
+		{toolCall: true, decision: "shortlist", score: 70, reasons: []string{"ok"}, overview: "o"},
+	}}
+	c := f.start(t)
+	if _, err := c.NewSession(briefPrompt).Curate(context.Background(), Posting{URL: "https://x.io/1", Markdown: "m"}); err != nil {
+		t.Fatalf("Curate: %v", err)
+	}
+	req2 := f.at(1)
+	msgs, _ := req2.body["messages"].([]any)
+	if len(msgs) < 3 {
+		t.Fatalf("follow-up has %d messages, want the tool round-trip", len(msgs))
+	}
+	asst := msgs[2].(map[string]any)
+	if asst["role"] != "assistant" {
+		t.Errorf("follow-up assistant role = %v, want assistant", asst["role"])
+	}
+	if _, ok := asst["tool_calls"]; !ok {
+		t.Errorf("follow-up assistant carries no tool_calls: %v", asst)
 	}
 }
