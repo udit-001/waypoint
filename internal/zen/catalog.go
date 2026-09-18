@@ -326,3 +326,37 @@ func parseFreeModels(raw []byte) ([]Model, string, error) {
 	}
 	return models, file.OpencodeVersion, nil
 }
+
+// API returns the endpoint family for a model from the last-known-good
+// list. Unknown models default to the chat-completions family — the family
+// every other curated model uses (pi-zen parity). Passive: no network.
+func (c *Catalog) API(model string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entry != nil {
+		for _, m := range c.entry.models {
+			if m.ID == model {
+				return m.API
+			}
+		}
+	}
+	return defaultFamilyAPI
+}
+
+// sharedCatalog is the process-wide catalog for client construction sites
+// that don't receive one (the CLI/daemon paths): one SWR cache per
+// process, lazily built against the production CDN.
+var (
+	sharedCatalogOnce sync.Once
+	sharedCatalog     *Catalog
+)
+
+// SharedCatalog returns the process-wide catalog. Clients attach it via
+// Config.Catalog so the UA version and model→family routing come from the
+// curated metadata.
+func SharedCatalog() *Catalog {
+	sharedCatalogOnce.Do(func() {
+		sharedCatalog = NewCatalog(CatalogConfig{})
+	})
+	return sharedCatalog
+}

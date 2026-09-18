@@ -17,16 +17,23 @@ Zen is an OpenAI-compatible gateway. Waypoint needs exactly **one HTTP client hi
 | Free models (all $0, all "limited time") | `big-pickle`, `mimo-v2.5-free`, `deepseek-v4-flash-free`, `hy3-free`, `laguna-s-2.1-free`, `nemotron-3-ultra-free`, `nemotron-3.5-lightning-free` |
 | Structured output | Tool calling on chat/completions — proven with `mimo-v2.5-free` by news-aggregator at 1,383 labels. **No `tool_choice`** (mimo rejects); `max_tokens >= 1024` (reasoning burns tokens first) |
 | Rate limits | Per-key + per-model RPM/TPM/TPS limiters server-side; 429s carry `retryInSec`-style messages. Server itself retries/failovers 3× on 429/provider errors |
-| Retry semantics (client) | Proven pattern: 3 retries with backoff + **fallback model** (`mimo-v2.5-free` → `glm-5.1` in production classifier). Treat 401 (auth), 402/credits, 429 distinctly |
+| Retry semantics (client) | Proven pattern: 3 retries with backoff + **fallback model**. Treat 401 (auth), 402/credits, 429 distinctly; 403 FreeTierError is fatal (shape/identity/transport — retrying can't help) |
 
-## ⚠️ The User-Agent gate (issue #42029)
+## ⚠️ The free-tier gate (layered — verified by capture-diff + replay 2026-09-19)
 
-Free-model capacity is reserved for the official client, enforced by **`User-Agent` alone**:
-- `User-Agent: opencode/1.17.11` → 200 OK
-- Any other UA → `429 FreeUsageLimitError`, regardless of key or IP
-- `x-opencode-*` headers do **not** unlock it; the gateway strips them before forwarding upstream
+The gate is a stack of independent checks; each layer fails differently:
 
-**Consequence:** the Go client must send `User-Agent: opencode/<version>` (mirror pi-zen's exact string). Anti-abuse gate, may change any time → **paid/BYOK is the long-term stable path; free tier is the on-ramp.**
+| Layer | Check | Failure when violated |
+|---|---|---|
+| 1. **TLS transport fingerprint** | Only OpenSSL-based client stacks pass (curl over HTTP/1.1, Node/undici). **Go's crypto/tls is rejected at full wire parity** — byte-identical replayed requests get 403 from Go/curl-h2 and 200 from undici/curl-h1 on the same IP minutes apart. utls presets (Chrome/Firefox/Safari/iOS/Edge) also 403 — OpenSSL's ClientHello specifically is what passes. | `403 FreeTierError: "OpenCode's free tier can only be used from within OpenCode"` |
+| 2. **UA version floor** | `User-Agent: opencode/<version>` with major > 1 or (major == 1 && minor >= 17). Verified live: `opencode/1.18.31` → OK; third-party/bare UAs → 403; older → 426 Upgrade Required ([9router PR #4105](https://github.com/decolua/9router/pull/4105)). Same 403 as layer 1 |
+| 3. **Session id shape** | `x-opencode-session` matches `/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/` (opencode's descending id format; 9router PR #4105). UUID/foreign shapes → 403. A sha1-derived id (pi-zen `opencodeIdFromSeed`) passes — only the regex is validated, not timestamp semantics |
+| 4. **Agent-turn shape** | `stream: true` + non-empty `tools` array (a never-invocable placeholder on tool-less turns — opencode's own trick) | Same 403 |
+| 5. **Quota** | Per-key/IP free-tier allowance | `429 FreeUsageLimitError` — quota, not shape; retry after reset |
+
+Error-ordering note: a dead key answers `401 AuthError: Invalid API key` before the shape layers run — a 401 on a request that 403s with another key means the key, not the wire.
+
+**Consequence for a pure-Go connector:** layers 2–4 are fully ported (identity + streaming + per-family wires), but layer 1 blocks any crypto/tls client. Options: (a) utls with a custom ClientHello replicating OpenSSL's (the endpoint's 200/403 is the oracle; captured s_client dump in this session's research), (b) route through a local proxy that presents an accepted fingerprint (pi-zen / 9router; `ZEN_BASE_URL` is honored for exactly this), (c) paid/BYOK key — the long-term stable path regardless.
 
 ## What `x-opencode-session` actually does (gateway source)
 

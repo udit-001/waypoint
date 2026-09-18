@@ -266,6 +266,7 @@ func runAutopilotCycle(store db.Store, exaClient *exa.Client, openURL, reason st
 	if key := zen.ResolveKey(settings.ZenAPIKey); key != "" {
 		zcfg := zen.DefaultConfig()
 		zcfg.APIKey = key
+		zcfg.Catalog = zen.SharedCatalog() // UA version + family routing from the curated metadata
 		if settings.ZenModel != "" {
 			zcfg.Model = settings.ZenModel // user's pick from Settings
 		}

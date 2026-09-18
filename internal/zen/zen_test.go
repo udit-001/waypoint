@@ -31,19 +31,21 @@ type capturedRequest struct {
 	client    string
 	project   string
 	session   string
+	request   string
 	body      map[string]any
 	rawBody   string
 	lastModel string
 }
 
 type fakeResponse struct {
-	status   int
-	toolCall bool // true: reply with a curate_posting tool call
-	decision string
-	score    int
-	note     string
-	overview string
-	reasons  []string // raw text fragments; serialized as {kind:match, field:role, text}
+	status      int
+	toolCall    bool // true: reply with a curate_posting tool call
+	decision    string
+	score       int
+	note        string
+	overview    string
+	reasons     []string // raw text fragments; serialized as {kind:match, field:role, text}
+	streamError string   // when set (with status 200): mid-stream error event
 }
 
 func toolCallBody(model, decision string, score int, reasons []string) map[string]any {
@@ -119,6 +121,7 @@ func (f *fakeZen) handler(w http.ResponseWriter, r *http.Request) {
 		client:    r.Header.Get("X-Opencode-Client"),
 		project:   r.Header.Get("X-Opencode-Project"),
 		session:   r.Header.Get("X-Opencode-Session"),
+		request:   r.Header.Get("X-Opencode-Request"),
 		body:      body,
 		rawBody:   string(raw),
 		lastModel: model,
@@ -132,11 +135,74 @@ func (f *fakeZen) handler(w http.ResponseWriter, r *http.Request) {
 	case resp.status != 0 && resp.status != 200:
 		w.WriteHeader(resp.status)
 		json.NewEncoder(w).Encode(errorBody("boom"))
+	case resp.streamError != "":
+		// 200 + in-stream error object (the zen gateway's mid-stream shape).
+		w.Header().Set("Content-Type", "text/event-stream")
+		sse(w, map[string]any{"error": map[string]any{"type": "FreeTierError", "message": resp.streamError}})
+		sseDone(w)
 	case resp.toolCall:
-		json.NewEncoder(w).Encode(toolCallBodyFull(model, resp.decision, resp.score, resp.note, resp.overview, resp.reasons))
+		w.Header().Set("Content-Type", "text/event-stream")
+		args, _ := json.Marshal(toolCallArgs(resp))
+		half := len(args) / 2
+		// Role + tool-call head (id, name, first argument fragment).
+		sse(w, chunk(map[string]any{
+			"role": "assistant",
+			"tool_calls": []map[string]any{{
+				"index": 0, "id": "call-fake-1", "type": "function",
+				"function": map[string]any{"name": "curate_posting", "arguments": string(args[:half])},
+			}},
+		}, ""))
+		// Argument tail assembled across chunks.
+		sse(w, chunk(map[string]any{
+			"tool_calls": []map[string]any{{
+				"index":    0,
+				"function": map[string]any{"arguments": string(args[half:])},
+			}},
+		}, ""))
+		sse(w, chunk(map[string]any{}, "tool_calls"))
+		sseDone(w)
 	default:
-		json.NewEncoder(w).Encode(plainBody("no tool call here"))
+		w.Header().Set("Content-Type", "text/event-stream")
+		content := "no tool call here"
+		sse(w, chunk(map[string]any{"role": "assistant", "content": content[:len(content)/2]}, ""))
+		sse(w, chunk(map[string]any{"content": content[len(content)/2:]}, ""))
+		sse(w, chunk(map[string]any{}, "stop"))
+		sseDone(w)
 	}
+}
+
+// sse writes one data: line + blank separator.
+func sse(w http.ResponseWriter, v any) {
+	b, _ := json.Marshal(v)
+	w.Write([]byte("data: " + string(b) + "\n\n"))
+}
+
+func sseDone(w http.ResponseWriter) { w.Write([]byte("data: [DONE]\n\n")) }
+
+// chunk is one streaming chat-completions chunk: a delta plus an optional
+// finish_reason.
+func chunk(delta map[string]any, finish string) map[string]any {
+	choice := map[string]any{"index": 0, "delta": delta}
+	if finish != "" {
+		choice["finish_reason"] = finish
+	}
+	return map[string]any{"id": "chatcmpl-fake", "choices": []any{choice}}
+}
+
+// toolCallArgs serializes the scripted curate_posting arguments.
+func toolCallArgs(resp fakeResponse) map[string]any {
+	objs := make([]map[string]any, len(resp.reasons))
+	for i, r := range resp.reasons {
+		objs[i] = map[string]any{"kind": "match", "field": "role", "text": r}
+	}
+	args := map[string]any{"verdict": resp.decision, "score": resp.score, "reasons": objs}
+	if resp.note != "" {
+		args["note"] = resp.note
+	}
+	if resp.overview != "" {
+		args["overview"] = resp.overview
+	}
+	return args
 }
 
 func (f *fakeZen) start(t *testing.T) *Client {
@@ -218,8 +284,11 @@ func TestCurate_sendsLockedWireShape(t *testing.T) {
 	if req.project != "proj123" {
 		t.Errorf("x-opencode-project = %q", req.project)
 	}
-	if !regexp.MustCompile(`^ses_[0-9a-f]{32}$`).MatchString(req.session) {
-		t.Errorf("x-opencode-session = %q, want ses_<32hex>", req.session)
+	if !regexp.MustCompile(`^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`).MatchString(req.session) {
+		t.Errorf("x-opencode-session = %q, want ses_<12hex><14base62>", req.session)
+	}
+	if !regexp.MustCompile(`^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$`).MatchString(req.request) {
+		t.Errorf("x-opencode-request = %q, want msg_<12hex><14base62>", req.request)
 	}
 
 	// Request body: locked curation wire shape.
@@ -750,5 +819,193 @@ func TestCurate_overviewRequiredRetried(t *testing.T) {
 	}
 	if v.Overview == "" {
 		t.Error("final verdict still has no overview")
+	}
+}
+
+// ---- WP-162: opencode wire identity ----------------------------------------
+
+// TestNew_sessionStableFromSeed: the session id is opencode-shaped and
+// derived from the project seed, so zen's sticky provider routing and
+// prompt cache survive restarts (same seed → same ses_).
+func TestNew_sessionStableFromSeed(t *testing.T) {
+	a := New(Config{ProjectID: "install-seed"})
+	b := New(Config{ProjectID: "install-seed"})
+	if a.sessionID != b.sessionID {
+		t.Errorf("same seed produced different sessions: %q vs %q", a.sessionID, b.sessionID)
+	}
+	if !regexp.MustCompile(`^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`).MatchString(a.sessionID) {
+		t.Errorf("session = %q, want opencode ses_ shape", a.sessionID)
+	}
+	c := New(Config{ProjectID: "other-install"})
+	if c.sessionID == a.sessionID {
+		t.Error("different seeds produced the same session")
+	}
+	// No seed: per-process fallback, still opencode-shaped and distinct.
+	d := New(Config{})
+	e := New(Config{})
+	if !regexp.MustCompile(`^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`).MatchString(d.sessionID) {
+		t.Errorf("fallback session = %q, want opencode ses_ shape", d.sessionID)
+	}
+	if d.sessionID == e.sessionID {
+		t.Error("seedless clients must not share a session")
+	}
+}
+
+// TestClient_requestIDPerCall: every request mints a fresh ascending msg_.
+func TestClient_requestIDPerCall(t *testing.T) {
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"ok"}, overview: "overview text"}}}
+	c := f.start(t)
+	sess := c.NewSession(briefPrompt)
+	for i := 0; i < 2; i++ {
+		if _, err := sess.Curate(context.Background(), Posting{URL: "https://x.io/1", Markdown: "m"}); err != nil {
+			t.Fatalf("Curate %d: %v", i, err)
+		}
+	}
+	r1, r2 := f.at(0).request, f.at(1).request
+	shape := regexp.MustCompile(`^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$`)
+	if !shape.MatchString(r1) || !shape.MatchString(r2) {
+		t.Fatalf("request ids = %q, %q — want msg_ shape", r1, r2)
+	}
+	if r1 == r2 {
+		t.Error("request ids must be fresh per call")
+	}
+}
+
+// TestClient_uaFromCatalog: with a catalog attached, the UA version comes
+// from the curated opencodeVersion (clamped), not waypoint's own version.
+func TestClient_uaFromCatalog(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"count":1,"opencodeVersion":"1.19.0","models":[{"id":"m","name":"M"}]}`))
+	}))
+	defer upstream.Close()
+	cat := NewCatalog(CatalogConfig{URL: upstream.URL})
+	if _, err := cat.Models(context.Background()); err != nil { // warm the cache
+		t.Fatalf("warm catalog: %v", err)
+	}
+
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"ok"}, overview: "overview text"}}}
+	ts := httptest.NewServer(http.HandlerFunc(f.handler))
+	t.Cleanup(ts.Close)
+	c := New(Config{BaseURL: ts.URL, APIKey: "k", Model: "m", Catalog: cat})
+
+	if _, err := c.NewSession(briefPrompt).Curate(context.Background(), Posting{URL: "https://x.io/1", Markdown: "m"}); err != nil {
+		t.Fatalf("Curate: %v", err)
+	}
+	want := "opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+	if got := f.last().ua; got != want {
+		t.Errorf("UA = %q, want %q", got, want)
+	}
+}
+
+// TestClient_uaClampedWhenCatalogStale: an absent/stale catalog version
+// clamps to the verified-good floor.
+func TestClient_uaClampedWhenCatalogStale(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"count":1,"opencodeVersion":"1.2.0","models":[{"id":"m","name":"M"}]}`))
+	}))
+	defer upstream.Close()
+	cat := NewCatalog(CatalogConfig{URL: upstream.URL})
+	if _, err := cat.Models(context.Background()); err != nil {
+		t.Fatalf("warm catalog: %v", err)
+	}
+
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"ok"}, overview: "overview text"}}}
+	ts := httptest.NewServer(http.HandlerFunc(f.handler))
+	t.Cleanup(ts.Close)
+	c := New(Config{BaseURL: ts.URL, APIKey: "k", Model: "m", Catalog: cat})
+
+	if _, err := c.NewSession(briefPrompt).Curate(context.Background(), Posting{URL: "https://x.io/1", Markdown: "m"}); err != nil {
+		t.Fatalf("Curate: %v", err)
+	}
+	want := "opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+	if got := f.last().ua; got != want {
+		t.Errorf("UA = %q, want the clamped floor %q", got, want)
+	}
+}
+
+// TestClient_bearerPublicWhenKeyless: the signed-out sentinel the opencode
+// CLI uses (free-tier anonymous path).
+func TestClient_bearerPublicWhenKeyless(t *testing.T) {
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"ok"}, overview: "overview text"}}}
+	ts := httptest.NewServer(http.HandlerFunc(f.handler))
+	t.Cleanup(ts.Close)
+	c := New(Config{BaseURL: ts.URL, Model: "m"}) // no APIKey
+
+	if _, err := c.NewSession(briefPrompt).Curate(context.Background(), Posting{URL: "https://x.io/1", Markdown: "m"}); err != nil {
+		t.Fatalf("Curate: %v", err)
+	}
+	if got := f.last().auth; got != "Bearer public" {
+		t.Errorf("Authorization = %q, want Bearer public", got)
+	}
+}
+
+// TestDefaultConfig_validUA: the shipped UA is a full opencode UA with the
+// verified-good floor version — never waypoint's own version (the free
+// tier 426/403s third-party or old opencode UAs).
+func TestDefaultConfig_validUA(t *testing.T) {
+	cfg := DefaultConfig()
+	want := "opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+	if cfg.UserAgent != want {
+		t.Errorf("DefaultConfig UA = %q, want %q", cfg.UserAgent, want)
+	}
+}
+
+// TestCurate_midStreamErrorIsFatal: the gateway's FreeTierError mid-stream
+// (200 + SSE error object) classifies fatal — the retry ladder stops
+// instead of burning attempts on a shape/identity rejection.
+func TestCurate_midStreamErrorIsFatal(t *testing.T) {
+	f := &fakeZen{script: []fakeResponse{{streamError: "OpenCode's free tier can only be used from within OpenCode"}}}
+	c := f.start(t)
+	_ = stubSleep(t)
+
+	_, err := c.NewSession(briefPrompt).Curate(context.Background(), Posting{URL: "https://x.io/1", Markdown: "m"})
+	if err == nil {
+		t.Fatal("Curate = nil error, want the fatal stream error")
+	}
+	zerr, ok := err.(*Error)
+	if !ok || !zerr.Fatal {
+		t.Fatalf("error = %v, want fatal *Error", err)
+	}
+	if f.reqCount() != 1 {
+		t.Errorf("requests = %d, want 1 (fatal must not retry)", f.reqCount())
+	}
+}
+
+// TestCurate_streamsTheWire: the request body streams — the free-tier
+// gate's other half.
+func TestCurate_streamsTheWire(t *testing.T) {
+	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"ok"}, overview: "o"}}}
+	c := f.start(t)
+	if _, err := c.NewSession(briefPrompt).Curate(context.Background(), Posting{URL: "https://x.io/1", Markdown: "m"}); err != nil {
+		t.Fatalf("Curate: %v", err)
+	}
+	if f.last().body["stream"] != true {
+		t.Errorf("stream = %v, want true", f.last().body["stream"])
+	}
+}
+
+// TestComplete_streamsAndInjectsPlaceholder: tool-less turns stream and
+// carry the never-invocable placeholder so the free-tier gate passes.
+func TestComplete_streamsAndInjectsPlaceholder(t *testing.T) {
+	f := &fakeZen{script: []fakeResponse{{}}} // default script: plain content chunks
+	c := f.start(t)
+	got, err := c.Complete(context.Background(), "system prompt", "user turn")
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if got != "no tool call here" {
+		t.Errorf("content = %q", got)
+	}
+	body := f.last().body
+	if body["stream"] != true {
+		t.Errorf("stream = %v, want true", body["stream"])
+	}
+	tools, _ := body["tools"].([]any)
+	if len(tools) != 1 {
+		t.Fatalf("tools = %v, want the placeholder", body["tools"])
+	}
+	fn, _ := tools[0].(map[string]any)["function"].(map[string]any)
+	if fn["name"] != "_zen_noop" {
+		t.Errorf("placeholder tool = %v", fn["name"])
 	}
 }

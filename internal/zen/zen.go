@@ -25,10 +25,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
-
-	"github.com/udit-001/waypoint/internal/version"
 )
 
 // Verdict decisions.
@@ -60,22 +59,31 @@ type Config struct {
 	BaseURL       string // scheme + host, no path (client appends /v1/chat/completions)
 	APIKey        string
 	Model         string
-	FallbackModel string // opt-in paid fallback; empty = no fallback
-	UserAgent     string // free-tier gate: "opencode/<version>"
-	ProjectID     string // x-opencode-project; omitted when empty
+	FallbackModel string   // opt-in paid fallback; empty = no fallback
+	UserAgent     string   // free-tier gate: "opencode/<version>" + AI-SDK suffix
+	ProjectID     string   // x-opencode-project; omitted when empty; also seeds the session id
+	Catalog       *Catalog // when set: UA version + model→family come from the curated catalog
 	HTTPClient    *http.Client
 }
 
 // DefaultConfig returns the shipped configuration: the zen gateway,
 // free-tier default model, no paid fallback.
 //
-// The UA gate (docs/research/zen-api.md) accepts opencode/<any-version>:
-// verified live with "opencode/dev" against mimo-v2.5-free on 2026-08-18.
+// The UA is the full opencode shape with the verified-good floor version
+// (the free tier 426/403s waypoint's own version or stale opencode UAs);
+// attaching a Catalog upgrades it to the catalog's fresh opencodeVersion.
 func DefaultConfig() Config {
+	baseURL := "https://opencode.ai/zen"
+	// Test escape hatch (pi-zen parity): route through a proxy / local
+	// capture server without touching stored settings.
+	if env := strings.TrimSpace(os.Getenv("ZEN_BASE_URL")); env != "" {
+		baseURL = strings.TrimRight(env, "/")
+		baseURL = strings.TrimSuffix(baseURL, "/v1")
+	}
 	return Config{
-		BaseURL:   "https://opencode.ai/zen",
+		BaseURL:   baseURL,
 		Model:     "mimo-v2.5-free",
-		UserAgent: "opencode/" + version.Version,
+		UserAgent: opencodeUserAgent(openCodeMinUAVersion),
 	}
 }
 
@@ -90,24 +98,84 @@ type Client struct {
 	fallbackModel string
 	searcher      CompanySearcher // optional company research
 	pageFetcher   PageFetcher     // optional posting-page fetch
+
+	idMu      sync.Mutex
+	idMS      int64 // millisecond of the current request id
+	idCounter int   // msg_ counter within that millisecond
 }
 
-// New builds a Client with a fresh ses_<32hex> identity.
+// New builds a Client with a stable opencode-shaped ses_ identity: derived
+// from the project seed when set, so zen's sticky provider routing and
+// prompt cache survive restarts; a random per-process seed otherwise.
 func New(cfg Config) *Client {
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = &http.Client{Timeout: 120 * time.Second}
 	}
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		panic("zen: crypto/rand unavailable: " + err.Error())
+	seed := strings.TrimSpace(cfg.ProjectID)
+	if seed == "" {
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			panic("zen: crypto/rand unavailable: " + err.Error())
+		}
+		seed = hex.EncodeToString(b)
 	}
 	return &Client{
 		cfg:           cfg,
 		httpClient:    cfg.HTTPClient,
-		sessionID:     "ses_" + hex.EncodeToString(b),
+		sessionID:     opencodeIDFromSeed("ses", seed),
 		baseURL:       strings.TrimRight(cfg.BaseURL, "/"),
 		fallbackModel: cfg.FallbackModel,
 	}
+}
+
+// family resolves the endpoint family for a model: catalog metadata when a
+// catalog is attached, the chat-completions default otherwise.
+func (c *Client) family(model string) string {
+	if c.cfg.Catalog != nil {
+		return c.cfg.Catalog.API(model)
+	}
+	return apiChatCompletions
+}
+
+// familyWireFor is in family.go.
+
+// userAgent resolves the wire UA: the catalog's fresh opencodeVersion
+// (clamped to the verified-good floor) when a catalog is attached, the
+// configured UA otherwise.
+func (c *Client) userAgent() string {
+	if c.cfg.Catalog != nil {
+		return opencodeUserAgent(validOpencodeVersion(c.cfg.Catalog.Version()))
+	}
+	if strings.TrimSpace(c.cfg.UserAgent) != "" {
+		return c.cfg.UserAgent
+	}
+	return opencodeUserAgent(openCodeMinUAVersion)
+}
+
+// authorization resolves the free-tier auth header: the stored key, or the
+// signed-out public sentinel the opencode CLI uses.
+func (c *Client) authorization() string {
+	if strings.TrimSpace(c.cfg.APIKey) == "" {
+		return "Bearer public"
+	}
+	return "Bearer " + c.cfg.APIKey
+}
+
+// nextRequestID mints a fresh ascending opencode msg_ id per request.
+func (c *Client) nextRequestID() string {
+	c.idMu.Lock()
+	defer c.idMu.Unlock()
+	now := time.Now().UnixMilli()
+	if now != c.idMS {
+		c.idMS = now
+		c.idCounter = 0
+	}
+	c.idCounter++
+	nonce := make([]byte, 14)
+	if _, err := rand.Read(nonce); err != nil {
+		panic("zen: crypto/rand unavailable: " + err.Error())
+	}
+	return opencodeID("msg", now, c.idCounter, nonce)
 }
 
 // SetCompanySearcher injects a company research backend.
@@ -189,57 +257,16 @@ type completionResponse struct {
 	} `json:"error"`
 }
 
-// curateTool is the locked tool schema from the WP-131 prototype.
-var curateTool = map[string]any{
-	"type": "function",
-	"function": map[string]any{
-		"name":        "curate_posting",
-		"description": "Record the curation verdict for one job posting against the user's brief.",
-		"parameters": map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"verdict": map[string]any{"type": "string", "enum": []string{DecisionShortlist, DecisionDismiss}},
-				"score":   map[string]any{"type": "integer", "description": "0-100 fit score"},
-				"note": map[string]any{
-					"type":        "string",
-					"description": "1-2 sentences the row doesn't already tell the user. The title, company, location, score, and reason chips are displayed elsewhere — surface what they can't: the stack and systems, the team's remit, the product it touches, the hiring bar, or the real dealbreaker behind a gap chip. Lead with the decisive fact. Max 200 chars.",
-				},
-				"overview": map[string]any{
-					"type":        "string",
-					"description": "Neutral 2-3 sentence summary of THIS posting only: what the team builds, core stack/systems, work model and location. Facts from the posting — no comparison to the person, no fit opinion (that's note/reasons). Max 60 words.",
-				},
-				"reasons": map[string]any{
-					"type": "array",
-					"items": map[string]any{
-						"type": "object",
-						"properties": map[string]any{
-							"kind":  map[string]any{"type": "string", "enum": []string{"match", "gap"}},
-							"field": map[string]any{"type": "string", "enum": []string{"role", "domain", "level", "location", "company"}},
-							"text":  map[string]any{"type": "string", "description": "terse fragment, max 60 chars, no full sentences"},
-						},
-						"required": []string{"kind", "field", "text"},
-					},
-					"description": "1-3 fit facts: one per dimension (role, domain, level, location, company), each tagged match or gap",
-				},
-			},
-			"required": []string{"verdict", "score", "note", "overview", "reasons"},
+// searchCompanyToolDef lets the model research a company before judging.
+var searchCompanyToolDef = toolDef{
+	Name:        "search_company",
+	Description: "Look up what a company does, its domain, size, and tech stack. Call this when the posting doesn't say what the company builds.",
+	Parameters: map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"company": map[string]any{"type": "string", "description": "Company name to research"},
 		},
-	},
-}
-
-// searchCompanyTool lets the model research a company before judging.
-var searchCompanyTool = map[string]any{
-	"type": "function",
-	"function": map[string]any{
-		"name":        "search_company",
-		"description": "Look up what a company does, its domain, size, and tech stack. Call this when the posting doesn't say what the company builds.",
-		"parameters": map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"company": map[string]any{"type": "string", "description": "Company name to research"},
-			},
-			"required": []string{"company"},
-		},
+		"required": []string{"company"},
 	},
 }
 
@@ -249,20 +276,17 @@ type CompanySearcher interface {
 	SearchCompany(ctx context.Context, name string) (string, error)
 }
 
-// fetchPostingTool lets the model pull the full posting page when the
+// fetchPostingToolDef lets the model pull the full posting page when the
 // description provided is too thin to judge.
-var fetchPostingTool = map[string]any{
-	"type": "function",
-	"function": map[string]any{
-		"name":        "fetch_posting",
-		"description": "Fetch the full job posting page as markdown. Call this when the posting description is empty or too thin to judge against the brief.",
-		"parameters": map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"url": map[string]any{"type": "string", "description": "The posting URL from the POSTING turn"},
-			},
-			"required": []string{"url"},
+var fetchPostingToolDef = toolDef{
+	Name:        "fetch_posting",
+	Description: "Fetch the full job posting page as markdown. Call this when the posting description is empty or too thin to judge against the brief.",
+	Parameters: map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"url": map[string]any{"type": "string", "description": "The posting URL from the POSTING turn"},
 		},
+		"required": []string{"url"},
 	},
 }
 
@@ -355,18 +379,20 @@ func truncateChars(s string, n int) string {
 	return s
 }
 
-// call performs one chat-completions request and returns the assistant
-// message exactly as received (all tool calls intact — models may batch
-// parallel tool calls), plus the validated curate_posting verdict if one
-// is present. curateFound is false when the model called only research
-// tools; that is not an error — toolLoop answers them and loops.
+// call performs one streamed request, routed by the model's API family
+// (from the catalog metadata), and returns the assembled assistant message
+// (all tool calls intact — models may batch parallel tool calls), plus the
+// validated curate_posting verdict if one is present. curateFound is false
+// when the model called only research tools; that is not an error —
+// toolLoop answers them and loops.
+//
+// Streaming is the free-tier gate's other half: a non-streaming request is
+// shape-rejected (403 FreeTierError) even with perfect identity headers.
 func (c *Client) call(ctx context.Context, model string, msgs []message) (message, Verdict, bool, *Error) {
-	body := map[string]any{
-		"model":      model,
-		"messages":   msgs,
-		"max_tokens": maxTokens,
-		"tools":      []any{curateTool, searchCompanyTool, fetchPostingTool},
-		// no tool_choice — mimo rejects it (WP-127)
+	wire := familyWireFor(c.family(model))
+	body, err := wire.buildBody(model, msgs, maxTokens, []toolDef{curateToolDef, searchCompanyToolDef, fetchPostingToolDef})
+	if err != nil {
+		return message{}, Verdict{}, false, &Error{Msg: "build request: " + err.Error()}
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -374,15 +400,16 @@ func (c *Client) call(ctx context.Context, model string, msgs []message) (messag
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST",
-		c.baseURL+"/v1/chat/completions", bytes.NewReader(raw))
+		c.baseURL+wire.endpoint(), bytes.NewReader(raw))
 	if err != nil {
 		return message{}, Verdict{}, false, &Error{Msg: "build request: " + err.Error()}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
-	req.Header.Set("User-Agent", c.cfg.UserAgent) // free-tier gate
+	req.Header.Set("Authorization", c.authorization())
+	req.Header.Set("User-Agent", c.userAgent()) // free-tier gate
 	req.Header.Set("x-opencode-client", "cli")
 	req.Header.Set("x-opencode-session", c.sessionID)
+	req.Header.Set("x-opencode-request", c.nextRequestID())
 	if c.cfg.ProjectID != "" {
 		req.Header.Set("x-opencode-project", c.cfg.ProjectID)
 	}
@@ -407,20 +434,35 @@ func (c *Client) call(ctx context.Context, model string, msgs []message) (messag
 		return message{}, Verdict{}, false, &Error{Status: resp.StatusCode, Fatal: fatal, Msg: msg}
 	}
 
-	var out completionResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
-		return message{}, Verdict{}, false, &Error{Status: resp.StatusCode, Msg: "decode response: " + err.Error()}
+	var msg message
+	finish := ""
+	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
+		// Streaming response: assemble the assistant message from deltas.
+		var serr *Error
+		finish, serr = wire.decodeStream(resp.Body, &msg)
+		if serr != nil {
+			return message{}, Verdict{}, false, serr
+		}
+	} else if _, ok := wire.(chatWire); ok {
+		// Non-streaming fallback (chat family only): a server that ignored
+		// stream:true still speaks the plain chat-completions JSON.
+		var out completionResponse
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+			return message{}, Verdict{}, false, &Error{Status: resp.StatusCode, Msg: "decode response: " + err.Error()}
+		}
+		if len(out.Choices) == 0 {
+			return message{}, Verdict{}, false, &Error{Msg: "empty choices in response"}
+		}
+		msg = out.Choices[0].Message
+		finish = out.Choices[0].FinishReason
+	} else {
+		return message{}, Verdict{}, false, &Error{Msg: "expected a streamed response"}
 	}
-
-	if len(out.Choices) == 0 {
-		return message{}, Verdict{}, false, &Error{Msg: "empty choices in response"}
-	}
-	msg := out.Choices[0].Message
 	if len(msg.ToolCalls) == 0 {
 		// finish_reason distinguishes truncation (length — max_tokens too
 		// small, reasoning burned the budget) from refusal (stop — model
 		// answered in prose instead of calling the tool).
-		return message{}, Verdict{}, false, &Error{Msg: "no tool call in response (finish_reason=" + out.Choices[0].FinishReason + ")"}
+		return message{}, Verdict{}, false, &Error{Msg: "no tool call in response (finish_reason=" + finish + ")"}
 	}
 
 	// Validate the curate_posting call if the model made one (possibly
@@ -581,26 +623,34 @@ func ProjectID(dbPath string) string {
 // single-turn completion for non-curation jobs — facet expansion
 // (WP-152). Fatal errors (bad key, out of credits) surface as *Error.
 func (c *Client) Complete(ctx context.Context, system, user string) (string, error) {
-	body := map[string]any{
-		"model": c.cfg.Model,
-		"messages": []message{
-			{Role: "system", Content: system},
-			{Role: "user", Content: user},
-		},
-		"max_tokens": maxTokens,
+	wire := familyWireFor(c.family(c.cfg.Model))
+	msgs := []message{
+		{Role: "system", Content: system},
+		{Role: "user", Content: user},
 	}
+	body, err := wire.buildBody(c.cfg.Model, msgs, maxTokens, nil)
+	if err != nil {
+		return "", &Error{Msg: "build request: " + err.Error()}
+	}
+	// Tool-less turn: buildBody guarantees the free-tier shape with the
+	// never-invocable placeholder (pi-zen parity — the same trick opencode
+	// uses for tool-less turns). A stray placeholder call resolves
+	// harmlessly: it is ignored below.
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return "", &Error{Msg: "marshal request: " + err.Error()}
 	}
 	req, err := http.NewRequestWithContext(ctx, "POST",
-		c.baseURL+"/v1/chat/completions", bytes.NewReader(raw))
+		c.baseURL+wire.endpoint(), bytes.NewReader(raw))
 	if err != nil {
 		return "", &Error{Msg: "build request: " + err.Error()}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
-	req.Header.Set("User-Agent", c.cfg.UserAgent)
+	req.Header.Set("Authorization", c.authorization())
+	req.Header.Set("User-Agent", c.userAgent())
+	req.Header.Set("x-opencode-client", "cli")
+	req.Header.Set("x-opencode-session", c.sessionID)
+	req.Header.Set("x-opencode-request", c.nextRequestID())
 	if c.cfg.ProjectID != "" {
 		req.Header.Set("x-opencode-project", c.cfg.ProjectID)
 	}
@@ -622,12 +672,24 @@ func (c *Client) Complete(ctx context.Context, system, user string) (string, err
 		return "", &Error{Status: resp.StatusCode, Fatal: fatal, Msg: msg}
 	}
 
-	var out completionResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
-		return "", &Error{Msg: "decode response: " + err.Error()}
+	var content string
+	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
+		var msg message
+		if _, serr := wire.decodeStream(resp.Body, &msg); serr != nil {
+			return "", serr
+		}
+		content = msg.Content // tool calls (the placeholder) are ignored
+	} else {
+		var out completionResponse
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+			return "", &Error{Msg: "decode response: " + err.Error()}
+		}
+		if len(out.Choices) > 0 {
+			content = out.Choices[0].Message.Content
+		}
 	}
-	if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
+	if strings.TrimSpace(content) == "" {
 		return "", &Error{Msg: "empty completion"}
 	}
-	return out.Choices[0].Message.Content, nil
+	return content, nil
 }
