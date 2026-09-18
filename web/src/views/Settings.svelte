@@ -316,7 +316,7 @@ import { setPage } from '../stores/page.svelte.js';
     <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-600">
       <label class="wp-label" for="zen-model">Curation model</label>
       <div class="flex gap-2">
-        <ZenModelPicker bind:value={zenModel} />
+        <ZenModelPicker models={zenModels} bind:value={zenModel} />
         <button
           class="px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"
           disabled={zenModelSaving || !zenKeySet}
