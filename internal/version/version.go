@@ -7,7 +7,7 @@ import (
 
 // Version is the current version of the Waypoint CLI.
 // Overridden at build time via ldflags, or detected from Go module info.
-var Version = "dev"
+var Version = "0.15.0"
 
 // Commit is the git commit hash the binary was built from.
 // Overridden at build time via ldflags, or detected from VCS build info.
