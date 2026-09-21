@@ -2,8 +2,8 @@ package discovery
 
 import (
 	"context"
-
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -102,8 +102,11 @@ func TestDiscover_careersLadderFallback(t *testing.T) {
 		"https://careers.toast.com/": "<!-- must not be fetched -->",
 	}
 	fetched := map[string]bool{}
+	var fetchedMu sync.Mutex // probeCompany fetches concurrently
 	wrapped := fetcherFunc(func(ctx context.Context, u string) (string, error) {
+		fetchedMu.Lock()
 		fetched[u] = true
+		fetchedMu.Unlock()
 		return fetch.Fetch(ctx, u)
 	})
 	stubVerify(t, func(BoardLink) bool { return true })

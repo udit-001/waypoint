@@ -55,10 +55,18 @@ jobs:
           version: v2.12.2
 
       - name: Test
-        # modernc.org/sqlite is pure-Go (no CGO) — runs on stock ubuntu-latest.
-        run: go test -race ./...
+        # CGO_ENABLED=0 is the project rule (pure-Go sqlite; the pdf_oxide
+        # backend's purego bindings dlopen at runtime and only link with cgo
+        # disabled). This also means -race is unavailable: the race detector
+        # requires cgo, and cgo-on breaks the resume backend's link. Matches
+        # `make test`.
+        env:
+          CGO_ENABLED: "0"
+        run: go test ./...
 
       - name: Build
+        env:
+          CGO_ENABLED: "0"
         run: go build ./...
 
       - name: Frontend tests
