@@ -401,7 +401,7 @@ func buildPortrait(store db.Store) string {
 
 	// Title + seniority.
 	if p.Title != "" {
-		b.WriteString(fmt.Sprintf("Role focus: %s\n", p.Title))
+		fmt.Fprintf(&b, "Role focus: %s\n", p.Title)
 	}
 	// Seniority is derived from experience, not stored.
 	seniority := p.Seniority
@@ -409,12 +409,12 @@ func buildPortrait(store db.Store) string {
 		seniority = db.DeriveSeniority(p.Experience)
 	}
 	if seniority != "" {
-		b.WriteString(fmt.Sprintf("Level: %s\n", seniority))
+		fmt.Fprintf(&b, "Level: %s\n", seniority)
 	}
 
 	// Location.
 	if p.CurrentLocation != "" {
-		b.WriteString(fmt.Sprintf("Current location: %s\n", p.CurrentLocation))
+		fmt.Fprintf(&b, "Current location: %s\n", p.CurrentLocation)
 	}
 	if p.Remote == "yes" {
 		b.WriteString("Prefers: remote\n")
@@ -423,7 +423,7 @@ func buildPortrait(store db.Store) string {
 		var locs []string
 		_ = json.Unmarshal([]byte(p.LocationPref), &locs)
 		if len(locs) > 0 {
-			b.WriteString(fmt.Sprintf("Location preferences: %s\n", strings.Join(locs, ", ")))
+			fmt.Fprintf(&b, "Location preferences: %s\n", strings.Join(locs, ", "))
 		}
 	}
 
@@ -437,7 +437,7 @@ func buildPortrait(store db.Store) string {
 				if end == "" {
 					end = "present"
 				}
-				b.WriteString(fmt.Sprintf("  %s–%s  %s @ %s\n", exp.Start, end, exp.Title, exp.Company))
+				fmt.Fprintf(&b, "  %s–%s  %s @ %s\n", exp.Start, end, exp.Title, exp.Company)
 			}
 		}
 	}
@@ -466,7 +466,7 @@ func buildPortrait(store db.Store) string {
 				curated = append(curated, s)
 			}
 			if len(curated) > 0 {
-				b.WriteString(fmt.Sprintf("Skills: %s\n", strings.Join(curated, ", ")))
+				fmt.Fprintf(&b, "Skills: %s\n", strings.Join(curated, ", "))
 			}
 		}
 	}
@@ -476,7 +476,7 @@ func buildPortrait(store db.Store) string {
 		var cos []string
 		_ = json.Unmarshal([]byte(p.Companies), &cos)
 		if len(cos) > 0 {
-			b.WriteString(fmt.Sprintf("\nTarget companies: %s\n", strings.Join(cos, ", ")))
+			fmt.Fprintf(&b, "\nTarget companies: %s\n", strings.Join(cos, ", "))
 		}
 	}
 
@@ -485,7 +485,7 @@ func buildPortrait(store db.Store) string {
 		var avoid []string
 		_ = json.Unmarshal([]byte(p.AvoidCompanies), &avoid)
 		if len(avoid) > 0 {
-			b.WriteString(fmt.Sprintf("Avoid: %s\n", strings.Join(avoid, ", ")))
+			fmt.Fprintf(&b, "Avoid: %s\n", strings.Join(avoid, ", "))
 		}
 	}
 
@@ -494,7 +494,7 @@ func buildPortrait(store db.Store) string {
 		var kws []string
 		_ = json.Unmarshal([]byte(p.Keywords), &kws)
 		if len(kws) > 0 {
-			b.WriteString(fmt.Sprintf("Interests: %s\n", strings.Join(kws, ", ")))
+			fmt.Fprintf(&b, "Interests: %s\n", strings.Join(kws, ", "))
 		}
 	}
 

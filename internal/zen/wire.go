@@ -113,7 +113,7 @@ func opencodeID(prefix string, timestampMS int64, counter int, random []byte) st
 	b.WriteString(prefix)
 	b.WriteByte('_')
 	for shift := 40; shift >= 0; shift -= 8 {
-		b.WriteString(fmt.Sprintf("%02x", byte(time48>>uint(shift))))
+		fmt.Fprintf(&b, "%02x", byte(time48>>uint(shift)))
 	}
 	for i := 0; i < 14; i++ {
 		b.WriteByte(opencodeIDAlphabet[random[i]%byte(len(opencodeIDAlphabet))])

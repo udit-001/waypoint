@@ -287,7 +287,7 @@ func TestPostingsPrune(t *testing.T) {
 	f := db.NewFakeStore()
 	seedPostings(f)
 	// Manually set an old first_seen.
-	p, _ := f.Postings["https://example.com/a"]
+	p := f.Postings["https://example.com/a"]
 	p.FirstSeen = "2020-01-01"
 	f.Postings["https://example.com/a"] = p
 	store = f

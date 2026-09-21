@@ -9,7 +9,6 @@ package zen
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io"
 	"strings"
 )
@@ -441,5 +440,5 @@ func streamError(errType, message string) *Error {
 	if message == "" {
 		message = "stream error"
 	}
-	return &Error{Status: status, Fatal: fatal, Msg: fmt.Sprintf("%s", message)}
+	return &Error{Status: status, Fatal: fatal, Msg: message}
 }

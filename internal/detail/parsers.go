@@ -147,19 +147,15 @@ func (p *greenhouseParser) Parse(md string) DetailResult {
 			if !companySet {
 				if m := pageTitleDash.FindStringSubmatch(t); m != nil && len(m[1]) < 40 {
 					r.Company = strings.TrimSpace(m[1])
-					companySet = true
 					if !titleSet {
 						// Bug fix: strip trailing # from title.
 						r.Title = strings.TrimSpace(strings.TrimRight(m[2], "# "))
-						titleSet = true
 					}
 					break
 				}
 				if m := pageTitleAt.FindStringSubmatch(t); m != nil && len(m[1]) < 60 {
 					r.Title = strings.TrimSpace(strings.TrimRight(m[1], "# "))
-					titleSet = true
 					r.Company = strings.TrimSpace(m[2])
-					companySet = true
 					break
 				}
 			}

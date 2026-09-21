@@ -146,9 +146,11 @@ func handleSweepCompany(store db.Store, loadBoards func() ([]config.BoardEntry, 
 
 		ctx, cancel := context.WithTimeout(r.Context(), 55*time.Second)
 		defer cancel()
-		maxPages := entry.MaxPages
-		if maxPages <= 0 || maxPages > webSweepMaxPages {
-			maxPages = webSweepMaxPages
+		// Clamp the board's own page cap: a web-triggered sweep must not
+		// run away, and 0/uncapped entries default to the web cap. SweepOne
+		// reads MaxPages off the entry.
+		if entry.MaxPages <= 0 || entry.MaxPages > webSweepMaxPages {
+			entry.MaxPages = webSweepMaxPages
 		}
 		res, serr := sweeper.SweepOne(ctx, store, *entry, 90, 0)
 
