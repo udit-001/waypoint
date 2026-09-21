@@ -145,6 +145,12 @@ func TestCurate_responsesFamily(t *testing.T) {
 	if req.body["stream"] != true {
 		t.Errorf("stream = %v, want true", req.body["stream"])
 	}
+	// Muse is served from a pool of shared upstream accounts; store:false is
+	// the verified invariant (account-bound state 400s on replay under the
+	// anonymous pool).
+	if req.body["store"] != false {
+		t.Errorf("store = %v, want false (responses-family invariant)", req.body["store"])
+	}
 	input, _ := req.body["input"].([]any)
 	if len(input) != 2 {
 		t.Fatalf("input = %d items, want system + user", len(input))

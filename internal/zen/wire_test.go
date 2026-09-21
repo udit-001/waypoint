@@ -166,9 +166,13 @@ func TestEnsureFreeTierShape(t *testing.T) {
 	if got, _ := populated["tools"].([]any); len(got) != 1 {
 		t.Errorf("populated tools changed: %v", populated["tools"])
 	}
+	if _, ok := populated["tool_choice"]; ok {
+		t.Error("tool_choice must be left untouched on turns with real tools (mimo rejects it)")
+	}
 
 	// Unknown family defaults to chat-completions; the google family is
-	// skipped entirely (pi-zen parity — different tool shape, no free models).
+	// skipped entirely (verified parity — different tool shape, no free
+	// models on it today).
 	unknown := map[string]any{}
 	ensureFreeTierShape(unknown, "some-unknown-family")
 	if got, _ := unknown["tools"].([]any); len(got) != 2 {
@@ -178,6 +182,56 @@ func TestEnsureFreeTierShape(t *testing.T) {
 	ensureFreeTierShape(google, apiGoogleGenerativeAI)
 	if _, ok := google["tools"]; ok {
 		t.Error("google-generative-ai payload must be left untouched")
+	}
+}
+
+// TestEnsureFreeTierShape_toolChoiceNoneOnInjectedDecoys: tool-less turns
+// gain the decoys AND tool_choice "none" on completions-shaped families, so
+// the model cannot call a tool it was told is unavailable (verified 200
+// against the live gateway 2026-09-20). Reasoning models were
+// observed wandering into a decoy call without it. Anthropic has no "none";
+// responses coerces to "auto" in its own buildBody.
+func TestEnsureFreeTierShape_toolChoiceNoneOnInjectedDecoys(t *testing.T) {
+	cases := []struct {
+		api     string
+		want    any
+		wantSet bool
+	}{
+		{apiChatCompletions, "none", true},
+		{"some-unknown-family", "none", true},
+		{apiOpenAIResponses, nil, false},   // handled by responsesWire.buildBody
+		{apiAnthropicMessages, nil, false}, // Anthropic has no "none"
+		{apiGoogleGenerativeAI, nil, false},
+	}
+	for _, tc := range cases {
+		payload := map[string]any{"model": "m"}
+		ensureFreeTierShape(payload, tc.api)
+		got, ok := payload["tool_choice"]
+		if ok != tc.wantSet || got != tc.want {
+			t.Errorf("api %q: tool_choice = %v (set=%v), want %v (set=%v)", tc.api, got, ok, tc.want, tc.wantSet)
+		}
+	}
+}
+
+// TestGateToolDefs_decoyShape: the gate tools are decoys — names carry the
+// gate, but the descriptions must tell the model not to call them (a
+// real-tool description invited reasoning models onto a decoy detour). The
+// literal text is pinned so a quiet drift in the decoy wording surfaces
+// here.
+func TestGateToolDefs_decoyShape(t *testing.T) {
+	const wantDescription = "This tool is currently unavailable and must not be used. Do not call it, and do not mention it."
+	for _, def := range gateToolDefs {
+		if def.Name != "read" && def.Name != "bash" {
+			t.Errorf("gate tool name = %q, want read or bash", def.Name)
+		}
+		if def.Description != wantDescription {
+			t.Errorf("gate tool %q description = %q, want the pinned decoy text", def.Name, def.Description)
+		}
+		// The gate validates names, not schemas — empty properties are
+		// served by the gateway.
+		if props, ok := def.Parameters["properties"].(map[string]any); !ok || len(props) != 0 {
+			t.Errorf("gate tool %q properties = %v, want empty", def.Name, def.Parameters["properties"])
+		}
 	}
 }
 

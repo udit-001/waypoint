@@ -1,10 +1,10 @@
 package zen
 
 // The curated free-models catalog (WP-161): a stale-while-revalidate cache
-// over pi-zen's curated free-models.json, served by GET /api/zen/models and
+// over the curated free-models.json list, served by GET /api/zen/models and
 // read by the picker (WP-163) and the connector (WP-162).
 //
-// Design mirrors pi-zen's extension cache (shared seam decision, spec
+// Design mirrors the pi extension cache (shared seam decision, spec
 // WP-160): a fresh entry answers instantly; a stale entry KEEPS answering
 // (last-known-good) while one shared background conditional revalidation
 // refreshes it; failures keep the stale entry and advance the timer so a
@@ -21,14 +21,14 @@ import (
 	"time"
 )
 
-// FreeModelsCDNURL is the production curated list: the pi-zen data branch
-// served via jsdelivr (1h edge cache, honors conditional requests).
+// FreeModelsCDNURL is the production curated list: the free-models data
+// branch served via jsdelivr (1h edge cache, honors conditional requests).
 const FreeModelsCDNURL = "https://cdn.jsdelivr.net/gh/udit-001/pi-zen@data/free-models.json"
 
 const (
 	catalogTTL       = time.Hour            // matches the CDN edge cache
 	catalogFetchTO   = 8 * time.Second      // bounded fetches; never hang a request
-	defaultFamilyAPI = "openai-completions" // curated entries omit api for the completions family (pi-zen parity)
+	defaultFamilyAPI = "openai-completions" // curated entries omit api for the completions family
 )
 
 // Model is one curated free model as callers see it: the id, the friendly
@@ -285,7 +285,7 @@ func (c *Catalog) keepStale() {
 
 // captureValidators reads the conditional-request stamps off a 200
 // response header. Only one of the two is ever sent; Last-Modified covers
-// intermediaries that strip ETags (pi-zen parity).
+// intermediaries that strip ETags.
 func captureValidators(res *http.Response) validators {
 	return validators{
 		etag:         res.Header.Get("ETag"),
@@ -329,7 +329,7 @@ func parseFreeModels(raw []byte) ([]Model, string, error) {
 
 // Family returns the endpoint family for a model from the last-known-good
 // list. Unknown models default to the chat-completions family — the family
-// every other curated model uses (pi-zen parity). Passive: no network.
+// every other curated model uses. Passive: no network.
 func (c *Catalog) Family(model string) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()

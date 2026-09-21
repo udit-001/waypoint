@@ -13,7 +13,7 @@ import (
 // Models) with an injected clock and an httptest upstream — never the
 // SWR internals.
 
-// cdnUpstream is a controllable stand-in for the pi-zen jsdelivr CDN.
+// cdnUpstream is a controllable stand-in for the jsdelivr CDN.
 type cdnUpstream struct {
 	mu      sync.Mutex
 	hits    int
@@ -87,8 +87,8 @@ func newTestCatalog(t *testing.T, u *cdnUpstream, now func() time.Time) *Catalog
 }
 
 // TestCatalog_firstCallFetchesAndParses: a cold cache fetches the curated
-// list and serves friendly names + API families. Regression for pi-zen
-// fix 0411587: the very first apply must initialise the cache, not panic.
+// list and serves friendly names + API families. Regression for the upstream
+// fix that made the first apply initialise the cache instead of panicking.
 func TestCatalog_firstCallFetchesAndParses(t *testing.T) {
 	u := &cdnUpstream{body: `{
 		"generatedAt": "2026-09-18T20:17:49.256Z",

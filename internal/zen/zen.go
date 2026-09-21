@@ -10,7 +10,9 @@
 //
 // Tool schema is locked by the WP-131 curation prototype (14/14
 // live verdicts): curate_posting{verdict, score, reasons}. No
-// explicit tool_choice (mimo rejects it); max_tokens >= 1024.
+// explicit tool_choice on real-tool turns (mimo rejects it) — but injected
+// tool-less turns force tool_choice "none" (see ensureFreeTierShape);
+// max_tokens >= 1024.
 package zen
 
 import (
@@ -89,8 +91,8 @@ func ResolveModel(saved string) string {
 // attaching a Catalog upgrades it to the catalog's fresh opencodeVersion.
 func DefaultConfig() Config {
 	baseURL := "https://opencode.ai/zen"
-	// Test escape hatch (pi-zen parity): route through a proxy / local
-	// capture server without touching stored settings.
+	// Test escape hatch: route through a proxy / local capture server
+	// without touching stored settings.
 	if env := strings.TrimSpace(os.Getenv("ZEN_BASE_URL")); env != "" {
 		baseURL = strings.TrimRight(env, "/")
 		baseURL = strings.TrimSuffix(baseURL, "/v1")

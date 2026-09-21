@@ -54,7 +54,9 @@ func (chatWire) buildBody(model string, msgs []message, maxTokens int, tools []t
 		"messages":   msgs,
 		"max_tokens": maxTokens,
 		"stream":     true,
-		// no tool_choice — mimo rejects it (WP-127)
+		// No tool_choice here: real-tool turns must not send one (mimo
+		// rejects it — WP-127). ensureFreeTierShape adds "none" only on
+		// turns where it stands in the gate decoys.
 	}
 	wrapped := make([]any, len(tools))
 	for i, t := range tools {
@@ -115,6 +117,19 @@ func (responsesWire) buildBody(model string, msgs []message, maxTokens int, tool
 		"input":             input,
 		"max_output_tokens": maxTokens,
 		"stream":            true,
+		// Muse (the responses-family free model) is served from a pool of
+		// shared upstream accounts; account-bound state on a "Bearer public"
+		// pool draws invalid_request errors on replay. store:false is the
+		// invariant verified against the gateway (2026-09).
+		//
+		// The gateway's other clients additionally sweep type:"reasoning"
+		// items and encrypted_content fields out of replayed input (some
+		// clients replay raw upstream items verbatim). Unnecessary here by
+		// construction: reasoning never enters the family-neutral message
+		// history (the stream decoders drop it), and this body is re-encoded
+		// from that history every turn — there is nothing account-bound to
+		// sweep.
+		"store": false,
 	}
 	wrapped := make([]any, len(tools))
 	for i, t := range tools {

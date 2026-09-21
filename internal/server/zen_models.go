@@ -10,7 +10,7 @@ import (
 var zenCatalogURL = zen.FreeModelsCDNURL
 
 // handleZenModels serves the curated free-models list from the catalog
-// (stale-while-revalidate over the pi-zen CDN). The fetch is anonymous —
+// (stale-while-revalidate over the jsdelivr CDN). The fetch is anonymous —
 // no key gate, no hardcoded fallback (decision 2026-09-19: a static list
 // goes stale exactly like the one this replaces). When the catalog has no
 // last-known-good and the CDN is unreachable, the endpoint answers 502
