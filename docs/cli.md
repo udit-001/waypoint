@@ -101,10 +101,38 @@ waypoint artifacts add --skill email-generator --title "Follow-up" --variants-fi
 | Command | Description |
 |---------|-------------|
 | `waypoint init` | Initialize a new SQLite database. Flag: `--force` |
-| `waypoint start` | Launch the web UI server. Flag: `--port` (default 8080) |
-| `waypoint stop` | Stop the background web UI server |
+| `waypoint start` | Launch the web UI server. Flags: `--port` (default 8080), `--foreground`, `--no-open` |
+| `waypoint stop` | Stop the server (or the supervisor, when one is running). Refuses while a service manager owns the server |
+| `waypoint service install` | Register Waypoint to start automatically and start it now |
+| `waypoint service uninstall` | Stop it and unregister (alias: `remove`) |
+| `waypoint service start` \| `stop` \| `restart` | Control the service without unregistering it |
+| `waypoint service status` | `running` \| `stopped` \| `not found` |
 | `waypoint skills install` | Install agent skill for AI coding assistants. Flag: `--agent` |
-| `waypoint upgrade` | Self-update to the latest release |
+| `waypoint upgrade` | Self-update to the latest release. Flags: `--force`, `--no-skills` |
+
+### Background service
+
+`waypoint service` uses whatever the platform provides, and never needs
+administrator rights:
+
+| Platform | Mechanism | Restarts on crash |
+|----------|-----------|-------------------|
+| Linux | systemd user unit | yes (`Restart=always`) |
+| macOS | launchd LaunchAgent | yes |
+| Windows | per-user `HKCU\...\CurrentVersion\Run` entry plus Waypoint's own supervisor (`service run` → `service supervise`) | yes (bounded: 5 starts/minute, then it gives up and says so in the log) |
+
+On Windows a real service was rejected deliberately: registering one needs
+admin, and a service runs in session 0, where it cannot open the browser,
+cannot post desktop notifications, and resolves `%APPDATA%` to a different
+profile — so it would read the wrong database.
+
+Use `waypoint service stop` rather than `waypoint stop` for a running service.
+The supervisor's own narration (and the server's stdout/stderr) is appended to
+`service.log` in the config directory:
+
+```
+Linux/macOS  ~/.config/waypoint/service.log
+```
 
 ## Common Options
 

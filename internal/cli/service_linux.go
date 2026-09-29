@@ -3,9 +3,6 @@
 package cli
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/kardianos/service"
 )
 
@@ -13,63 +10,52 @@ func init() {
 	newOSService = newLinuxService
 }
 
+// linuxService delegates to a systemd user unit written by kardianos. The
+// library is worth its dependency here: it renders the unit, runs
+// `systemctl --user enable --now`, and knows the unit path — on macOS the same
+// seam reaches launchd.
 type linuxService struct {
 	svc service.Service
 }
 
-func newLinuxService(name, displayName, description string, args []string) (serviceController, error) {
-	cfg := &service.Config{
-		Name:        name,
-		DisplayName: displayName,
-		Description: description,
-		Arguments:   args,
+func newLinuxService(opts serviceOptions) (serviceController, error) {
+	svc, err := service.New(&noopProgram{}, &service.Config{
+		Name:        opts.Name,
+		DisplayName: opts.Display,
+		Description: opts.Desc,
+		Arguments:   opts.Args,
 		Option: service.KeyValue{
+			// A user unit: no root, no system-wide footprint.
 			"UserService": true,
-			"Restart":     "always",
+			// Restart on crash. This is the one guarantee the Windows logon
+			// entry cannot make, which is why Waypoint brings its own
+			// supervisor there.
+			"Restart": "always",
 		},
-	}
-
-	// Stub interface — waypoint doesn't implement service.Interface because
-	// it manages its own lifecycle via PID file + health check. The library
-	// only needs the Interface for Run(); Install/Status/Uninstall never
-	// call it.
-	svc, err := service.New(&noopProgram{}, cfg)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create service: %w", err)
+		return nil, formatError("create service", err)
 	}
 	return &linuxService{svc: svc}, nil
 }
 
-func (l *linuxService) Install() error {
-	return l.svc.Install()
-}
+func (l *linuxService) Install() error { return l.svc.Install() }
 
-func (l *linuxService) Status() (string, error) {
-	status, err := l.svc.Status()
-	if err != nil {
-		if strings.Contains(err.Error(), "not installed") {
-			return "not found", nil
-		}
-		return "", err
-	}
-	switch status {
-	case service.StatusRunning:
-		return "running", nil
-	case service.StatusStopped:
-		return "stopped", nil
-	default:
-		return "unknown", nil
-	}
-}
-
-func (l *linuxService) Remove() error {
-	// Try to stop first — ignore errors (may not be running).
+// Uninstall stops the unit before removing it: `systemctl disable` does not
+// stop a running unit, so removing the file alone would leave the server
+// holding its port.
+func (l *linuxService) Uninstall() error {
 	_ = l.svc.Stop()
 	return l.svc.Uninstall()
 }
 
-// noopProgram satisfies service.Interface but is never called — the CLI
-// manages its own lifecycle via PID file + health check.
+func (l *linuxService) Start() error { return l.svc.Start() }
+func (l *linuxService) Stop() error  { return l.svc.Stop() }
+
+func (l *linuxService) Status() (ServiceState, error) { return serviceStateOf(l.svc) }
+
+// noopProgram satisfies service.Interface but is never called: the unit runs
+// `waypoint start --daemon`, so the library's Run() loop is unused.
 type noopProgram struct{}
 
 func (p *noopProgram) Start(s service.Service) error { return nil }

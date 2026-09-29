@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -182,7 +183,15 @@ func Start(cfg Config) error {
 		server.Close()
 	}()
 
-	return server.ListenAndServe()
+	// A shutdown signal closes the server, and ListenAndServe reports that as
+	// http.ErrServerClosed. Stopping is the intended ending, not a failure —
+	// otherwise every Ctrl+C and every `service stop` logs an error and exits
+	// non-zero, which a supervisor would read as a crash.
+	if err := server.ListenAndServe(); errors.Is(err, http.ErrServerClosed) {
+		return nil
+	} else {
+		return err
+	}
 }
 
 // spaHandler serves static files with SPA fallback to index.html.

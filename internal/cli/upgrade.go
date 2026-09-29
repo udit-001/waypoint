@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/version"
 )
 
@@ -61,23 +59,32 @@ restarted afterwards.`,
 			return nil
 		}
 
-		// Stop server if running — the binary can't be replaced while
-		// the process is alive, and the DB lock will conflict on restart.
-		var info *pidInfo
-		if i, err := readPidFile(); err == nil {
-			info = i
+		// Stop whatever is running — the binary can't be replaced while the
+		// process is alive, and the DB lock will conflict on restart. A
+		// supervisor is paused first: it owns its server, and needs restarting
+		// afterwards so the service keeps supervising the new binary.
+		supervised, perr := pauseSupervisor()
+		if perr != nil {
+			fmt.Printf("  Warning: could not stop the supervisor: %v\n", perr)
+			fmt.Printf("  Please stop it manually and re-run upgrade.\n")
+			fmt.Println()
+			return nil
 		}
 
-		if info != nil && info.PID > 0 {
-			fmt.Printf("  Stopping server (PID %d)...\n", info.PID)
-			if err := killProcess(info.PID); err != nil {
+		restartPort := 0
+		if !supervised {
+			// stopServerByPidfile verifies the process before signaling, so an
+			// unrelated process holding a reused PID is never killed.
+			if outcome, info, err := stopServerByPidfile(); err != nil {
 				fmt.Printf("  Warning: could not stop server: %v\n", err)
 				fmt.Printf("  Please stop it manually and re-run upgrade.\n")
 				fmt.Println()
 				return nil
+			} else if outcome == stopStopped {
+				fmt.Printf("  Stopping server (PID %d)...\n", info.PID)
+				restartPort = info.Port
+				fmt.Printf("  Server stopped.\n")
 			}
-			_ = os.Remove(config.PidPath())
-			fmt.Printf("  Server stopped.\n")
 		}
 
 		goPath, err := exec.LookPath("go")
@@ -101,33 +108,27 @@ restarted afterwards.`,
 
 		fmt.Printf("  Upgraded to %s\n", rel.TagName)
 
-		// Restart the server if it was running before the upgrade.
-		if info != nil && info.PID > 0 {
+		// Restart whatever was running before the upgrade.
+		switch {
+		case supervised:
+			fmt.Printf("  Restarting the service supervisor...\n")
+			if err := startSupervisorDetached(exePath()); err != nil {
+				fmt.Printf("  Warning: could not restart the supervisor: %v\n", err)
+				fmt.Printf("  Run 'waypoint service start' manually.\n")
+			} else {
+				fmt.Printf("  Service supervisor restarted.\n")
+			}
+		case restartPort > 0:
 			fmt.Printf("  Restarting server...\n")
-			restartPort := info.Port
-			if restartPort == 0 {
-				restartPort = startFlags.port
-			}
-			daemonArgs := []string{
-				os.Args[0], "start",
-				"--port", strconv.Itoa(restartPort),
-				"--no-open",
-				"--daemon",
-			}
-			rc := exec.Command(daemonArgs[0], daemonArgs[1:]...)
-			rc.Stdin = nil
-			rc.Stdout = nil
-			rc.Stderr = nil
-			detachProcess(rc)
-			if err := rc.Start(); err != nil {
+			rc, err := startDaemon(restartPort)
+			if err != nil {
 				fmt.Printf("  Warning: could not restart server: %v\n", err)
 				fmt.Printf("  Run 'waypoint start' manually.\n")
 			} else {
-				_ = writePidFile(restartPort, rc.Process.Pid)
 				fmt.Printf("  Server restarted in background (PID: %d)\n", rc.Process.Pid)
 				fmt.Printf("  http://127.0.0.1:%d\n", restartPort)
 			}
-		} else {
+		default:
 			fmt.Printf("  Run 'waypoint start' to launch the server.\n")
 		}
 

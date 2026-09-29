@@ -3,9 +3,6 @@
 package cli
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/kardianos/service"
 )
 
@@ -13,56 +10,41 @@ func init() {
 	newOSService = newDarwinService
 }
 
+// darwinService delegates to a launchd LaunchAgent written by kardianos.
 type darwinService struct {
 	svc service.Service
 }
 
-func newDarwinService(name, displayName, description string, args []string) (serviceController, error) {
-	cfg := &service.Config{
-		Name:        name,
-		DisplayName: displayName,
-		Description: description,
-		Arguments:   args,
+func newDarwinService(opts serviceOptions) (serviceController, error) {
+	svc, err := service.New(&noopProgram{}, &service.Config{
+		Name:        opts.Name,
+		DisplayName: opts.Display,
+		Description: opts.Desc,
+		Arguments:   opts.Args,
 		Option: service.KeyValue{
+			// A per-user agent: no root, loads at login.
 			"UserService": true,
 		},
-	}
-
-	svc, err := service.New(&noopProgram{}, cfg)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create service: %w", err)
+		return nil, formatError("create service", err)
 	}
 	return &darwinService{svc: svc}, nil
 }
 
-func (d *darwinService) Install() error {
-	return d.svc.Install()
-}
+func (d *darwinService) Install() error { return d.svc.Install() }
 
-func (d *darwinService) Status() (string, error) {
-	status, err := d.svc.Status()
-	if err != nil {
-		if strings.Contains(err.Error(), "not installed") {
-			return "not found", nil
-		}
-		return "", err
-	}
-	switch status {
-	case service.StatusRunning:
-		return "running", nil
-	case service.StatusStopped:
-		return "stopped", nil
-	default:
-		return "unknown", nil
-	}
-}
+// Uninstall only unregisters; stopping is the command's job (see
+// serviceUninstallCmd), so both platforms share one ordering.
+func (d *darwinService) Uninstall() error { return d.svc.Uninstall() }
 
-func (d *darwinService) Remove() error {
-	_ = d.svc.Stop()
-	return d.svc.Uninstall()
-}
+func (d *darwinService) Start() error { return d.svc.Start() }
+func (d *darwinService) Stop() error  { return d.svc.Stop() }
 
-// noopProgram satisfies service.Interface but is never called.
+func (d *darwinService) Status() (ServiceState, error) { return serviceStateOf(d.svc) }
+
+// noopProgram satisfies service.Interface but is never called: the agent runs
+// `waypoint start --daemon`, so the library's Run() loop is unused.
 type noopProgram struct{}
 
 func (p *noopProgram) Start(s service.Service) error { return nil }

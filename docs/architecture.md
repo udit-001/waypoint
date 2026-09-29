@@ -46,6 +46,7 @@ shared by both surfaces.
 ├── cmd/waypoint/main.go       # Entry point
 ├── internal/
 │   ├── cli/                   # Cobra commands (jobs, artifacts, etc.)
+│   ├── supervise/             # Platform-neutral server supervisor: restart budget, backoff, graceful stop (the Windows service arm)
 │   ├── db/                    # SQLite models, queries, FTS5
 │   ├── server/                # HTTP server, API handlers
 │   ├── mcp/                   # MCP Streamable HTTP client (JSON-RPC 2.0 + SSE) — same pattern as income-tracker

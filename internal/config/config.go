@@ -55,6 +55,27 @@ func PidPath() string {
 	return filepath.Join(ConfigDir(), "server.pid")
 }
 
+// SupervisorPidPath is the lock file of the built-in supervisor: it both
+// records the supervisor's pid and, by existing, asserts that one is running.
+// Separate from PidPath because the two processes have different lifetimes —
+// the supervisor outlives individual server runs.
+func SupervisorPidPath() string {
+	return filepath.Join(ConfigDir(), "supervisor.pid")
+}
+
+// StopRequestPath is the marker `waypoint service stop` writes to ask the
+// supervisor to shut down. A file, not a signal, so the same code works on
+// every platform and is testable anywhere.
+func StopRequestPath() string {
+	return filepath.Join(ConfigDir(), "service.stop")
+}
+
+// ServiceLogPath is where the supervisor and the server it runs append their
+// output. Without it a background server has no narration at all.
+func ServiceLogPath() string {
+	return filepath.Join(ConfigDir(), "service.log")
+}
+
 // DefaultDataDir returns the default data directory (~/.waypoint/).
 func DefaultDataDir() string {
 	return filepath.Join(homeDir(), ".waypoint")

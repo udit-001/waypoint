@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -9,83 +10,176 @@ import (
 	"github.com/udit-001/waypoint/internal/config"
 )
 
-// stopAction represents the action to take after validating a PID file.
-type stopAction int
+// identityProbe is the evidence gathered about the process named in the PID
+// file. It is the seam between the shared stop decision and the per-OS probe:
+// unix resolves the executable and can verify it; Windows cannot (no
+// portable liveness probe, and Go cannot deliver a console interrupt), so
+// Windows falls back to port health.
+type identityProbe struct {
+	Alive       bool // the pid exists
+	Ours        bool // the pid's executable is waypoint (meaningful only when Known)
+	Known       bool // the executable could be probed at all
+	PortHealthy bool // a waypoint server answers on the PID file's port
+}
+
+// stopOutcome is what stopServerByPidfile found.
+type stopOutcome int
 
 const (
-	stopKill   stopAction = iota // PID is our server — kill it
-	stopSkip                     // PID alive but not our server — skip kill, clean up
-	stopStale                    // PID is dead — just clean up
-	stopLegacy                   // Port=0 legacy file — fall back to kill
+	stopNoServer     stopOutcome = iota // no PID file
+	stopStalePID                        // the process is gone
+	stopForeignPID                      // live, but not verified as waypoint — never signaled
+	stopUnverifiable                    // no port recorded and no probe — never signaled
+	stopStopped                         // verified ours, signal delivered
 )
 
-// decideStopAction determines what to do based on PID file info and health
-// check results. Extracted as a pure function for testability.
-func decideStopAction(info *pidInfo, serverRunning, pidAlive bool) stopAction {
-	if info.Port == 0 {
-		return stopLegacy
+// decideStop is the whole stop policy in one pure function. The rule that
+// matters: a resolved executable is authoritative, so a reused PID is never
+// signaled even when something waypoint-like happens to answer on the port.
+// Where no probe exists (Windows), port health is the only identity evidence
+// available and it needs a pinned port to mean anything.
+func decideStop(info *pidInfo, p identityProbe) stopOutcome {
+	if info == nil || info.PID <= 0 {
+		return stopNoServer
 	}
-	if serverRunning {
-		return stopKill
+	if p.Known {
+		switch {
+		case !p.Alive:
+			return stopStalePID
+		case !p.Ours:
+			return stopForeignPID
+		default:
+			return stopStopped
+		}
 	}
-	if pidAlive {
-		return stopSkip
+	if info.Port <= 0 {
+		return stopUnverifiable
 	}
-	return stopStale
+	switch {
+	case p.PortHealthy:
+		return stopStopped
+	case p.Alive:
+		return stopForeignPID
+	default:
+		return stopStalePID
+	}
+}
+
+// stopMessage is the one human/JSON message for an outcome.
+func stopMessage(outcome stopOutcome, info *pidInfo) string {
+	pid := 0
+	if info != nil {
+		pid = info.PID
+	}
+	switch outcome {
+	case stopStopped:
+		return fmt.Sprintf("Server (PID %d) stopped", pid)
+	case stopStalePID:
+		return "No running Waypoint server found (stale PID file cleaned up)"
+	case stopForeignPID:
+		return fmt.Sprintf("PID %d is alive but is not a Waypoint process — not stopped. Stale PID file cleaned up.", pid)
+	case stopUnverifiable:
+		return fmt.Sprintf("PID %d could not be verified as Waypoint (no port recorded) — not stopped. Stale PID file cleaned up.", pid)
+	default:
+		return "No running Waypoint server found"
+	}
+}
+
+// stopServerByPidfile stops the server named in the PID file and removes the
+// file. This is the one routine behind `waypoint stop` and the restart path
+// in `waypoint upgrade`, so both refuse to signal an unverified process.
+//
+// Every "nothing to stop" case (missing, stale, foreign, unverifiable) is an
+// outcome rather than an error — callers can tell "stopped" from "there was
+// nothing to stop". The one error is a verified stop that outlived the kill,
+// and then the PID file is deliberately kept: it still names a live server,
+// so removing it would hide the failure.
+func stopServerByPidfile() (stopOutcome, *pidInfo, error) {
+	info, err := readPidFile()
+	if err != nil {
+		return stopNoServer, nil, nil
+	}
+	outcome := decideStop(info, probeIdentity(info))
+	if outcome == stopStopped {
+		if kerr := killProcess(info.PID); kerr != nil && processAlive(info.PID) {
+			return stopStopped, info, formatError("stop server", kerr)
+		}
+		waitForProcessExit(info.PID, 5*time.Second)
+	}
+	_ = os.Remove(config.PidPath())
+	return outcome, info, nil
+}
+
+// waitForProcessExit polls until the process is gone or the deadline passes.
+// Best-effort: the signal has already been delivered, so a timeout is not an
+// error — the OS reaps eventually and the PID file is already gone.
+func waitForProcessExit(pid int, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !processAlive(pid) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 var stopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the background web UI server",
-	Args:  cobra.NoArgs,
+	Long: `Stop the local Waypoint web server if one is running.
+
+Reads the server PID file, verifies the process is actually Waypoint,
+sends a graceful shutdown signal, and cleans up the PID file. A stale,
+reused, or unverifiable PID is never signaled — the file is removed and
+nothing else happens.
+
+Examples:
+  waypoint stop
+  waypoint stop --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		info, err := readPidFile()
-		if err != nil {
-			// Missing PID file — not an error, just nothing to stop.
+		// A service manager that has Waypoint registered and running owns the
+		// server: stopping it behind the manager's back invites a restart
+		// (systemd Restart=always), so point at the command that owns both.
+		if serviceActive() {
+			msg := "Waypoint is managed by the background service — use 'waypoint service stop'"
+			if h := runningSupervisor(); h != nil {
+				msg = fmt.Sprintf("Waypoint is running under the service supervisor (PID %d) — use 'waypoint service stop'", h.PID)
+			}
+			if jsonOut {
+				printJSON(map[string]any{"running": true, "message": msg})
+			}
+			return errors.New(msg)
+		}
+
+		// A supervisor with no registered, running service is just what is
+		// keeping a hand-run server alive: stopping it is what the user means.
+		if h := runningSupervisor(); h != nil {
+			if err := stopSupervisorNow(); err != nil {
+				return formatError("stop supervisor", err)
+			}
+			msg := fmt.Sprintf("Waypoint supervisor (PID %d) stopped", h.PID)
+			if jsonOut {
+				printJSON(map[string]any{"running": false, "message": msg})
+				return nil
+			}
 			fmt.Println()
-			fmt.Println("  No running Waypoint server found")
+			fmt.Printf("  %s\n", msg)
 			fmt.Println()
 			return nil
 		}
-
-		// Health-check the server and the process before killing.
-		serverRunning := info.Port > 0 && isServerRunning(info.Port)
-		pidAlive := processAlive(info.PID)
-
-		switch decideStopAction(info, serverRunning, pidAlive) {
-		case stopKill, stopLegacy:
-			// Confirmed our server (or legacy PID file) — kill it.
-			if err := killProcess(info.PID); err != nil {
-				return err
-			}
-			// Wait for the process to actually exit (up to 5 seconds)
-			for i := 0; i < 50; i++ {
-				if !processAlive(info.PID) {
-					break
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-			_ = os.Remove(config.PidPath())
-			fmt.Println()
-			fmt.Printf("  Server (PID %d) stopped\n", info.PID)
-			fmt.Println()
-
-		case stopSkip:
-			// PID is alive but not responding as our server — don't kill it.
-			// It may be a different process (e.g. PID was reused by PostgreSQL).
-			_ = os.Remove(config.PidPath())
-			fmt.Println()
-			fmt.Printf("  PID %d is alive but not responding on port %d — it may be a different process.\n", info.PID, info.Port)
-			fmt.Println("  Stale PID file cleaned up.")
-			fmt.Println()
-
-		case stopStale:
-			// Process is dead — just clean up the PID file.
-			_ = os.Remove(config.PidPath())
-			fmt.Println()
-			fmt.Println("  No running server found (stale PID file cleaned up).")
-			fmt.Println()
+		outcome, info, err := stopServerByPidfile()
+		if err != nil {
+			return err
 		}
+		msg := stopMessage(outcome, info)
+		if jsonOut {
+			printJSON(map[string]any{"running": false, "message": msg})
+			return nil
+		}
+		fmt.Println()
+		fmt.Printf("  %s\n", msg)
+		fmt.Println()
 		return nil
 	},
 }

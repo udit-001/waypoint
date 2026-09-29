@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -71,37 +70,18 @@ Examples:
 
 		background := startFlags.background && !startFlags.foreground
 		if background && !startFlags.daemon {
-			daemonArgs := []string{
-				os.Args[0], "start",
-				"--port", strconv.Itoa(startFlags.port),
-				"--no-open",
-				"--daemon",
+			c, err := startDaemon(startFlags.port)
+			if err != nil {
+				return err
 			}
-			c := exec.Command(daemonArgs[0], daemonArgs[1:]...)
-			c.Stdin = nil
-			c.Stdout = nil
-			c.Stderr = nil
-			detachProcess(c)
-			if err := c.Start(); err != nil {
-				return fmt.Errorf("failed to start background server: %w", err)
+			url := fmt.Sprintf("http://127.0.0.1:%d", startFlags.port)
+			if jsonOut {
+				printJSON(map[string]any{"running": true, "port": startFlags.port, "pid": c.Process.Pid, "url": url})
+				return nil
 			}
-			if err := writePidFile(startFlags.port, c.Process.Pid); err != nil {
-				return fmt.Errorf("failed to write PID file: %w", err)
-			}
-
-			// Poll isServerRunning every 100ms for up to 2 seconds (20 attempts).
-			// This catches silent failures — port in use, child crash, etc.
-			// On timeout, kill the child and clean up so the user isn't left
-			// with a zombie process and a stale PID file.
-			if !waitForServerReady(startFlags.port, 20, 100*time.Millisecond) {
-				c.Process.Kill()
-				_ = os.Remove(config.PidPath())
-				return fmt.Errorf("server failed to start — port may be in use")
-			}
-
 			fmt.Println()
 			fmt.Printf("  Waypoint server started in background (PID: %d)\n", c.Process.Pid)
-			fmt.Printf("  http://127.0.0.1:%d\n", startFlags.port)
+			fmt.Printf("  %s\n", url)
 			fmt.Printf("  Use 'waypoint stop' to stop\n")
 			fmt.Println()
 			return nil
@@ -131,7 +111,7 @@ Examples:
 		return server.Start(server.Config{
 			Port:   startFlags.port,
 			DB:     store,
-			NoOpen: true,
+			NoOpen: startFlags.noOpen,
 			Silent: startFlags.daemon,
 			// ADR 0001: CLI writes boards.toml, web reads it. The loader
 			// re-reads per request so `boards add` shows up without a restart.
@@ -164,6 +144,41 @@ Examples:
 			},
 		})
 	},
+}
+
+// startDaemon spawns the detached background daemon on port, writes the PID
+// file, and waits for it to answer /api/stats. All the failure modes are
+// handled here rather than at each call site: a spawn failure, an unwritable
+// PID file, or a port that never opens each leave no zombie process and no
+// stale PID file behind.
+//
+// The one routine behind `waypoint start --background` and the restart path
+// in `waypoint upgrade`, so both get the same verified-start contract.
+func startDaemon(port int) (*exec.Cmd, error) {
+	argv := daemonFlags(port)
+	c := exec.Command(exePath(), argv...)
+	c.Stdin = nil
+	c.Stdout = nil
+	c.Stderr = nil
+	detachProcess(c)
+	if err := c.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start background server: %w", err)
+	}
+	if err := writePidFile(port, c.Process.Pid); err != nil {
+		_ = c.Process.Kill()
+		return nil, fmt.Errorf("failed to write PID file: %w", err)
+	}
+
+	// Poll isServerRunning every 100ms for up to 2 seconds (20 attempts).
+	// This catches silent failures — port in use, child crash, etc. On
+	// timeout, kill the child and clean up so the user isn't left with a
+	// zombie process and a stale PID file.
+	if !waitForServerReady(port, 20, 100*time.Millisecond) {
+		_ = c.Process.Kill()
+		_ = os.Remove(config.PidPath())
+		return nil, fmt.Errorf("server failed to start — port may be in use")
+	}
+	return c, nil
 }
 
 // waitForServerReady polls isServerRunning every interval up to maxAttempts.

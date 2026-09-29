@@ -29,6 +29,9 @@ to create one, then add, list, update, and delete your job entries.
 
 All commands support --json for machine-readable output.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if !needsStore(cmd) {
+			return nil
+		}
 		// Resolve DB path from config (data_dir → default). Config is the
 		// single source; there is no --db override.
 		cfg, err := config.Load()
@@ -37,10 +40,6 @@ All commands support --json for machine-readable output.`,
 		}
 		storePath = config.DBPath(cfg)
 
-		// Skip DB connection for non-DB commands
-		if cmd.Name() == "init" || cmd.Name() == "help" || cmd.Name() == "completion" || cmd.Name() == "version" {
-			return nil
-		}
 		store, err = db.Open(storePath)
 		if err != nil {
 			return fmt.Errorf("could not open database at %s: %w", storePath, err)
@@ -64,6 +63,23 @@ func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+// needsStore reports whether a command needs the database open.
+//
+// The whole `service` tree is process plumbing — on Windows it runs at logon,
+// where no database is guaranteed to exist, and none of its verbs touch one.
+// Requiring a connection there would mean a corrupt or missing database stops
+// the supervisor from starting, which is exactly when someone needs to read
+// the service log.
+func needsStore(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		switch c.Name() {
+		case "init", "help", "completion", "version", "service":
+			return false
+		}
+	}
+	return true
 }
 
 // printJSON outputs a value as formatted JSON.

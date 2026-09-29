@@ -5,19 +5,22 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/udit-001/waypoint/internal/config"
 )
 
-// pidInfo is the JSON structure of the PID file. Carrying the port
-// alongside the PID lets callers health-check the server without
-// guessing the port — essential for "already running" detection and
-// for upgrade restarts on the correct port.
+// pidInfo is the JSON structure of the PID file. It carries the three facts
+// a caller needs to act on the file safely: which port to health-check, which
+// process to signal, and which executable that process should be. The exe
+// path is what makes `waypoint stop` safe against a reused PID even when the
+// binary was renamed — see stop_identity_unix.go.
 type pidInfo struct {
-	Port int `json:"port"`
-	PID  int `json:"pid"`
+	Port int    `json:"port"`
+	PID  int    `json:"pid"`
+	Exe  string `json:"exe,omitempty"`
 }
 
 // readPidFile reads and parses the PID file. Handles both the current
@@ -25,7 +28,14 @@ type pidInfo struct {
 // (a bare integer). Legacy files return pidInfo with Port=0, so
 // callers can skip port-based health checks.
 func readPidFile() (*pidInfo, error) {
-	data, err := os.ReadFile(config.PidPath())
+	return readPidInfo(config.PidPath())
+}
+
+// readPidInfo parses a PID file at an arbitrary path — the server's or the
+// supervisor's. Missing files and unparseable content are both errors: the
+// caller decides whether that means "nothing running" or "corrupt state".
+func readPidInfo(path string) (*pidInfo, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -41,13 +51,34 @@ func readPidFile() (*pidInfo, error) {
 	return &pidInfo{PID: pid}, nil
 }
 
-// writePidFile writes the PID file in JSON format.
+// writePidFile writes the PID file in JSON format, recording the executable
+// that owns the server so a later `waypoint stop` can verify identity by path
+// rather than by guessing from a process name.
 func writePidFile(port, pid int) error {
-	data, err := json.Marshal(pidInfo{Port: port, PID: pid})
+	return writePidInfo(config.PidPath(), pidInfo{Port: port, PID: pid, Exe: exePath()})
+}
+
+// writePidInfo writes a PID file at an arbitrary path (server or supervisor).
+func writePidInfo(path string, info pidInfo) error {
+	data, err := json.Marshal(info)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(config.PidPath(), data, 0644)
+	return os.WriteFile(path, data, 0644)
+}
+
+// exePath resolves the current executable with symlinks resolved, matching
+// what /proc/<pid>/exe reports for this process. Empty when it cannot be
+// resolved — callers then fall back to name matching.
+func exePath() string {
+	p, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if rp, err := filepath.EvalSymlinks(p); err == nil {
+		return rp
+	}
+	return p
 }
 
 // isServerRunning returns true if a waypoint server responds on the given
