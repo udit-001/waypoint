@@ -53,7 +53,26 @@ func handleUpdateSettings(store db.Store) http.HandlerFunc {
 			switch k {
 			case "theme", "default_view", "autopilot_provider", "zen_api_key", "zen_model", "exa_api_key":
 				updates[k] = v
-			case "items_per_page", "autopilot_cadence":
+			case "autopilot_disabled_scrapers":
+				// The opt-out is a hard constraint on the selection contract:
+				// a malformed payload must fail loudly rather than silently
+				// leave scrapers gated-in. Stored as the canonical JSON string.
+				arr, ok := v.([]any)
+				if !ok {
+					jsonError(w, "autopilot_disabled_scrapers must be an array of scraper names", http.StatusBadRequest)
+					return
+				}
+				names := make([]string, 0, len(arr))
+				for _, item := range arr {
+					s, ok := item.(string)
+					if !ok {
+						jsonError(w, "autopilot_disabled_scrapers must contain only strings", http.StatusBadRequest)
+						return
+					}
+					names = append(names, s)
+				}
+				updates[k] = db.DisabledScrapersJSON(names)
+			case "items_per_page", "autopilot_cadence", "discovery_interval_days":
 				// Accept both float64 (JSON) and int.
 				if f, ok := v.(float64); ok {
 					updates[k] = int(f)

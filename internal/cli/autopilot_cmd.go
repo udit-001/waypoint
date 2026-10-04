@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/udit-001/waypoint/internal/autopilot"
+	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/exa"
 	"github.com/udit-001/waypoint/internal/scraper"
 	"github.com/udit-001/waypoint/internal/zen"
@@ -103,9 +104,10 @@ var autopilotStatusCmd = &cobra.Command{
 
 		if jsonOut {
 			result := map[string]any{
-				"enabled": settings.AutopilotEnabled == 1,
-				"cadence": settings.AutopilotCadence,
-				"lastRun": nil,
+				"enabled":          settings.AutopilotEnabled == 1,
+				"cadence":          settings.AutopilotCadence,
+				"disabledScrapers": db.ParseDisabledScrapers(settings.AutopilotDisabledScrapers),
+				"lastRun":          nil,
 			}
 			if hasRun {
 				result["lastRun"] = lastRun

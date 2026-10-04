@@ -120,6 +120,7 @@ REST API at `/api/`. All endpoints return JSON. Reads are free. Write routes cro
 | `GET /api/candidates?status=` | Discovery ledger rows (`suggested`/`added`/`dismissed`) with verified board URLs and the facet that surfaced them |
 | `POST /api/candidates/{id}/add` | Promote a suggested company: verify gate (live first-page fetch per board), then into boards.toml enabled, status → `added`. 409 on already-watched/no-op or name conflict, 502 when a board fails verification |
 | `POST /api/candidates/{id}/dismiss` | Tombstone a suggested company — discovery never re-suggests it |
-| `GET /api/settings` | App settings |
+| `GET /api/settings` | App settings (`autopilotDisabledScrapers` emits as a JSON array of scraper ids) |
+| `PATCH /api/settings` | Partial settings update; whitelisted keys only (`theme`, `default_view`, `items_per_page`, `autopilot_*`, `zen_*`, `exa_api_key`, `discovery_interval_days`). `autopilot_disabled_scrapers` takes an array of scraper ids, stored as a canonical JSON array string — the opt-out autopilot source selection cannot override; non-array payloads 400 |
 | `GET /api/companies` | boards.toml entries joined with live stats: new-posting counts (ledger rows awaiting review, matched case-insensitively by company) and per-board sweep state (`board_last_swept.*` from kv). Sorted by attention weight — companies with news float on top, loudest first; the rest alphabetical. Read-only: the CLI writes boards.toml and sweep state, the web reads both (ADR 0001) |
 | `GET /api/search?q=` | Unified search across jobs and artifacts |

@@ -39,6 +39,8 @@ Alias: `waypoint cat`
 |---------|-------------|
 | `waypoint scrape run <name>` | Run a job scraper and stage/print new results. Flags: `--query`, `--location`, `--limit`, `--jobage` (default 90), `--remote`, `--page`, `--today <YYYY-MM-DD>` (reference date for recency) |
 | `waypoint scrape list` | List registered scrapers with categories |
+| `waypoint scrape disable <name>` | Opt a scraper out of autopilot source selection. Unknown name errors; repeat is idempotent. JSON: `{scraper, disabled, disabledScrapers}` |
+| `waypoint scrape enable <name>` | Remove a scraper from the autopilot opt-out list. Unknown name errors; repeat is idempotent |
 | `waypoint scrape staged` | Review postings in the ledger. Flag: `--status new|shortlisted|dismissed|promoted` |
 | `waypoint scrape dismiss <url>` | Mark a posting as dismissed |
 | `waypoint scrape promote [<url>]` | Promote posting(s) into tracked jobs; `--all` promotes every new entry |

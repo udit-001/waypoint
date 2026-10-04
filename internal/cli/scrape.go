@@ -248,6 +248,103 @@ Examples:
 	},
 }
 
+// --- scrape disable / enable (WP-175: autopilot scraper opt-out) ---
+
+// runScraperOptOut toggles one scraper's autopilot opt-out. The name is
+// validated against the scraper registry; the write crosses the same
+// db.Store seam as every other settings change. Idempotent: disabling an
+// already-disabled scraper (or enabling an enabled one) writes nothing.
+func runScraperOptOut(name string, disable bool) error {
+	if _, ok := scraper.Get(name); !ok {
+		return fmt.Errorf("unknown scraper %q — run 'waypoint scrape list' to see available", name)
+	}
+
+	settings, err := store.GetSettings()
+	if err != nil {
+		return formatError("read settings", err)
+	}
+	names := db.ParseDisabledScrapers(settings.AutopilotDisabledScrapers)
+
+	idx := -1
+	for i, n := range names {
+		if n == name {
+			idx = i
+			break
+		}
+	}
+	changed := false
+	switch {
+	case disable && idx < 0:
+		names = append(names, name)
+		changed = true
+	case !disable && idx >= 0:
+		names = append(names[:idx], names[idx+1:]...)
+		changed = true
+	}
+
+	if changed {
+		if err := store.UpsertSettings(map[string]any{
+			"autopilot_disabled_scrapers": db.DisabledScrapersJSON(names),
+		}); err != nil {
+			return formatError("save settings", err)
+		}
+	}
+
+	// Re-read: report the canonical stored list, not the local guess.
+	settings, err = store.GetSettings()
+	if err != nil {
+		return formatError("read settings", err)
+	}
+	disabled := db.ParseDisabledScrapers(settings.AutopilotDisabledScrapers)
+
+	if jsonOut {
+		printJSON(map[string]any{
+			"scraper":          name,
+			"disabled":         disable,
+			"disabledScrapers": disabled,
+		})
+		return nil
+	}
+
+	if disable {
+		fmt.Printf("  %s will be skipped by autopilot (%d opted out).\n", name, len(disabled))
+	} else {
+		fmt.Printf("  %s is available to autopilot again (%d opted out).\n", name, len(disabled))
+	}
+	return nil
+}
+
+var scrapeDisableCmd = &cobra.Command{
+	Use:   "disable <name>",
+	Short: "Opt a scraper out of autopilot source selection",
+	Long: `Mark a scraper as opted out of the autopilot's source selection. The
+choice persists in settings; the source-selection contract receives the
+list as a constraint it cannot override.
+
+Examples:
+  waypoint scrape disable linkedin
+  waypoint scrape disable indeed --json`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runScraperOptOut(args[0], true)
+	},
+}
+
+var scrapeEnableCmd = &cobra.Command{
+	Use:   "enable <name>",
+	Short: "Make a scraper available to autopilot again",
+	Long: `Remove a scraper from the autopilot opt-out list so source selection
+can name it again when the brief makes it relevant.
+
+Examples:
+  waypoint scrape enable linkedin
+  waypoint scrape enable indeed --json`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runScraperOptOut(args[0], false)
+	},
+}
+
 // --- scrape staged ---
 
 var scrapeStagedFlags struct {
@@ -483,6 +580,8 @@ func init() {
 	scrapeCmd.AddCommand(scrapeListCmd)
 	scrapeCmd.AddCommand(scrapeRunCmd)
 	scrapeCmd.AddCommand(scrapeDetailCmd)
+	scrapeCmd.AddCommand(scrapeDisableCmd)
+	scrapeCmd.AddCommand(scrapeEnableCmd)
 	scrapeCmd.AddCommand(scrapeMigrateCmd)
 
 	// Deprecated staging commands → replaced by postings group.

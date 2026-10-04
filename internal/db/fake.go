@@ -607,6 +607,11 @@ func (f *FakeStore) UpsertSettings(updates map[string]any) error {
 			f.Settings.DiscoveryIntervalDays = n
 		}
 	}
+	// Same canonical form as SQLiteStore: lowercase, trim, dedupe.
+	if v, ok := updates["autopilot_disabled_scrapers"]; ok {
+		s, _ := v.(string)
+		f.Settings.AutopilotDisabledScrapers = normalizeListJSON(s)
+	}
 	return nil
 }
 

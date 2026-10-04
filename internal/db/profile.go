@@ -93,6 +93,10 @@ type Settings struct {
 	DefaultView      string `db:"default_view" json:"defaultView"`
 	ItemsPerPage     int    `db:"items_per_page" json:"itemsPerPage"`
 
+	// Scrapers permanently opted out of autopilot (WP-175). Stored as a
+	// JSON array string of scraper ids; emitted as an array via MarshalJSON.
+	AutopilotDisabledScrapers string `db:"autopilot_disabled_scrapers" json:"-"`
+
 	// Autopilot settings.
 	AutopilotEnabled      int    `db:"autopilot_enabled" json:"autopilotEnabled"`
 	AutopilotCadence      int    `db:"autopilot_cadence" json:"autopilotCadence"` // hours; 0 = default (6)
@@ -101,6 +105,41 @@ type Settings struct {
 	ZenModel              string `db:"zen_model" json:"zenModel"`
 	ExaAPIKey             string `db:"exa_api_key" json:"exaApiKey"`
 	DiscoveryIntervalDays int    `db:"discovery_interval_days" json:"discoveryIntervalDays"`
+}
+
+// MarshalJSON emits AutopilotDisabledScrapers as a JSON array (the same
+// raw-string-to-array pattern the Profile brief preferences use).
+func (s Settings) MarshalJSON() ([]byte, error) {
+	type Alias Settings
+	return json.Marshal(&struct {
+		*Alias
+		AutopilotDisabledScrapers []string `json:"autopilotDisabledScrapers"`
+	}{
+		Alias:                     (*Alias)(&s),
+		AutopilotDisabledScrapers: ParseDisabledScrapers(s.AutopilotDisabledScrapers),
+	})
+}
+
+// ParseDisabledScrapers decodes the stored autopilot_disabled_scrapers JSON
+// array string. Empty or unparseable input yields an empty slice — callers
+// treat the field as "no scrapers opted out".
+func ParseDisabledScrapers(s string) []string {
+	out := stringList(s)
+	if out == nil {
+		return []string{}
+	}
+	return out
+}
+
+// DisabledScrapersJSON encodes scraper ids into the canonical stored form
+// (lowercase, trim, dedupe) — the same normalization the profile's list
+// preferences apply.
+func DisabledScrapersJSON(names []string) string {
+	b, err := json.Marshal(normalizeListValues(names))
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
 }
 
 // defaultSettings holds the Go-level defaults returned when no settings row
@@ -205,6 +244,7 @@ func ensureAutopilotSettingsColumns(s *SQLiteStore) {
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN zen_model TEXT DEFAULT ''`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN exa_api_key TEXT DEFAULT ''`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN discovery_interval_days INTEGER NOT NULL DEFAULT 30`)
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_disabled_scrapers TEXT NOT NULL DEFAULT ''`)
 }
 
 // GetSettings returns the app settings. If no settings row exists yet, it
@@ -213,7 +253,7 @@ func (s *SQLiteStore) GetSettings() (Settings, error) {
 	var st Settings
 	ensureAutopilotSettingsColumns(s)
 
-	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key, zen_model, exa_api_key, discovery_interval_days FROM settings WHERE id = 1`)
+	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key, zen_model, exa_api_key, discovery_interval_days, autopilot_disabled_scrapers FROM settings WHERE id = 1`)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return defaultSettings, nil
@@ -244,11 +284,20 @@ func (s *SQLiteStore) UpsertSettings(updates map[string]any) error {
 		"zen_model":               "zen_model",
 		"exa_api_key":             "exa_api_key",
 		"discovery_interval_days": "discovery_interval_days",
+
+		"autopilot_disabled_scrapers": "autopilot_disabled_scrapers",
 	}
 	var setClauses []string
 	var args []any
 	for key, col := range columnMap {
 		if val, ok := updates[key]; ok {
+			// The disabled-scrapers list is stored in canonical form (the
+			// same normalization profile list preferences get), so reads are
+			// deterministic no matter which surface wrote the value.
+			if key == "autopilot_disabled_scrapers" {
+				s, _ := val.(string)
+				val = normalizeListJSON(s)
+			}
 			setClauses = append(setClauses, col+" = ?")
 			args = append(args, val)
 		}

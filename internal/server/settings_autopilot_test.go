@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -106,5 +107,94 @@ func TestUpdateSettingsAcceptsExaAPIKey(t *testing.T) {
 	}
 	if stored.ExaAPIKey != "exa-test-key" {
 		t.Errorf("stored ExaAPIKey = %q, want exa-test-key", stored.ExaAPIKey)
+	}
+}
+
+// WP-175: the scraper opt-out list round-trips through PATCH /api/settings
+// (JSON array in, canonical JSON array string in the store) and comes back
+// as an array on GET — the shape the Sources tab and the Zen selection
+// constraint both read.
+func TestUpdateSettingsDisabledScrapersRoundTrip(t *testing.T) {
+	f := db.NewFakeStore()
+	mux := newMuxWithLinkedIn(f, nil, nil)
+
+	req := httptest.NewRequest("PATCH", "/api/settings",
+		strings.NewReader(`{"autopilot_disabled_scrapers": ["linkedin", "ncbs"]}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("PATCH status = %d (%s), want 200", w.Code, w.Body.String())
+	}
+
+	stored, err := f.GetSettings()
+	if err != nil {
+		t.Fatalf("get settings: %v", err)
+	}
+	if got, want := stored.AutopilotDisabledScrapers, `["linkedin","ncbs"]`; got != want {
+		t.Errorf("stored = %s, want %s", got, want)
+	}
+
+	get := httptest.NewRequest("GET", "/api/settings", nil)
+	gw := httptest.NewRecorder()
+	mux.ServeHTTP(gw, get)
+	if gw.Code != 200 {
+		t.Fatalf("GET status = %d, want 200", gw.Code)
+	}
+	var view struct {
+		Disabled []string `json:"autopilotDisabledScrapers"`
+	}
+	if err := json.Unmarshal(gw.Body.Bytes(), &view); err != nil {
+		t.Fatalf("decode GET body: %v\nbody: %s", err, gw.Body.String())
+	}
+	if len(view.Disabled) != 2 || view.Disabled[0] != "linkedin" || view.Disabled[1] != "ncbs" {
+		t.Errorf("GET autopilotDisabledScrapers = %v, want [linkedin ncbs]", view.Disabled)
+	}
+}
+
+// The opt-out is a hard constraint — a malformed payload must fail loudly,
+// never silently leave the constraint unset: a non-array fails, and so does
+// an array carrying non-string items.
+func TestUpdateSettingsDisabledScrapersRejectsNonArray(t *testing.T) {
+	f := db.NewFakeStore()
+	mux := newMuxWithLinkedIn(f, nil, nil)
+
+	for _, body := range []string{
+		`{"autopilot_disabled_scrapers": "linkedin"}`,
+		`{"autopilot_disabled_scrapers": ["linkedin", 5]}`,
+	} {
+		req := httptest.NewRequest("PATCH", "/api/settings", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+
+		if w.Code != 400 {
+			t.Errorf("PATCH %s: status = %d (%s), want 400", body, w.Code, w.Body.String())
+		}
+	}
+	stored, _ := f.GetSettings()
+	if stored.AutopilotDisabledScrapers != "" {
+		t.Errorf("store changed on rejected payload: %q", stored.AutopilotDisabledScrapers)
+	}
+}
+
+// discovery_interval_days is a whitelisted settings key (the Sources tab
+// patches it); it was missing from the handler, so the PATCH 400'd.
+func TestUpdateSettingsAcceptsDiscoveryInterval(t *testing.T) {
+	f := db.NewFakeStore()
+	mux := newMuxWithLinkedIn(f, nil, nil)
+
+	req := httptest.NewRequest("PATCH", "/api/settings",
+		strings.NewReader(`{"discovery_interval_days": 14}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("status = %d (%s), want 200", w.Code, w.Body.String())
+	}
+	stored, err := f.GetSettings()
+	if err != nil {
+		t.Fatalf("get settings: %v", err)
+	}
+	if stored.DiscoveryIntervalDays != 14 {
+		t.Errorf("DiscoveryIntervalDays = %d, want 14", stored.DiscoveryIntervalDays)
 	}
 }
