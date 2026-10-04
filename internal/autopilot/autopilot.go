@@ -59,26 +59,154 @@ type CycleConfig struct {
 	Direct detail.Fetcher
 }
 
+// runRecord accumulates a cycle's evidence as the stages execute: the
+// per-source rows and the stage-level errors. It is the writer's side of
+// the runlog record; the verdict is computed from it when the run closes,
+// never stored as a parallel truth.
+type runRecord struct {
+	db.RunLog
+	outcomes map[string]*db.SourceOutcome
+	closed   bool
+}
+
+func newRunRecord(started time.Time) *runRecord {
+	return &runRecord{
+		RunLog:   db.RunLog{StartedAt: started.Format(time.RFC3339)},
+		outcomes: map[string]*db.SourceOutcome{},
+	}
+}
+
+// outcome returns a source's row, creating it on first touch.
+func (r *runRecord) outcome(source string) *db.SourceOutcome {
+	if row, ok := r.outcomes[source]; ok {
+		return row
+	}
+	row := &db.SourceOutcome{Source: source}
+	r.outcomes[source] = row
+	return row
+}
+
+// record moves a posting to a status and attributes the outcome to the
+// source that produced it. The ledger write and the per-source count move
+// together here; the run totals are summed from the rows when the record
+// closes, so there is one place a new outcome has to be taught.
+func (r *runRecord) record(store db.Store, p scraper.Result, status string) {
+	_ = store.SetPostingStatus(p.URL, status)
+	row := r.outcome(p.Source)
+	switch status {
+	case db.StatusShortlisted:
+		row.Shortlisted++
+	case db.StatusDismissed:
+		row.Dismissed++
+	}
+}
+
+// stageError records a stage-level failure (a fetch that never ran, a
+// panicked stage, an interrupted cycle). Per-posting failures are counted
+// per source instead — that split is what keeps signal out of noise.
+func (r *runRecord) stageError(format string, args ...any) {
+	r.StageErrors = append(r.StageErrors, fmt.Sprintf(format, args...))
+}
+
+// finish closes the record: it stamps the end, materializes the per-source
+// rows, and computes the verdict. Called once from Run's defer, so a
+// panicked or interrupted cycle still ends with a verdict.
+func (r *runRecord) finish(ctx context.Context, store db.Store) db.RunLog {
+	if r.closed {
+		return r.RunLog
+	}
+	r.closed = true
+
+	finished := time.Now().UTC()
+	r.FinishedAt = finished.Format(time.RFC3339)
+	started, _ := time.Parse(time.RFC3339, r.StartedAt)
+	r.DurationMs = finished.Sub(started).Milliseconds()
+
+	// An interrupted cycle is a degraded one: its coverage is partial.
+	if err := ctx.Err(); err != nil {
+		r.stageError("cycle interrupted: %v", err)
+	}
+
+	r.PerSource = r.rows()
+	r.sumTotals()
+	r.Verdict = verdictFor(r.RunLog, queueDepth(store, r))
+	return r.RunLog
+}
+
+// sumTotals sets the run totals from the per-source evidence — never a
+// parallel count that could drift from it. Idempotent, so the cycle can ask
+// mid-run (the notifier needs the shortlist count) and finish() can ask
+// again after the last outcome landed.
+func (r *runRecord) sumTotals() {
+	r.PostingsShortlisted, r.PostingsDismissed, r.PostingsErrored = 0, 0, 0
+	for _, row := range r.outcomes {
+		r.PostingsShortlisted += row.Shortlisted
+		r.PostingsDismissed += row.Dismissed
+		r.PostingsErrored += row.Errored
+	}
+}
+
+// rows materializes the per-source record in a stable order (by source
+// id), so two renderings of one log agree byte for byte.
+func (r *runRecord) rows() []db.SourceOutcome {
+	out := make([]db.SourceOutcome, 0, len(r.outcomes))
+	for _, row := range r.outcomes {
+		out = append(out, *row)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Source < out[j].Source })
+	return out
+}
+
+// verdictFor is the run's outcome — the answer to "why did nothing show
+// up?". Precedence: any failure outranks everything (the run's evidence is
+// partial, so it must never read as dry — §7's whole point), then a
+// non-empty review queue (the ball is with the user), then whether anything
+// survived curation, then quiet.
+//
+// A posting that failed curation counts as a failure here, not just a stage
+// error: if the curate stage breaks outright every posting errors and the
+// run would otherwise claim a dry verdict for a cycle that never ran.
+func verdictFor(entry db.RunLog, queued int) db.Verdict {
+	switch {
+	case len(entry.StageErrors) > 0 || entry.PostingsErrored > 0:
+		return db.VerdictDegraded
+	case queued > 0:
+		return db.VerdictWaitingOnYou
+	case entry.PostingsDismissed > 0:
+		return db.VerdictNothingSurvived
+	default:
+		return db.VerdictQuiet
+	}
+}
+
+// queueDepth is the review queue's depth: postings shortlisted and not yet
+// reviewed. A read failure is a stage error — without the count the verdict
+// could claim quiet while postings wait.
+func queueDepth(store db.Store, rec *runRecord) int {
+	n, err := store.CountPostings(db.StatusShortlisted)
+	if err != nil {
+		rec.stageError("runlog: read review queue: %v", err)
+		return 0
+	}
+	return n
+}
+
 // Run executes one full autopilot cycle. It is safe to call from a
 // goroutine — panics are recovered and logged, and the run-log row is
-// always CLOSED (FinishedAt set) even on panic: the scheduler's cadence
-// measures from the last finished run, so an open row would re-fire a
-// poisoned cycle at poll rate forever.
+// always CLOSED (FinishedAt set, verdict computed) even on panic: the
+// scheduler's cadence measures from the last finished run, so an open row
+// would re-fire a poisoned cycle at poll rate forever.
 func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
-	started := time.Now().UTC()
-	logEntry = db.RunLog{
-		StartedAt: started.Format(time.RFC3339),
-	}
+	rec := newRunRecord(time.Now().UTC())
 
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("autopilot: cycle panicked: %v", r)
-			logEntry.Errors = addError(logEntry.Errors, fmt.Sprintf("panic: %v", r))
-			// Close the row — a panicked cycle still happened.
-			finished := time.Now().UTC()
-			logEntry.FinishedAt = finished.Format(time.RFC3339)
-			logEntry.DurationMs = finished.Sub(started).Milliseconds()
+			rec.stageError("panic: %v", r)
 		}
+		// One place closes the record: a panicked cycle still ends with a
+		// verdict rather than an open row.
+		logEntry = rec.finish(ctx, cfg.Store)
 	}()
 
 	// Shared Exa seam: one client, one budget, one cache across company
@@ -95,14 +223,14 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 
 	// Stage 0: Discovery — widen the company universe when a trigger
 	// fires (first-run / brief change / interval). Never blocks scoring:
-	// failures are logged with cause and the cycle proceeds.
-	if reason := stageDiscovery(ctx, cfg); reason != "" {
-		logEntry.Errors = addError(logEntry.Errors, "discovery ran: "+reason)
+	// a failure is recorded as a stage error and the cycle proceeds.
+	if _, err := stageDiscovery(ctx, cfg); err != nil {
+		rec.stageError("%v", err)
 	}
 
 	// Stage 1: Sweep — scrape new postings from relevant sources.
-	newPostings := stageSweep(ctx, cfg)
-	logEntry.PostingsNew = len(newPostings)
+	newPostings := stageSweep(ctx, cfg, rec)
+	rec.PostingsNew = len(newPostings)
 
 	// Collect swept URLs to avoid double-processing.
 	sweptURLs := make(map[string]bool, len(newPostings))
@@ -112,7 +240,7 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 
 	// Also curate existing "new" postings from the ledger backlog,
 	// excluding any that were just swept.
-	backlog := stageBacklog(ctx, cfg, sweptURLs)
+	backlog := stageBacklog(ctx, cfg, rec, sweptURLs)
 
 	// Merge: sweep results first, then backlog. Apply limit.
 	allPostings := append(newPostings, backlog...)
@@ -136,29 +264,29 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	// Stage 2: Detail — enrich postings with full job body.
 	stageDetail(ctx, cfg, allPostings)
 
-	// Stage 3+4: Prefilter + Curate — per-posting commit.
-	shortlisted, dismissed, errored := stagePrefilterCurate(ctx, cfg, allPostings)
-	logEntry.PostingsShortlisted = shortlisted
-	logEntry.PostingsDismissed = dismissed
-	logEntry.PostingsErrored = errored
+	// Stage 3+4: Prefilter + Curate — per-posting commit. Outcomes land in
+	// the per-source rows; sum them so the notifier sees this cycle's count.
+	stagePrefilterCurate(ctx, cfg, allPostings, rec)
+	rec.sumTotals()
 
 	// Stage 5: Notify — one nudge per cycle when shortlists exist.
-	notifyShortlist(ctx, cfg, &logEntry, shortlisted, allPostings)
+	notifyShortlist(ctx, cfg, rec, allPostings)
 
-	// Stage 6: Run log — written by RunLogged by the caller.
-
-	finished := time.Now().UTC()
-	logEntry.FinishedAt = finished.Format(time.RFC3339)
-	logEntry.DurationMs = finished.Sub(started).Milliseconds()
-
-	return logEntry
+	// Stage 6: Run log — closed by the deferred finish above; written by
+	// RunLogged by the caller.
+	return
 }
 
-// stageSweep scrapes all enabled scrapers and adds new postings to the ledger.
-func stageSweep(ctx context.Context, cfg CycleConfig) []scraper.Result {
+// stageSweep scrapes all configured scrapers and adds new postings to the
+// ledger. It records one per-source row per scraper swept: results
+// returned, results actually new, and any fetch failure.
+func stageSweep(ctx context.Context, cfg CycleConfig, rec *runRecord) []scraper.Result {
 	var allNew []scraper.Result
 
 	for _, s := range cfg.Scrapers {
+		name := s.Name()
+		row := rec.outcome(name)
+
 		// Politeness: jittered delay between sources.
 		jitter := time.Duration(2000+rand.Intn(1000)) * time.Millisecond
 		select {
@@ -176,9 +304,12 @@ func stageSweep(ctx context.Context, cfg CycleConfig) []scraper.Result {
 		cancel()
 
 		if err != nil {
-			log.Printf("autopilot: sweep %s failed: %v", s.Name(), err)
+			log.Printf("autopilot: sweep %s failed: %v", name, err)
+			row.Errored++
+			rec.stageError("sweep %s: %v", name, err)
 			continue
 		}
+		row.Scraped = len(results)
 
 		// Dedup against existing postings and jobs.
 		for _, r := range results {
@@ -190,7 +321,9 @@ func stageSweep(ctx context.Context, cfg CycleConfig) []scraper.Result {
 			if tracked {
 				continue
 			}
+			r.Source = name
 			allNew = append(allNew, r)
+			row.New++
 		}
 	}
 
@@ -198,6 +331,7 @@ func stageSweep(ctx context.Context, cfg CycleConfig) []scraper.Result {
 	if len(allNew) > 0 {
 		if err := cfg.Store.AddPostings(allNew); err != nil {
 			log.Printf("autopilot: sweep add postings: %v", err)
+			rec.stageError("sweep: add postings: %v", err)
 		}
 	}
 
@@ -208,10 +342,11 @@ func stageSweep(ctx context.Context, cfg CycleConfig) []scraper.Result {
 // them as scraper.Result for processing. This allows the autopilot to curate
 // postings that were swept in previous cycles but never curated.
 // exclude contains URLs already swept this cycle to avoid double-processing.
-func stageBacklog(ctx context.Context, cfg CycleConfig, exclude map[string]bool) []scraper.Result {
+func stageBacklog(ctx context.Context, cfg CycleConfig, rec *runRecord, exclude map[string]bool) []scraper.Result {
 	postings, err := cfg.Store.ListPostings(db.StatusNew)
 	if err != nil {
 		log.Printf("autopilot: backlog fetch failed: %v", err)
+		rec.stageError("backlog: %v", err)
 		return nil
 	}
 	results := make([]scraper.Result, 0, len(postings))
@@ -278,8 +413,9 @@ func stageDetail(ctx context.Context, cfg CycleConfig, postings []scraper.Result
 }
 
 // stagePrefilterCurate runs the prefilter and zen curation per-posting.
-// Returns counts of shortlisted, dismissed, and errored postings.
-func stagePrefilterCurate(ctx context.Context, cfg CycleConfig, postings []scraper.Result) (shortlisted, dismissed, errored int) {
+// Every outcome is written to the ledger and attributed to the posting's
+// source; the run totals are summed from those rows when the record closes.
+func stagePrefilterCurate(ctx context.Context, cfg CycleConfig, postings []scraper.Result, rec *runRecord) {
 	// Build profile for prefilter.
 	profile := buildPrefilterProfile(cfg.Store)
 
@@ -342,21 +478,18 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 		// Stage 3: Prefilter — deterministic Go rules.
 		verdict := prefilter.Filter(p, profile, cfg.Store)
 		if verdict.Action == "dismiss" {
-			_ = cfg.Store.SetPostingStatus(p.URL, db.StatusDismissed)
-			dismissed++
+			rec.record(cfg.Store, p, db.StatusDismissed)
 			continue
 		}
 		if verdict.Action == "shortlist" {
-			_ = cfg.Store.SetPostingStatus(p.URL, db.StatusShortlisted)
-			shortlisted++
+			rec.record(cfg.Store, p, db.StatusShortlisted)
 			continue
 		}
 
 		// Stage 4: Curate — zen LLM (when available).
 		if session == nil {
 			// No zen client — escalate to shortlist for manual review.
-			_ = cfg.Store.SetPostingStatus(p.URL, db.StatusShortlisted)
-			shortlisted++
+			rec.record(cfg.Store, p, db.StatusShortlisted)
 			continue
 		}
 
@@ -366,7 +499,7 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 		})
 		if err != nil {
 			log.Printf("autopilot: curate %s failed: %v", p.URL, err)
-			errored++
+			rec.outcome(p.Source).Errored++
 			continue
 		}
 
@@ -380,15 +513,11 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 		_ = cfg.Store.EnrichPosting(p.URL, "", meta)
 
 		if v.Decision == zen.DecisionDismiss {
-			_ = cfg.Store.SetPostingStatus(p.URL, db.StatusDismissed)
-			dismissed++
+			rec.record(cfg.Store, p, db.StatusDismissed)
 		} else {
-			_ = cfg.Store.SetPostingStatus(p.URL, db.StatusShortlisted)
-			shortlisted++
+			rec.record(cfg.Store, p, db.StatusShortlisted)
 		}
 	}
-
-	return
 }
 
 // buildPortrait synthesizes a readable portrait from the person's profile.
@@ -515,17 +644,6 @@ func buildPrefilterProfile(store db.Store) prefilter.Profile {
 // happen for []string).
 func mustJSON(v any) string {
 	b, _ := json.Marshal(v)
-	return string(b)
-}
-
-// addError appends an error string to a JSON array.
-func addError(errorsJSON, msg string) string {
-	var errs []string
-	if errorsJSON != "" && errorsJSON != "[]" {
-		_ = json.Unmarshal([]byte(errorsJSON), &errs)
-	}
-	errs = append(errs, msg)
-	b, _ := json.Marshal(errs)
 	return string(b)
 }
 

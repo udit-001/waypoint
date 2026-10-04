@@ -176,11 +176,7 @@ import { setPage } from '../stores/page.svelte.js';
   }
 
   function runErrors(run) {
-    if (!run?.errors) return [];
-    try {
-      const parsed = JSON.parse(run.errors);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
+    return Array.isArray(run?.stageErrors) ? run.stageErrors : [];
   }
 
   function formatDuration(ms) {
@@ -252,7 +248,7 @@ import { setPage } from '../stores/page.svelte.js';
               <span class="text-slate-400">Errored</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{lastRun.postingsErrored}</span>
               <span class="text-slate-400">Duration</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{formatDuration(lastRun.durationMs)}</span>
             </div>
-            {#if lastRun.postingsErrored > 0 && runErrors(lastRun).length > 0}
+            {#if runErrors(lastRun).length > 0}
               <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-600">
                 <p class="text-[11px] font-semibold uppercase tracking-wide text-red-500 mb-1.5">Last run errors</p>
                 <ul class="space-y-1">

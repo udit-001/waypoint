@@ -48,6 +48,29 @@ Alias: `waypoint cat`
 | `waypoint scrape prune` | Remove old postings. Flag: `--days` (default 30) |
 | `waypoint scrape migrate` | Import legacy scrape-cache.json into the database |
 
+## Autopilot
+
+| Command | Description |
+|---------|-------------|
+| `waypoint autopilot run` | Run one full cycle immediately, ignoring the cadence. Flag: `--limit` (max new postings to curate). JSON: `{run_id, verdict, new, shortlisted, dismissed, errored, perSource, stageErrors, duration_ms, elapsed_ms}` |
+| `waypoint autopilot status` | Autopilot state and the last run. JSON adds `disabledScrapers` and the full `lastRun` record |
+| `waypoint autopilot runs` | Recent runs, newest first: verdict, per-source outcomes, stage errors. Flag: `--limit` (default 10). JSON: `{runs: [...]}` |
+
+Every run ends with a **verdict** — the answer to "why did nothing show up?":
+
+| Verdict | Meaning | Dry? |
+|---------|---------|------|
+| `quiet` | Sources ran fine, nothing new fit the brief | yes |
+| `nothing-survived` | Postings were found, none survived curation | yes |
+| `waiting-on-you` | Shortlists exist and are unreviewed | no |
+| `degraded` | A stage errored, so the run's evidence is partial | no |
+
+The per-source counts are the evidence stored *under* the verdict, not the
+answer. The record also carries a **skipped** fact per source, with its
+reason — a source fact, never a verdict. The dry streak is derived from
+verdict history: three or more consecutive `quiet` runs is the stale-search
+signal.
+
 ## Boards
 
 Company ATS boards (Greenhouse, Workday, Lever, BambooHR, Eightfold) — one company's careers site per board. Boards live in `boards.toml` inside `data_dir`, so they travel with the database in backups. The flow: find the company's careers URL (any search tool), `add` it (detect + verify + save), then `sweep` to stage postings.

@@ -118,12 +118,15 @@ func TestCycle_NotifierFailureNeverBlocksCycle(t *testing.T) {
 	cfg.Notifier = n
 	entry := Run(context.Background(), cfg)
 
-	// Cycle completes normally; failure recorded in the run log errors.
+	// Cycle completes normally; failure recorded as a stage error.
 	if entry.FinishedAt == "" {
 		t.Error("cycle did not finish after notifier failure")
 	}
-	if !strings.Contains(entry.Errors, "notify") {
-		t.Errorf("errors = %q, want notify failure recorded", entry.Errors)
+	if !strings.Contains(strings.Join(entry.StageErrors, "\n"), "notify") {
+		t.Errorf("stageErrors = %v, want notify failure recorded", entry.StageErrors)
+	}
+	if entry.Verdict != db.VerdictDegraded {
+		t.Errorf("verdict = %q, want degraded after a stage error", entry.Verdict)
 	}
 }
 
@@ -176,8 +179,11 @@ func TestCycle_PanicClosesRunRow(t *testing.T) {
 	if entry.FinishedAt == "" {
 		t.Fatal("panicked cycle left FinishedAt empty — scheduler would hot-refire every poll")
 	}
-	if !strings.Contains(entry.Errors, "panic") {
-		t.Errorf("errors = %q, want panic recorded", entry.Errors)
+	if !strings.Contains(strings.Join(entry.StageErrors, "\n"), "panic") {
+		t.Errorf("stageErrors = %v, want panic recorded", entry.StageErrors)
+	}
+	if entry.Verdict != db.VerdictDegraded {
+		t.Errorf("verdict = %q, want degraded for a panicked cycle", entry.Verdict)
 	}
 }
 

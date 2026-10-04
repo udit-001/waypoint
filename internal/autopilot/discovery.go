@@ -3,6 +3,7 @@ package autopilot
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -91,19 +92,24 @@ var errEmptyDomain = errors.New("empty domain")
 // stageDiscovery runs discovery before the cycle when a trigger fires:
 // first-run (no candidates ever), brief-hash change, or interval elapsed
 // (new setting discovery_interval_days, default 30). Discovery never
-// blocks scoring — a failure is logged with cause and the cycle proceeds
-// to sweep. Trigger state persists in kv so daemon restarts don't re-fire.
-func stageDiscovery(ctx context.Context, cfg CycleConfig) string {
+// blocks scoring — a failure comes back as an error for the run record
+// and the cycle proceeds to sweep. Trigger state persists in kv so daemon
+// restarts don't re-fire.
+//
+// The returned reason names the trigger that fired (empty when no trigger
+// did); the error is a stage failure, never a reason to skip the sweep.
+func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("autopilot: discovery panicked: %v — proceeding without it", r)
+			err = fmt.Errorf("discovery: panic: %v", r)
 		}
 	}()
 
 	settings, serr := cfg.Store.GetSettings()
 	if serr != nil {
 		log.Printf("autopilot: discovery skipped (settings): %v", serr)
-		return ""
+		return "", nil
 	}
 	interval := settings.DiscoveryIntervalDays
 	if interval <= 0 {
@@ -112,17 +118,17 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) string {
 	brief, berr := cfg.Store.GetBrief()
 	if berr != nil {
 		log.Printf("autopilot: discovery skipped (brief): %v", berr)
-		return ""
+		return "", nil
 	}
 	briefText := brief.Text()
 
 	lastHash, lastAt, hasLast, lerr := cfg.Store.DiscoveryLastRun()
 	if lerr != nil {
 		log.Printf("autopilot: discovery skipped (trigger state): %v", lerr)
-		return ""
+		return "", nil
 	}
 	cands, _ := cfg.Store.Candidates("")
-	reason := discovery.ShouldRunDiscovery(discovery.TriggerInput{
+	reason = discovery.ShouldRunDiscovery(discovery.TriggerInput{
 		Now:           timeNow(),
 		IntervalDays:  interval,
 		Candidates:    len(cands),
@@ -132,25 +138,25 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) string {
 		LastRunAt:     parseRFC3339OrZero(lastAt),
 	})
 	if reason == "" {
-		return ""
+		return "", nil
 	}
 
 	facets, source, derr := expandEnumerateFacets(ctx, cfg, briefText)
 	if derr != nil {
 		log.Printf("autopilot: discovery failed (%s): %v — proceeding with scoring", reason, derr)
-		return ""
+		return "", fmt.Errorf("discovery (%s): %w", reason, derr)
 	}
 
 	n, rerr := runAutoDiscovery(ctx, cfg, facets)
 	if rerr != nil {
 		log.Printf("autopilot: discovery failed (%s): %v — proceeding with scoring", reason, rerr)
-		return ""
+		return "", fmt.Errorf("discovery (%s): %w", reason, rerr)
 	}
 	if serr := cfg.Store.SaveDiscoveryLastRun(discovery.BriefHash(briefText), timeNow().UTC().Format(time.RFC3339)); serr != nil {
 		log.Printf("autopilot: discovery state save failed: %v", serr)
 	}
 	log.Printf("autopilot: discovery ran (%s, facets via %s): %d new candidate(s)", reason, source, n)
-	return reason
+	return reason, nil
 }
 
 // expandEnumerateFacets mirrors the CLI's enumeration path: brief → zen

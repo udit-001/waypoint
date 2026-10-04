@@ -671,6 +671,16 @@ func (f *FakeStore) SetPostingStatus(url, status string) error {
 	return nil
 }
 
+func (f *FakeStore) CountPostings(status string) (int, error) {
+	n := 0
+	for _, p := range f.Postings {
+		if status == "" || p.Status == status {
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (f *FakeStore) PrunePostings(days int) (int, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
 	removed := 0

@@ -28,7 +28,7 @@ type Posting struct {
 	Result    scraper.Result `json:"result"`
 }
 
-const postingColumns = `url, title, company, location, date, description, metadata, first_seen, status`
+const postingColumns = `url, title, company, location, date, description, metadata, first_seen, status, source`
 
 // marshalPostingMeta serializes posting metadata for storage; "{}" when empty.
 func marshalPostingMeta(meta map[string]string) (string, error) {
@@ -50,7 +50,7 @@ func scanPosting(row interface{ Scan(...any) error }) (Posting, error) {
 	err := row.Scan(
 		&p.Result.URL, &p.Result.Title, &p.Result.Company,
 		&p.Result.Location, &p.Result.Date, &p.Result.Description,
-		&metadataRaw, &p.FirstSeen, &p.Status,
+		&metadataRaw, &p.FirstSeen, &p.Status, &p.Result.Source,
 	)
 	if err != nil {
 		return Posting{}, err
@@ -89,7 +89,9 @@ func (s *SQLiteStore) HasPosting(url string) (bool, error) {
 }
 
 // AddPostings inserts new results with status "new". Results whose URL
-// is already in the ledger are skipped (idempotent).
+// is already in the ledger are skipped (idempotent). Each result's Source
+// (its scraper id) is persisted with it so per-source run outcomes stay
+// attributable after the posting leaves its sweep cycle.
 func (s *SQLiteStore) AddPostings(results []scraper.Result) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, r := range results {
@@ -98,9 +100,9 @@ func (s *SQLiteStore) AddPostings(results []scraper.Result) error {
 			return err
 		}
 		if _, err := s.Exec(
-			`INSERT OR IGNORE INTO postings (url, title, company, location, date, description, metadata, first_seen, status)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new')`,
-			r.URL, r.Title, r.Company, r.Location, r.Date, r.Description, metaJSON, now,
+			`INSERT OR IGNORE INTO postings (url, title, company, location, date, description, metadata, first_seen, status, source)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', ?)`,
+			r.URL, r.Title, r.Company, r.Location, r.Date, r.Description, metaJSON, now, r.Source,
 		); err != nil {
 			return fmt.Errorf("insert posting: %w", err)
 		}
@@ -129,6 +131,17 @@ func (s *SQLiteStore) ListPostings(status string) ([]Posting, error) {
 	}
 	defer rows.Close()
 	return scanPostings(rows)
+}
+
+// CountPostings returns how many ledger postings hold a status. Empty
+// status counts the whole ledger. The autopilot reads the review queue's
+// depth through this (status shortlisted) to decide "waiting on you".
+func (s *SQLiteStore) CountPostings(status string) (int, error) {
+	var n int
+	if status == "" {
+		return n, s.Get(&n, "SELECT COUNT(*) FROM postings")
+	}
+	return n, s.Get(&n, "SELECT COUNT(*) FROM postings WHERE status = ?", status)
 }
 
 // GetPosting returns a single posting by URL.

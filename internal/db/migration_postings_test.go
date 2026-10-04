@@ -68,6 +68,9 @@ func TestMigration00008_existingDB(t *testing.T) {
 	}
 	raw := s.(*SQLiteStore)
 	for _, stmt := range []string{
+		// V18 added postings.source — drop it while the table still has
+		// its ledger name.
+		`ALTER TABLE postings DROP COLUMN source`,
 		`ALTER TABLE postings RENAME TO scrape_staging`,
 		`DROP INDEX IF EXISTS idx_postings_status`,
 		`DROP INDEX IF EXISTS idx_postings_first_seen`,
@@ -88,9 +91,16 @@ func TestMigration00008_existingDB(t *testing.T) {
 		`ALTER TABLE jobs DROP COLUMN review_json`,
 		// Same for V17's settings.autopilot_disabled_scrapers.
 		`ALTER TABLE settings DROP COLUMN autopilot_disabled_scrapers`,
+		// V18 added autopilot_runs.verdict/per_source and renamed the
+		// errors column; ADD/RENAME COLUMN can't be un-applied by
+		// deleting the version row.
+		`ALTER TABLE autopilot_runs DROP COLUMN verdict`,
+		`ALTER TABLE autopilot_runs DROP COLUMN per_source`,
+		`ALTER TABLE autopilot_runs RENAME COLUMN stage_errors TO errors`,
 		`DELETE FROM goose_db_version WHERE version_id = 15`,
 		`DELETE FROM goose_db_version WHERE version_id = 16`,
 		`DELETE FROM goose_db_version WHERE version_id = 17`,
+		`DELETE FROM goose_db_version WHERE version_id = 18`,
 	} {
 		if _, err := raw.Exec(stmt); err != nil {
 			t.Fatalf("revert to V7 (%q): %v", stmt, err)

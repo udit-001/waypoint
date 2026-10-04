@@ -64,6 +64,7 @@ type Store interface {
 	HasPosting(url string) (bool, error)
 	AddPostings(results []scraper.Result) error
 	ListPostings(status string) ([]Posting, error)
+	CountPostings(status string) (int, error)
 	GetPosting(url string) (Posting, bool, error)
 	SetPostingStatus(url, status string) error
 	PrunePostings(days int) (int, error)
@@ -79,10 +80,12 @@ type Store interface {
 	AddChangeEvent(kind string) error
 	ChangesSince(cursor int64, limit int) ([]ChangeEvent, error)
 
-	// Autopilot run log.
+	// Autopilot run log. One record per cycle: the verdict plus the
+	// per-source and per-stage evidence stored under it.
 	AddRunLog(entry RunLog) (int64, error)
 	UpdateRunLog(id int64, entry RunLog) error
 	GetLastRun() (RunLog, bool, error)
+	ListRunLogs(limit int) ([]RunLog, error)
 
 	// Company discovery candidates — the discovery ledger (WP-150).
 	SaveCandidates(cands []CompanyCandidate) error

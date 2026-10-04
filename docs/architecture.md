@@ -27,8 +27,20 @@ and `PATCH /api/profile` (web) patch only the keys present. Keys, validation,
 and the schema template live behind the db seam (`internal/db/documents.go`),
 shared by both surfaces.
 | `settings` | Theme, default view, reminders |
+| `postings` | Scraped postings ledger, one row per URL: the posting, its review status, and its `source` (the scraper id that found it) |
+| `autopilot_runs` | The runlog: one row per autopilot cycle — verdict, per-source outcomes, stage errors |
 | `kv` | Small durable state that doesn't warrant its own table; values are JSON blobs owned by their feature (`board_last_swept.<name>` = how a board's last sweep ended) |
 | `jobs_fts` / `artifacts_fts` | FTS5 full-text search indices |
+
+`autopilot_runs` is the runlog: one record per cycle, agent-grade from birth.
+`verdict` is the run's outcome (`quiet` | `nothing-survived` | `waiting-on-you` |
+`degraded`); `per_source` and `stage_errors` are JSON columns holding the
+evidence stored *under* the verdict — per-source counts (`source`, `scraped`,
+`new`, `shortlisted`, `dismissed`, `errored`, `skipped` + `reason`) and
+stage-prefixed failures. One log, two renderings: the human panel and
+`waypoint autopilot runs --json` read the same records. A run opened but not
+yet closed (empty `finished_at`) is the "running now" signal, and its verdict
+is empty because it has no outcome yet.
 
 ## Tech Stack
 
@@ -122,5 +134,7 @@ REST API at `/api/`. All endpoints return JSON. Reads are free. Write routes cro
 | `POST /api/candidates/{id}/dismiss` | Tombstone a suggested company — discovery never re-suggests it |
 | `GET /api/settings` | App settings (`autopilotDisabledScrapers` emits as a JSON array of scraper ids) |
 | `PATCH /api/settings` | Partial settings update; whitelisted keys only (`theme`, `default_view`, `items_per_page`, `autopilot_*`, `zen_*`, `exa_api_key`, `discovery_interval_days`). `autopilot_disabled_scrapers` takes an array of scraper ids, stored as a canonical JSON array string — the opt-out autopilot source selection cannot override; non-array payloads 400 |
+| `GET /api/autopilot` | Autopilot state, the last run, and the last 10 runs. Each run record is `{verdict, startedAt, finishedAt, perSource[], stageErrors[]}` — counts are the evidence under the verdict |
+| `GET /api/autopilot/runs?limit=` | Recent runs, newest first (default 10; a non-positive or malformed limit is 400). The same records `waypoint autopilot runs` renders |
 | `GET /api/companies` | boards.toml entries joined with live stats: new-posting counts (ledger rows awaiting review, matched case-insensitively by company) and per-board sweep state (`board_last_swept.*` from kv). Sorted by attention weight — companies with news float on top, loudest first; the rest alphabetical. Read-only: the CLI writes boards.toml and sweep state, the web reads both (ADR 0001) |
 | `GET /api/search?q=` | Unified search across jobs and artifacts |

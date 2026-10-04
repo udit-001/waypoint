@@ -119,6 +119,7 @@ func newMuxWithBoards(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, load
 
 	// Autopilot
 	mux.HandleFunc("GET /api/autopilot", handleGetAutopilot(store))
+	mux.HandleFunc("GET /api/autopilot/runs", handleAutopilotRuns(store))
 
 	// Live-sync (SSE — tails the change_events table)
 	mux.HandleFunc("GET /api/events", handleEvents(store))
@@ -542,6 +543,7 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 		}
 
 		lastRun, hasRun, _ := store.GetLastRun()
+		runs, _ := store.ListRunLogs(db.DefaultRunLogLimit)
 
 		cadence := settings.AutopilotCadence
 		if cadence <= 0 {
@@ -554,12 +556,38 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 			"zenKeySet": settings.ZenAPIKey != "",
 			"exaKeySet": settings.ExaAPIKey != "",
 			"lastRun":   nil,
+			"runs":      runs,
 		}
 		if hasRun {
 			resp["lastRun"] = lastRun
 		}
 
 		jsonResponse(w, resp)
+	}
+}
+
+// handleAutopilotRuns lists recent runs — the same records
+// `waypoint autopilot runs` renders (one log, two renderings). The
+// autopilot payload already carries the last 10; this route is the
+// paginated/standalone read.
+func handleAutopilotRuns(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		limit := db.DefaultRunLogLimit
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n <= 0 {
+				jsonError(w, "limit must be a positive integer", http.StatusBadRequest)
+				return
+			}
+			limit = n
+		}
+
+		runs, err := store.ListRunLogs(limit)
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		jsonResponse(w, map[string]any{"runs": runs})
 	}
 }
 

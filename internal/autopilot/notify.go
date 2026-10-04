@@ -2,7 +2,6 @@ package autopilot
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"strconv"
 
@@ -55,19 +54,19 @@ func buildNotice(ctx context.Context, store interface {
 	return n
 }
 
-// notifyShortlist sends the nudge through cfg.Notifier when shortlists
-// exist this cycle. Errors are logged into the run row — the loop's
-// "on never lies" surface — but never fail the cycle.
-func notifyShortlist(ctx context.Context, cfg CycleConfig, logEntry *db.RunLog, shortlisted int, allPostings []scraper.Result) {
-	if cfg.Notifier == nil || shortlisted <= 0 {
+// notifyShortlist sends the nudge through cfg.Notifier when the run
+// shortlisted anything. Errors are recorded as stage errors in the run row —
+// the loop's "on never lies" surface — but never fail the cycle.
+func notifyShortlist(ctx context.Context, cfg CycleConfig, rec *runRecord, allPostings []scraper.Result) {
+	if cfg.Notifier == nil || rec.PostingsShortlisted <= 0 {
 		return
 	}
 	cycleURLs := make(map[string]bool, len(allPostings))
 	for _, p := range allPostings {
 		cycleURLs[p.URL] = true
 	}
-	if err := cfg.Notifier.NotifyShortlist(ctx, buildNotice(ctx, cfg.Store, shortlisted, cycleURLs)); err != nil {
+	if err := cfg.Notifier.NotifyShortlist(ctx, buildNotice(ctx, cfg.Store, rec.PostingsShortlisted, cycleURLs)); err != nil {
 		log.Printf("autopilot: notify failed: %v", err)
-		logEntry.Errors = addError(logEntry.Errors, fmt.Sprintf("notify: %v", err))
+		rec.stageError("notify: %v", err)
 	}
 }

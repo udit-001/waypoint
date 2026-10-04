@@ -10,6 +10,10 @@ import (
 )
 
 // Result is a single job posting returned by a scraper.
+//
+// Source is the id of the scraper that produced it. Search results leave
+// it empty (the caller knows which scraper it called); the autopilot sets
+// it before persisting, so per-source run outcomes stay attributable.
 type Result struct {
 	ID          string            `json:"id"`
 	Title       string            `json:"title"`
@@ -17,6 +21,7 @@ type Result struct {
 	Location    string            `json:"location"`
 	Date        string            `json:"date"`
 	URL         string            `json:"url"`
+	Source      string            `json:"source,omitempty"`
 	Description string            `json:"description,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }

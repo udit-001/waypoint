@@ -322,19 +322,21 @@ func TestCycle_MultipleScrapers(t *testing.T) {
 	}
 }
 
-func TestAddError(t *testing.T) {
-	j := addError("", "first error")
-	if j != `["first error"]` {
-		t.Errorf("addError empty = %q", j)
-	}
+// TestRunRecord_StageErrorsAppend: stage errors accumulate in order as a
+// slice — the record's own error list, not a JSON string.
+func TestRunRecord_StageErrorsAppend(t *testing.T) {
+	rec := newRunRecord(time.Now().UTC())
+	rec.stageError("sweep iisc: %v", "timeout")
+	rec.stageError("panic: %v", "boom")
 
-	j = addError(j, "second error")
-	var errs []string
-	if err := json.Unmarshal([]byte(j), &errs); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	want := []string{"sweep iisc: timeout", "panic: boom"}
+	if len(rec.StageErrors) != len(want) {
+		t.Fatalf("stageErrors = %v, want %v", rec.StageErrors, want)
 	}
-	if len(errs) != 2 {
-		t.Errorf("len = %d, want 2", len(errs))
+	for i := range want {
+		if rec.StageErrors[i] != want[i] {
+			t.Errorf("stageErrors[%d] = %q, want %q", i, rec.StageErrors[i], want[i])
+		}
 	}
 }
 

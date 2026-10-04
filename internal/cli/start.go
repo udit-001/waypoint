@@ -296,7 +296,7 @@ func runAutopilotCycle(store db.Store, exaClient *exa.Client, openURL, reason st
 		Notifier:  notify.New(openURL),
 	})
 
-	log.Printf("autopilot: cycle complete (id=%d, new=%d, shortlisted=%d, dismissed=%d, errored=%d, duration=%dms)",
-		entry.ID, entry.PostingsNew, entry.PostingsShortlisted,
+	log.Printf("autopilot: cycle complete (id=%d, verdict=%s, new=%d, shortlisted=%d, dismissed=%d, errored=%d, duration=%dms)",
+		entry.ID, entry.Verdict, entry.PostingsNew, entry.PostingsShortlisted,
 		entry.PostingsDismissed, entry.PostingsErrored, entry.DurationMs)
 }

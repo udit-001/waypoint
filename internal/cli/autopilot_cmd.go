@@ -73,10 +73,13 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 		if jsonOut {
 			printJSON(map[string]any{
 				"run_id":      entry.ID,
+				"verdict":     entry.Verdict,
 				"new":         entry.PostingsNew,
 				"shortlisted": entry.PostingsShortlisted,
 				"dismissed":   entry.PostingsDismissed,
 				"errored":     entry.PostingsErrored,
+				"perSource":   entry.PerSource,
+				"stageErrors": entry.StageErrors,
 				"duration_ms": entry.DurationMs,
 				"elapsed_ms":  elapsed.Milliseconds(),
 			})
@@ -84,6 +87,7 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 		}
 
 		fmt.Printf("\n  ✓ Cycle complete (run #%d)\n\n", entry.ID)
+		fmt.Printf("    Verdict:          %s\n", entry.Verdict)
 		fmt.Printf("    New postings:     %d\n", entry.PostingsNew)
 		fmt.Printf("    Shortlisted:      %d\n", entry.PostingsShortlisted)
 		fmt.Printf("    Dismissed:        %d\n", entry.PostingsDismissed)
@@ -92,6 +96,87 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 		fmt.Println()
 		return nil
 	},
+}
+
+var autopilotRunsFlags struct {
+	limit int
+}
+
+var autopilotRunsCmd = &cobra.Command{
+	Use:   "runs",
+	Short: "List recent runs: verdict, per-source outcomes, stage errors",
+	Long: `List recent autopilot runs, newest first.
+
+Every run ends with a verdict that answers "why did nothing show up?":
+quiet (sources ran fine, nothing new fit the brief), nothing-survived
+(postings found, none survived curation), waiting-on-you (shortlists await
+review), degraded (a stage errored). Per-source counts are the evidence
+stored under the verdict; a skipped source is a per-source fact, not a
+verdict.
+
+Use --json for the agent-grade record.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		runs, err := store.ListRunLogs(autopilotRunsFlags.limit)
+		if err != nil {
+			return formatError("failed to read autopilot runs", err)
+		}
+		if jsonOut {
+			printJSON(map[string]any{"runs": runs})
+			return nil
+		}
+		printRuns(runs)
+		return nil
+	},
+}
+
+// printRuns renders the runlog for humans: the verdict is the headline,
+// the per-source rows are the evidence beneath it. Same records the JSON
+// read — one log, two renderings.
+func printRuns(runs []db.RunLog) {
+	if len(runs) == 0 {
+		fmt.Println("  No autopilot runs yet.")
+		return
+	}
+	fmt.Printf("  %d run(s), newest first\n\n", len(runs))
+	for _, r := range runs {
+		verdict := string(r.Verdict)
+		if verdict == "" {
+			verdict = "running"
+		}
+		fmt.Printf("  %s  %s\n", r.StartedAt, verdict)
+		fmt.Printf("    new %d  shortlisted %d  dismissed %d  errored %d  %s\n",
+			r.PostingsNew, r.PostingsShortlisted, r.PostingsDismissed, r.PostingsErrored,
+			formatRunDuration(r.DurationMs))
+		for _, s := range r.PerSource {
+			if s.Skipped {
+				fmt.Printf("    %-18s skipped  %s\n", sourceLabel(s.Source), s.Reason)
+				continue
+			}
+			fmt.Printf("    %-18s scraped %d  new %d  shortlisted %d  dismissed %d  errored %d\n",
+				sourceLabel(s.Source), s.Scraped, s.New, s.Shortlisted, s.Dismissed, s.Errored)
+		}
+		for _, e := range r.StageErrors {
+			fmt.Printf("    ! %s\n", e)
+		}
+		fmt.Println()
+	}
+}
+
+// sourceLabel names a per-source row. An empty source is a ledger row from
+// before source recording (migration 00018).
+func sourceLabel(source string) string {
+	if source == "" {
+		return "(unattributed)"
+	}
+	return source
+}
+
+func formatRunDuration(ms int64) string {
+	if ms <= 0 {
+		return ""
+	}
+	return time.Duration(ms * int64(time.Millisecond)).Round(time.Second).String()
 }
 
 var autopilotStatusCmd = &cobra.Command{
@@ -127,8 +212,12 @@ var autopilotStatusCmd = &cobra.Command{
 			fmt.Println("  Zen API:    not configured (LLM curation skipped)")
 		}
 		if hasRun {
-			fmt.Printf("  Last run:   %s (new=%d, shortlisted=%d, dismissed=%d, errors=%d)\n",
-				lastRun.StartedAt, lastRun.PostingsNew,
+			verdict := string(lastRun.Verdict)
+			if verdict == "" {
+				verdict = "running"
+			}
+			fmt.Printf("  Last run:   %s — %s (new=%d, shortlisted=%d, dismissed=%d, errored=%d)\n",
+				lastRun.StartedAt, verdict, lastRun.PostingsNew,
 				lastRun.PostingsShortlisted, lastRun.PostingsDismissed,
 				lastRun.PostingsErrored)
 		} else {
@@ -141,7 +230,9 @@ var autopilotStatusCmd = &cobra.Command{
 
 func init() {
 	autopilotRunCmd.Flags().IntVar(&autopilotRunFlags.limit, "limit", 0, "max new postings to curate per cycle (0 = all)")
+	autopilotRunsCmd.Flags().IntVar(&autopilotRunsFlags.limit, "limit", db.DefaultRunLogLimit, "max runs to list")
 	autopilotCmd.AddCommand(autopilotRunCmd)
+	autopilotCmd.AddCommand(autopilotRunsCmd)
 	autopilotCmd.AddCommand(autopilotStatusCmd)
 	rootCmd.AddCommand(autopilotCmd)
 }
