@@ -44,6 +44,12 @@ Examples:
 			fmt.Printf("  • Config exists: %s\n", config.ConfigPath())
 		}
 
+		// The root's PersistentPreRunE skips `init` (there may be no
+		// database yet), so this command resolves the path itself. Without
+		// it the store below would open an empty path — an in-memory
+		// database that is migrated and then discarded, creating no file.
+		storePath = config.DBPath(cfg)
+
 		// Step 2: Ensure database exists (idempotent unless --force).
 		force, _ := cmd.Flags().GetBool("force")
 		if _, err := os.Stat(storePath); err == nil {

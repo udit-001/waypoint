@@ -67,6 +67,9 @@ func Execute() {
 
 // needsStore reports whether a command needs the database open.
 //
+// `init` is excluded because creating the database is its job: it resolves
+// the path from the config it just ensured and opens the store itself.
+//
 // The whole `service` tree is process plumbing — on Windows it runs at logon,
 // where no database is guaranteed to exist, and none of its verbs touch one.
 // Requiring a connection there would mean a corrupt or missing database stops
