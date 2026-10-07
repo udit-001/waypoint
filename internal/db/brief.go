@@ -90,7 +90,7 @@ func getBrief(p Profile) Brief {
 		Industry:        p.Industry,
 		CurrentLocation: p.CurrentLocation,
 		Skills:          stringList(p.Skills),
-		WorkHistory:     compressWorkHistory(p.Experience, maxWorkHistory),
+		WorkHistory:     compressWorkHistory(p.Experience),
 	}
 
 	constraints := BriefConstraints{
@@ -198,12 +198,17 @@ type LLMInput struct {
 // LLMInput projects a Brief onto the allowlist. This function is the whole
 // PII decision in one readable place; everything downstream is formatting
 // over a type that has nothing to leak.
+//
+// It also carries the prompt-quality curation the old curation portrait did:
+// skills are deduped and stripped of generic filler. That is not a PII
+// concern, but it is the same decision (what the model is shown) and it
+// belongs on the same side of the seam.
 func (b Brief) LLMInput() LLMInput {
 	return LLMInput{
 		Title:          b.Facts.Title,
 		Seniority:      b.Facts.Seniority,
 		Industry:       b.Facts.Industry,
-		Skills:         b.Facts.Skills,
+		Skills:         curateSkills(b.Facts.Skills),
 		WorkHistory:    b.Facts.WorkHistory,
 		Remote:         b.Preferences.Remote,
 		LocationPref:   b.Preferences.LocationPref,
@@ -212,6 +217,30 @@ func (b Brief) LLMInput() LLMInput {
 		Keywords:       b.Preferences.Keywords,
 		Open:           b.Open,
 	}
+}
+
+// genericSkills are filler tags that say nothing about fit — every profile
+// built from a resume carries several, and they crowd out the real signal.
+var genericSkills = map[string]bool{
+	"developer": true, "engineer": true, "software developer": true,
+	"software engineer": true, "software development": true,
+	"development engineering": true, "development": true,
+}
+
+// curateSkills dedupes case-insensitively and drops generic filler tags.
+func curateSkills(skills []string) []string {
+	seen := make(map[string]bool, len(skills))
+	out := make([]string, 0, len(skills))
+	for _, s := range skills {
+		s = strings.TrimSpace(s)
+		lower := strings.ToLower(s)
+		if s == "" || seen[lower] || genericSkills[lower] {
+			continue
+		}
+		seen[lower] = true
+		out = append(out, s)
+	}
+	return out
 }
 
 // Text renders the allowlist as compact prompt text — the single renderer for
@@ -224,8 +253,9 @@ func (b Brief) LLMInput() LLMInput {
 // never-leaves fields are not merely unread but unreachable.
 //
 // TestBriefText_Allowlist asserts the allowlist against a fixture profile
-// carrying the whole never-leaves set; it covers every LLM-input builder,
-// because they all cross this one seam.
+// carrying the whole never-leaves set. It covers the renderer every
+// LLM-input builder crosses; TestCurationInput_IsPIIFree and
+// TestExpandFacets_InputIsPIIFree cover the two builders at the wire.
 func (i LLMInput) Text() string {
 	var sb strings.Builder
 	if i.Title != "" {
@@ -283,8 +313,8 @@ func renderWorkHistory(history []WorkHistoryEntry) string {
 
 // compressWorkHistory reduces structured experience to the LLM-visible
 // history. Entries keep their profile order, duplicates collapse, and the
-// list is capped — the three things "compressed" means here.
-func compressWorkHistory(stored string, max int) []WorkHistoryEntry {
+// list is capped at maxWorkHistory — the three things "compressed" means here.
+func compressWorkHistory(stored string) []WorkHistoryEntry {
 	entries := ParseExperienceEntries(stored)
 	out := make([]WorkHistoryEntry, 0, len(entries))
 	seen := make(map[string]bool, len(entries))
@@ -299,7 +329,7 @@ func compressWorkHistory(stored string, max int) []WorkHistoryEntry {
 		}
 		seen[key] = true
 		out = append(out, WorkHistoryEntry{Title: title, Company: company})
-		if len(out) == max {
+		if len(out) == maxWorkHistory {
 			break
 		}
 	}

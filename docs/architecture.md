@@ -11,6 +11,11 @@ All data lives in a SQLite database at `~/.waypoint/waypoint.db`.
 | `artifacts` | AI-generated content with multi-variant support |
 | `history` | Activity audit trail |
 | `profile` | Name, skills, experience, education, brief fields |
+| `settings` | Theme, default view, reminders |
+| `postings` | Scraped postings ledger, one row per URL: the posting, its review status, and its `source` (the scraper id that found it) |
+| `autopilot_runs` | The runlog: one row per autopilot cycle — verdict, per-source outcomes, stage errors |
+| `kv` | Small durable state that doesn't warrant its own table; values are JSON blobs owned by their feature (`board_last_swept.<name>` = how a board's last sweep ended) |
+| `jobs_fts` / `artifacts_fts` | FTS5 full-text search indices |
 
 Experience/education are TEXT columns holding a JSON array of structured
 objects — `experience`: `{title, company, start, end, description}`, `education`:
@@ -48,14 +53,15 @@ prompt, the facet-expansion prompt).
 `TestBriefText_Allowlist` pins the allowlist against a fixture profile carrying
 the full never-leaves set; `TestCurationInput_IsPIIFree` and
 `TestExpandFacets_InputIsPIIFree` assert it at the wire for the two builders.
-This is the spec WP-DOC-8 hard constraint "PII never reaches an LLM" — a new
-LLM-input builder must render through `db.LLMInput`, and adding a field to the
-prompt means adding it to that type.
-| `settings` | Theme, default view, reminders |
-| `postings` | Scraped postings ledger, one row per URL: the posting, its review status, and its `source` (the scraper id that found it) |
-| `autopilot_runs` | The runlog: one row per autopilot cycle — verdict, per-source outcomes, stage errors |
-| `kv` | Small durable state that doesn't warrant its own table; values are JSON blobs owned by their feature (`board_last_swept.<name>` = how a board's last sweep ended) |
-| `jobs_fts` / `artifacts_fts` | FTS5 full-text search indices |
+The fixture itself lives in `internal/db/dbtest`, so the never-leaves set grows
+in one place. This is the spec WP-DOC-8 hard constraint "PII never reaches an
+LLM" — a new LLM-input builder must render through `db.LLMInput`, and adding a
+field to the prompt means adding it to that type.
+
+One gap, deliberately left: the *assistant's* own context. A skill can run
+`profile show --json` and put the raw profile in its own prompt — that path is
+the agent reading local data, not the app calling a model, and the constraint
+above does not reach it.
 
 `autopilot_runs` is the runlog: one record per cycle, agent-grade from birth.
 `verdict` is the run's outcome (`quiet` | `nothing-survived` | `waiting-on-you` |

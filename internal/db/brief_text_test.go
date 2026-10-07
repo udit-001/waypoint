@@ -1,47 +1,24 @@
-package db
+package db_test
 
 import (
 	"strings"
 	"testing"
+
+	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/db/dbtest"
 )
 
 // TestBriefText_Allowlist pins the PII seam (spec WP-DOC-8, hard constraint
-// "PII never reaches an LLM"). Brief.Text is the single renderer for every
-// LLM input in the system, so this one test covers every LLM-input builder:
-// a fixture profile carrying the never-leaves set must not leak a byte of it,
-// and every allowlisted field must come out.
+// "PII never reaches an LLM"). Brief.LLMInput().Text() is the single renderer
+// for every LLM input in the system, so this one test covers the allowlist
+// for every builder; the two builders are additionally asserted at the wire.
 //
-// Default-deny is the rule, so the absence list is the interesting half. If a
+// Default-deny is the rule, so the absence half is the interesting one. If a
 // future change wants to render something here, this test is the conversation.
 func TestBriefText_Allowlist(t *testing.T) {
-	p := Profile{
-		// Never leaves the machine.
-		Name:            "Ada Lovelace",
-		Email:           "ada.lovelace@example.com",
-		Phone:           "+91 98765 43210",
-		CurrentLocation: "12 MG Road, Bengaluru 560001",
-		VisaSponsorship: "citizen-only",
-		SalaryFloor:     `[{"region":"IN","amount":4000000}]`,
+	f := db.NewFakeStore()
+	f.Profile = dbtest.PIIProfile()
 
-		// The allowlist — every one of these must reach the model.
-		Title:     "Backend Engineer",
-		Seniority: "senior",
-		Industry:  "fintech",
-		Skills:    `["Go","PostgreSQL"]`,
-		Experience: `[{"title":"Senior Engineer","company":"Stripe","start":"2021-01","end":"",` +
-			`"description":"Owned the payment rails for 40M users"}]`,
-		Remote:         "remote",
-		LocationPref:   `["Bengaluru","Berlin"]`,
-		Companies:      `["Stripe","Gojek"]`,
-		AvoidCompanies: `["Acme"]`,
-		Keywords:       `["payments","distributed systems"]`,
-
-		// Not on the allowlist either — default-deny keeps it home.
-		Dealbreakers: `["night shift"]`,
-	}
-
-	f := NewFakeStore()
-	f.Profile = p
 	brief, err := f.GetBrief()
 	if err != nil {
 		t.Fatalf("GetBrief: %v", err)
@@ -49,39 +26,85 @@ func TestBriefText_Allowlist(t *testing.T) {
 	// The caller's path: profile -> brief -> allowlist projection -> text.
 	out := brief.LLMInput().Text()
 
-	mustNotAppear := []struct{ what, value string }{
-		{"name", p.Name},
-		{"email", p.Email},
-		{"phone", p.Phone},
-		{"street", "12 MG Road"},
-		{"postcode", "560001"},
-		{"visa status", p.VisaSponsorship},
-		{"salary floor", "4000000"},
-		{"free-text role description", "40M users"},
-		{"dealbreaker (not on the allowlist)", "night shift"},
-	}
-	for _, c := range mustNotAppear {
-		if strings.Contains(out, c.value) {
-			t.Errorf("%s leaked into the LLM input: %q found in:\n%s", c.what, c.value, out)
+	for _, c := range dbtest.NeverLeaves() {
+		if strings.Contains(out, c.Value) {
+			t.Errorf("%s leaked into the LLM input: %q found in:\n%s", c.What, c.Value, out)
 		}
 	}
 
-	mustAppear := []struct{ what, value string }{
-		{"title", "Backend Engineer"},
-		{"seniority", "senior"},
-		{"industry", "fintech"},
-		{"skill", "PostgreSQL"},
-		{"interest", "distributed systems"},
-		{"company liked", "Gojek"},
-		{"company avoided", "Acme"},
-		{"remote preference", "remote"},
-		{"city-granularity location preference", "Berlin"},
-		{"past role", "Senior Engineer"},
-		{"past company", "Stripe"},
+	mustAppear := []dbtest.Leak{
+		{What: "title", Value: "Backend Engineer"},
+		{What: "seniority", Value: "senior"},
+		{What: "industry", Value: "fintech"},
+		{What: "skill", Value: "PostgreSQL"},
+		{What: "interest", Value: "distributed systems"},
+		{What: "company liked", Value: "Gojek"},
+		{What: "company avoided", Value: "Acme"},
+		{What: "remote preference", Value: "remote"},
+		{What: "city-granularity location preference", Value: "Berlin"},
+		{What: "past role", Value: "Senior Engineer"},
+		{What: "past company", Value: "Stripe"},
 	}
 	for _, c := range mustAppear {
-		if !strings.Contains(out, c.value) {
-			t.Errorf("%s missing from the LLM input: %q not found in:\n%s", c.what, c.value, out)
+		if !strings.Contains(out, c.Value) {
+			t.Errorf("%s missing from the LLM input: %q not found in:\n%s", c.What, c.Value, out)
 		}
+	}
+}
+
+// TestLLMInput_SkillsAreCurated: the renderer dedupes skills and drops
+// generic filler tags — a resume-sourced profile carries several, and they
+// crowd out the real signal.
+func TestLLMInput_SkillsAreCurated(t *testing.T) {
+	f := db.NewFakeStore()
+	f.Profile = db.Profile{
+		Skills: `["Go","go","  Go  ","Engineer","software engineer","PostgreSQL"]`,
+	}
+	brief, err := f.GetBrief()
+	if err != nil {
+		t.Fatalf("GetBrief: %v", err)
+	}
+
+	got := brief.LLMInput().Skills
+	want := []string{"Go", "PostgreSQL"}
+	if len(got) != len(want) {
+		t.Fatalf("skills = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("skills[%d] = %q, want %q (full: %v)", i, got[i], want[i], got)
+		}
+	}
+}
+
+// TestCompressWorkHistory: the history the model sees is role + company, in
+// profile order, deduped and capped — and never the free-text description.
+func TestCompressWorkHistory(t *testing.T) {
+	entries := make([]string, 0, 14)
+	for i := 0; i < 14; i++ {
+		entries = append(entries, `{"title":"Engineer `+string(rune('A'+i))+`","company":"Co `+string(rune('A'+i))+`"}`)
+	}
+	// A duplicate of the first entry, and a blank one, both dropped.
+	stored := "[" + strings.Join(entries, ",") + `,{"title":"Engineer A","company":"Co A"},{"title":"","company":""}]`
+
+	f := db.NewFakeStore()
+	f.Profile = db.Profile{Experience: stored}
+	brief, err := f.GetBrief()
+	if err != nil {
+		t.Fatalf("GetBrief: %v", err)
+	}
+
+	got := brief.LLMInput().WorkHistory
+	if len(got) != 10 {
+		t.Fatalf("work history = %d entries, want the cap of 10: %+v", len(got), got)
+	}
+	if got[0].Title != "Engineer A" || got[0].Company != "Co A" {
+		t.Errorf("first entry = %+v, want Engineer A @ Co A (profile order)", got[0])
+	}
+	if got[1].Title != "Engineer B" {
+		t.Errorf("second entry = %+v, want Engineer B — the duplicate must collapse", got[1])
+	}
+	if strings.Contains(brief.LLMInput().Text(), "description") {
+		t.Error("free-text description reached the LLM input")
 	}
 }

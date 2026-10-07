@@ -115,7 +115,17 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, err er
 	if interval <= 0 {
 		interval = 30
 	}
-	briefText := cfg.LLMInput.Text()
+	// Read the brief here rather than trusting cfg.LLMInput: this stage has to
+	// tell "the brief is unreadable" (skip — the trigger state would be
+	// poisoned by an empty hash) from "the brief is empty" (first run — the
+	// trigger should fire). The cycle's projection has already collapsed that
+	// distinction. Same renderer either way.
+	brief, berr := cfg.Store.GetBrief()
+	if berr != nil {
+		log.Printf("autopilot: discovery skipped (brief): %v", berr)
+		return "", nil
+	}
+	briefText := brief.LLMInput().Text()
 
 	lastHash, lastAt, hasLast, lerr := cfg.Store.DiscoveryLastRun()
 	if lerr != nil {

@@ -14,7 +14,6 @@ import (
 	"log"
 	"math/rand"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/udit-001/waypoint/internal/db"
@@ -604,6 +603,3 @@ func RunLogged(ctx context.Context, cfg CycleConfig) db.RunLog {
 }
 
 // --- helpers ---
-
-// Ensure strings is used (for contains checks in future).
-var _ = strings.Contains

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/db/dbtest"
 	"strconv"
 	"strings"
 	"testing"
@@ -139,17 +140,8 @@ func (c *capturingCompleter) Complete(_ context.Context, system, user string) (s
 // the renderer fails this test.
 func TestExpandFacets_InputIsPIIFree(t *testing.T) {
 	f := db.NewFakeStore()
-	f.Profile = db.Profile{
-		Name:            "Ada Lovelace",
-		Email:           "ada.lovelace@example.com",
-		Phone:           "+91 98765 43210",
-		CurrentLocation: "12 MG Road, Bengaluru 560001",
-		VisaSponsorship: "citizen-only",
-		SalaryFloor:     `[{"region":"IN","amount":4000000}]`,
+	f.Profile = dbtest.PIIProfile()
 
-		Title:    "Backend Engineer",
-		Keywords: `["payments"]`,
-	}
 	brief, err := f.GetBrief()
 	if err != nil {
 		t.Fatalf("GetBrief: %v", err)
@@ -161,12 +153,9 @@ func TestExpandFacets_InputIsPIIFree(t *testing.T) {
 	}
 
 	sent := c.system + "\n" + c.user
-	for _, leak := range []string{
-		"Ada Lovelace", "ada.lovelace@example.com", "+91 98765 43210",
-		"12 MG Road", "560001", "citizen-only", "4000000",
-	} {
-		if strings.Contains(sent, leak) {
-			t.Errorf("PII reached the wire: %q in:\n%s", leak, sent)
+	for _, leak := range dbtest.NeverLeaves() {
+		if strings.Contains(sent, leak.Value) {
+			t.Errorf("%s reached the wire: %q in:\n%s", leak.What, leak.Value, sent)
 		}
 	}
 	if !strings.Contains(sent, "Backend Engineer") {

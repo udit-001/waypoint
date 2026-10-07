@@ -10,39 +10,10 @@ import (
 	"testing"
 
 	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/db/dbtest"
 	"github.com/udit-001/waypoint/internal/scraper"
 	"github.com/udit-001/waypoint/internal/zen"
 )
-
-// piiLadenProfile is the never-leaves fixture plus every allowlisted field,
-// shared with the db-side renderer test.
-func piiLadenProfile() db.Profile {
-	return db.Profile{
-		// Never leaves the machine.
-		Name:            "Ada Lovelace",
-		Email:           "ada.lovelace@example.com",
-		Phone:           "+91 98765 43210",
-		CurrentLocation: "12 MG Road, Bengaluru 560001",
-		VisaSponsorship: "citizen-only",
-		SalaryFloor:     `[{"region":"IN","amount":4000000}]`,
-
-		// The allowlist.
-		Title:     "Backend Engineer",
-		Seniority: "senior",
-		Industry:  "fintech",
-		Skills:    `["Go","PostgreSQL"]`,
-		Experience: `[{"title":"Senior Engineer","company":"Stripe","start":"2021-01","end":"",` +
-			`"description":"Owned the payment rails for 40M users"}]`,
-		Remote:         "remote",
-		LocationPref:   `["Bengaluru","Berlin"]`,
-		Companies:      `["Stripe","Gojek"]`,
-		AvoidCompanies: `["Acme"]`,
-		Keywords:       `["payments","distributed systems"]`,
-
-		// Not on the allowlist either.
-		Dealbreakers: `["night shift"]`,
-	}
-}
 
 // captureUpstream is a fake zen that records every request body and answers
 // each one with a successful curation turn — so a test can assert what was
@@ -72,7 +43,7 @@ func (u *captureUpstream) sent() string {
 func TestCurationInput_IsPIIFree(t *testing.T) {
 	stubDiscovery(t)
 	f := db.NewFakeStore()
-	f.Profile = piiLadenProfile()
+	f.Profile = dbtest.PIIProfile()
 
 	up := &captureUpstream{}
 	srv := httptest.NewServer(http.HandlerFunc(up.handler))
@@ -95,39 +66,28 @@ func TestCurationInput_IsPIIFree(t *testing.T) {
 		t.Fatal("no zen request captured")
 	}
 
-	mustNotAppear := []struct{ what, value string }{
-		{"name", "Ada Lovelace"},
-		{"email", "ada.lovelace@example.com"},
-		{"phone", "+91 98765 43210"},
-		{"street", "12 MG Road"},
-		{"postcode", "560001"},
-		{"visa status", "citizen-only"},
-		{"salary floor", "4000000"},
-		{"free-text role description", "40M users"},
-		{"dealbreaker (not on the allowlist)", "night shift"},
-	}
-	for _, c := range mustNotAppear {
-		if strings.Contains(sent, c.value) {
-			t.Errorf("%s reached the wire: %q", c.what, c.value)
+	for _, c := range dbtest.NeverLeaves() {
+		if strings.Contains(sent, c.Value) {
+			t.Errorf("%s reached the wire: %q", c.What, c.Value)
 		}
 	}
 
-	mustAppear := []struct{ what, value string }{
-		{"title", "Backend Engineer"},
-		{"seniority", "senior"},
-		{"industry", "fintech"},
-		{"skill", "PostgreSQL"},
-		{"interest", "distributed systems"},
-		{"company liked", "Gojek"},
-		{"company avoided", "Acme"},
-		{"remote preference", "remote"},
-		{"city-granularity location preference", "Berlin"},
-		{"past role", "Senior Engineer"},
-		{"past company", "Stripe"},
+	mustAppear := []dbtest.Leak{
+		{What: "title", Value: "Backend Engineer"},
+		{What: "seniority", Value: "senior"},
+		{What: "industry", Value: "fintech"},
+		{What: "skill", Value: "PostgreSQL"},
+		{What: "interest", Value: "distributed systems"},
+		{What: "company liked", Value: "Gojek"},
+		{What: "company avoided", Value: "Acme"},
+		{What: "remote preference", Value: "remote"},
+		{What: "city-granularity location preference", Value: "Berlin"},
+		{What: "past role", Value: "Senior Engineer"},
+		{What: "past company", Value: "Stripe"},
 	}
 	for _, c := range mustAppear {
-		if !strings.Contains(sent, c.value) {
-			t.Errorf("%s missing from the curation input: %q", c.what, c.value)
+		if !strings.Contains(sent, c.Value) {
+			t.Errorf("%s missing from the curation input: %q", c.What, c.Value)
 		}
 	}
 }
