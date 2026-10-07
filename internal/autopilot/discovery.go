@@ -115,12 +115,7 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, err er
 	if interval <= 0 {
 		interval = 30
 	}
-	brief, berr := cfg.Store.GetBrief()
-	if berr != nil {
-		log.Printf("autopilot: discovery skipped (brief): %v", berr)
-		return "", nil
-	}
-	briefText := brief.Text()
+	briefText := cfg.LLMInput.Text()
 
 	lastHash, lastAt, hasLast, lerr := cfg.Store.DiscoveryLastRun()
 	if lerr != nil {
@@ -161,7 +156,8 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, err er
 
 // expandEnumerateFacets mirrors the CLI's enumeration path: brief → zen
 // facets (cached by hash) → Exa companies, falling back to the built-in
-// starter facets when either key is missing.
+// starter facets when either key is missing. briefText is the cycle's one
+// rendered brief (cfg.LLMInput.Text()) — this stage does not re-render it.
 func expandEnumerateFacets(ctx context.Context, cfg CycleConfig, briefText string) ([]discovery.Facet, string, error) {
 	settings, err := cfg.Store.GetSettings()
 	if err != nil {
@@ -173,17 +169,12 @@ func expandEnumerateFacets(ctx context.Context, cfg CycleConfig, briefText strin
 		return discovery.HardcodedFacets(), "hardcoded", nil
 	}
 
-	brief, berr := cfg.Store.GetBrief()
-	if berr != nil {
-		return nil, "", berr
-	}
-	text := brief.Text()
-	hash := discovery.BriefHash(text)
+	hash := discovery.BriefHash(briefText)
 	if cached, ok, _ := cfg.Store.DiscoveryFacets(hash); ok && len(cached) > 0 {
 		return toFacetList(cached), "cached", nil
 	}
 
-	facets, err := discovery.ExpandFacets(ctx, text, cfg.ZenClient, 12)
+	facets, err := discovery.ExpandFacets(ctx, briefText, cfg.ZenClient, 12)
 	if err != nil {
 		return nil, "", err
 	}

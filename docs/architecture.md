@@ -26,6 +26,31 @@ schema --json` prints the empty template; `profile set --file doc.json` (CLI)
 and `PATCH /api/profile` (web) patch only the keys present. Keys, validation,
 and the schema template live behind the db seam (`internal/db/documents.go`),
 shared by both surfaces.
+
+### The brief and the LLM allowlist
+
+`db.Brief` is the worked readout of the profile — `facts` (title, seniority,
+industry, skills, compressed `work_history` of role + company, current
+location), `constraints` (visa sponsorship, salary floor), `preferences`
+(remote, location preference, companies liked/avoided, keywords, dealbreakers),
+plus the `open` frontier and `complete` flag. Compressed work history drops
+dates and free-text descriptions: role and company are the fit signal.
+
+Every LLM input in the system is built by **one renderer**, and it is a method
+on `db.LLMInput` rather than on `Brief`. `Brief.LLMInput()` projects the brief
+onto the allowlist — title, seniority, industry, skills, work history, remote,
+location preference, companies, keywords — and `LLMInput.Text()` renders it.
+Default-deny is structural: name, email, phone, current location and the whole
+constraints bucket have no counterpart on `LLMInput`, so no renderer can reach
+them. Callers own only the framing around the rendered text (the curation
+prompt, the facet-expansion prompt).
+
+`TestBriefText_Allowlist` pins the allowlist against a fixture profile carrying
+the full never-leaves set; `TestCurationInput_IsPIIFree` and
+`TestExpandFacets_InputIsPIIFree` assert it at the wire for the two builders.
+This is the spec WP-DOC-8 hard constraint "PII never reaches an LLM" — a new
+LLM-input builder must render through `db.LLMInput`, and adding a field to the
+prompt means adding it to that type.
 | `settings` | Theme, default view, reminders |
 | `postings` | Scraped postings ledger, one row per URL: the posting, its review status, and its `source` (the scraper id that found it) |
 | `autopilot_runs` | The runlog: one row per autopilot cycle — verdict, per-source outcomes, stage errors |

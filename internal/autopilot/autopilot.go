@@ -48,11 +48,16 @@ type CycleConfig struct {
 	// company research (zen) and posting fetch (detail tier 4). Created
 	// by Run when nil; the budget resets per cycle to ExaCap.
 	ExaClient *exa.Client
-	ExaCap    int           // max live Exa calls per cycle (default 10; anonymous MCP allows ~50/day)
-	FetchCap  int           // max webfetch calls per cycle (default 10)
-	Recency   int           // days for recency filter (default 14)
-	Cadence   time.Duration // time between cycles
-	Limit     int           // max new postings to curate (0 = all)
+	// LLMInput is the allowlist projection of the brief (db.LLMInput),
+	// loaded once by Run. Every LLM input the cycle builds — curation now,
+	// source selection next — renders from it, so the PII seam is crossed
+	// in one place. Empty until Run fills it.
+	LLMInput db.LLMInput
+	ExaCap   int           // max live Exa calls per cycle (default 10; anonymous MCP allows ~50/day)
+	FetchCap int           // max webfetch calls per cycle (default 10)
+	Recency  int           // days for recency filter (default 14)
+	Cadence  time.Duration // time between cycles
+	Limit    int           // max new postings to curate (0 = all)
 	// Direct overrides the detail stage's tier-3 HTTP fetcher. When nil,
 	// the cycle falls back to a real scraper.HTTPFetcher. Tests inject a
 	// fake so the cycle never touches the network.
@@ -193,6 +198,20 @@ func queueDepth(store db.Store, rec *runRecord) int {
 	return n
 }
 
+// loadLLMInput projects the store's brief onto the LLM allowlist. Called
+// once per cycle so every LLM input renders from one projection. A read
+// failure leaves the projection empty — curation then judges without the
+// person's context, which is logged rather than fatal (same tolerance as
+// the prefilter profile).
+func loadLLMInput(store db.Store) db.LLMInput {
+	brief, err := store.GetBrief()
+	if err != nil {
+		log.Printf("autopilot: brief read failed: %v — LLM input will be empty", err)
+		return db.LLMInput{}
+	}
+	return brief.LLMInput()
+}
+
 // Run executes one full autopilot cycle. It is safe to call from a
 // goroutine — panics are recovered and logged, and the run-log row is
 // always CLOSED (FinishedAt set, verdict computed) even on panic: the
@@ -210,6 +229,11 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 		// verdict rather than an open row.
 		logEntry = rec.finish(ctx, cfg.Store)
 	}()
+
+	// One allowlist projection for the whole cycle. Every LLM input the
+	// cycle builds renders from cfg.LLMInput — see db.LLMInput for why that
+	// shape is the seam rather than a callsite discipline.
+	cfg.LLMInput = loadLLMInput(cfg.Store)
 
 	// Shared Exa seam: one client, one budget, one cache across company
 	// research and detail tier 4. Anonymous by default — an invalid
@@ -418,11 +442,9 @@ func stageDetail(ctx context.Context, cfg CycleConfig, postings []scraper.Result
 // Every outcome is written to the ledger and attributed to the posting's
 // source; the run totals are summed from those rows when the record closes.
 func stagePrefilterCurate(ctx context.Context, cfg CycleConfig, postings []scraper.Result, rec *runRecord) {
-	// Build profile for prefilter.
+	// Build the prefilter profile from the store.
 	profile := buildPrefilterProfile(cfg.Store)
 
-	// Build a portrait of the person from profile data.
-	portrait := buildPortrait(cfg.Store)
 	systemPrompt := fmt.Sprintf(`You are a talent scout. Be **grounded** — every judgment must cite something concrete from the posting.
 
 The person you're scouting for:
@@ -450,7 +472,7 @@ For each posting (title, company, location, description):
              "Hybrid — conflicts with remote preference" (location/gap).
      Fragments the user can skim.
 
-Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-79 decent (most align, one gap), below 60 weak (major mismatch).`, portrait)
+Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-79 decent (most align, one gap), below 60 weak (major mismatch).`, cfg.LLMInput.Text())
 
 	// Create zen session (one per cycle).
 	var session *zen.Session
@@ -535,116 +557,6 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 	if curateAttempts > 0 && curateFailures == curateAttempts {
 		rec.stageError("curate: all %d postings failed", curateAttempts)
 	}
-}
-
-// buildPortrait synthesizes a readable portrait from the person's profile.
-// The portrait is what zen sees — it should read like a recruiter's brief,
-// not a JSON dump.
-func buildPortrait(store db.Store) string {
-	p, _ := store.GetProfile()
-
-	var b strings.Builder
-
-	// Title + seniority.
-	if p.Title != "" {
-		fmt.Fprintf(&b, "Role focus: %s\n", p.Title)
-	}
-	// Seniority is derived from experience, not stored.
-	seniority := p.Seniority
-	if seniority == "" {
-		seniority = db.DeriveSeniority(p.Experience)
-	}
-	if seniority != "" {
-		fmt.Fprintf(&b, "Level: %s\n", seniority)
-	}
-
-	// Location.
-	if p.CurrentLocation != "" {
-		fmt.Fprintf(&b, "Current location: %s\n", p.CurrentLocation)
-	}
-	if p.Remote == "yes" {
-		b.WriteString("Prefers: remote\n")
-	}
-	if p.LocationPref != "" {
-		var locs []string
-		_ = json.Unmarshal([]byte(p.LocationPref), &locs)
-		if len(locs) > 0 {
-			fmt.Fprintf(&b, "Location preferences: %s\n", strings.Join(locs, ", "))
-		}
-	}
-
-	// Experience — the real signal.
-	if p.Experience != "" {
-		e := db.ParseExperienceEntries(p.Experience)
-		if len(e) > 0 {
-			b.WriteString("\nExperience:\n")
-			for _, exp := range e {
-				end := exp.End
-				if end == "" {
-					end = "present"
-				}
-				fmt.Fprintf(&b, "  %s–%s  %s @ %s\n", exp.Start, end, exp.Title, exp.Company)
-			}
-		}
-	}
-
-	// Skills — curated, not raw tags.
-	if p.Skills != "" {
-		var skills []string
-		_ = json.Unmarshal([]byte(p.Skills), &skills)
-		if len(skills) > 0 {
-			// Dedupe and pick the meaningful ones.
-			seen := make(map[string]bool)
-			var curated []string
-			for _, s := range skills {
-				s = strings.TrimSpace(s)
-				lower := strings.ToLower(s)
-				if seen[lower] {
-					continue
-				}
-				seen[lower] = true
-				// Skip generic filler tags.
-				if lower == "developer" || lower == "engineer" || lower == "software developer" ||
-					lower == "software engineer" || lower == "software development" ||
-					lower == "development engineering" || lower == "development" {
-					continue
-				}
-				curated = append(curated, s)
-			}
-			if len(curated) > 0 {
-				fmt.Fprintf(&b, "Skills: %s\n", strings.Join(curated, ", "))
-			}
-		}
-	}
-
-	// Target companies.
-	if p.Companies != "" {
-		var cos []string
-		_ = json.Unmarshal([]byte(p.Companies), &cos)
-		if len(cos) > 0 {
-			fmt.Fprintf(&b, "\nTarget companies: %s\n", strings.Join(cos, ", "))
-		}
-	}
-
-	// Avoid companies.
-	if p.AvoidCompanies != "" {
-		var avoid []string
-		_ = json.Unmarshal([]byte(p.AvoidCompanies), &avoid)
-		if len(avoid) > 0 {
-			fmt.Fprintf(&b, "Avoid: %s\n", strings.Join(avoid, ", "))
-		}
-	}
-
-	// Keywords.
-	if p.Keywords != "" {
-		var kws []string
-		_ = json.Unmarshal([]byte(p.Keywords), &kws)
-		if len(kws) > 0 {
-			fmt.Fprintf(&b, "Interests: %s\n", strings.Join(kws, ", "))
-		}
-	}
-
-	return b.String()
 }
 
 // buildPrefilterProfile extracts the curation-relevant fields from the store.

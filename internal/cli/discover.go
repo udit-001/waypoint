@@ -37,7 +37,7 @@ var enumerateFacets = func(ctx context.Context, store db.Store) ([]discovery.Fac
 	if err != nil {
 		return nil, "", err
 	}
-	text := brief.Text()
+	text := brief.LLMInput().Text()
 	hash := discovery.BriefHash(text)
 
 	// Facet cache: an unchanged brief skips the LLM expansion.

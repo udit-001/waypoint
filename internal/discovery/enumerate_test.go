@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"errors"
+	"github.com/udit-001/waypoint/internal/db"
 	"strconv"
 	"strings"
 	"testing"
@@ -116,5 +117,59 @@ func TestEnumerate_rateLimitSurfacesWithHint(t *testing.T) {
 	_, err := Enumerate(context.Background(), []string{"payments"}, e, 5)
 	if err == nil || !strings.Contains(err.Error(), "429") || !strings.Contains(err.Error(), "retry") {
 		t.Errorf("err = %v, want rate-limit cause with retry hint", err)
+	}
+}
+
+// capturingCompleter records the message pair it was handed.
+type capturingCompleter struct {
+	out    string
+	system string
+	user   string
+}
+
+func (c *capturingCompleter) Complete(_ context.Context, system, user string) (string, error) {
+	c.system, c.user = system, user
+	return c.out, nil
+}
+
+// TestExpandFacets_InputIsPIIFree: facet expansion is the second LLM-input
+// builder in the system (curation is the other). Its only personal input is
+// the rendered brief, so the never-leaves set cannot reach the wire here
+// either — and a future builder that reaches for raw profile rows instead of
+// the renderer fails this test.
+func TestExpandFacets_InputIsPIIFree(t *testing.T) {
+	f := db.NewFakeStore()
+	f.Profile = db.Profile{
+		Name:            "Ada Lovelace",
+		Email:           "ada.lovelace@example.com",
+		Phone:           "+91 98765 43210",
+		CurrentLocation: "12 MG Road, Bengaluru 560001",
+		VisaSponsorship: "citizen-only",
+		SalaryFloor:     `[{"region":"IN","amount":4000000}]`,
+
+		Title:    "Backend Engineer",
+		Keywords: `["payments"]`,
+	}
+	brief, err := f.GetBrief()
+	if err != nil {
+		t.Fatalf("GetBrief: %v", err)
+	}
+
+	c := &capturingCompleter{out: `["payments"]`}
+	if _, err := ExpandFacets(context.Background(), brief.LLMInput().Text(), c, 12); err != nil {
+		t.Fatalf("ExpandFacets: %v", err)
+	}
+
+	sent := c.system + "\n" + c.user
+	for _, leak := range []string{
+		"Ada Lovelace", "ada.lovelace@example.com", "+91 98765 43210",
+		"12 MG Road", "560001", "citizen-only", "4000000",
+	} {
+		if strings.Contains(sent, leak) {
+			t.Errorf("PII reached the wire: %q in:\n%s", leak, sent)
+		}
+	}
+	if !strings.Contains(sent, "Backend Engineer") {
+		t.Errorf("allowlisted title missing from the facet-expansion input:\n%s", sent)
 	}
 }

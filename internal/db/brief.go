@@ -27,11 +27,36 @@ type Brief struct {
 // BriefFacts holds facts sourced from a resume or public profile. They are
 // read-only on the web and never gate `Complete`.
 type BriefFacts struct {
-	Title           string   `json:"title"`
-	Seniority       string   `json:"seniority"`
-	CurrentLocation string   `json:"current_location"`
-	Skills          []string `json:"skills"`
+	Title     string   `json:"title"`
+	Seniority string   `json:"seniority"`
+	Industry  string   `json:"industry"`
+	Skills    []string `json:"skills"`
+	// WorkHistory is the compressed employment history: role and company per
+	// entry, in profile order, deduped and capped. Dates and the free-text
+	// description are dropped — a description is uncontrolled text, and
+	// neither is on the LLM allowlist.
+	WorkHistory []WorkHistoryEntry `json:"work_history"`
+
+	// CurrentLocation is the user's own readout of where they are. It is NOT
+	// on the LLM allowlist (the allowlist carries a city-granularity location
+	// *preference*): it is free text — the LinkedIn import and a hand-typed
+	// field can both hold a street address — so it has no counterpart on
+	// LLMInput and no renderer can reach it. It stays on the brief because
+	// the profile readout and the web need it.
+	CurrentLocation string `json:"current_location"`
 }
+
+// WorkHistoryEntry is one past role as an LLM may see it. Deliberately no
+// dates and no description: role and company are the fit signal, and both
+// are on the allowlist.
+type WorkHistoryEntry struct {
+	Title   string `json:"title"`
+	Company string `json:"company"`
+}
+
+// maxWorkHistory caps the compressed history. Beyond a handful of roles the
+// signal stops adding and the tokens keep costing.
+const maxWorkHistory = 10
 
 // BriefConstraints holds one-time user constraints.
 type BriefConstraints struct {
@@ -62,8 +87,10 @@ func getBrief(p Profile) Brief {
 	facts := BriefFacts{
 		Title:           p.Title,
 		Seniority:       seniority,
+		Industry:        p.Industry,
 		CurrentLocation: p.CurrentLocation,
 		Skills:          stringList(p.Skills),
+		WorkHistory:     compressWorkHistory(p.Experience, maxWorkHistory),
 	}
 
 	constraints := BriefConstraints{
@@ -134,30 +161,147 @@ func (s *SQLiteStore) GetBrief() (Brief, error) {
 	return getBrief(p), nil
 }
 
-// Text renders the brief as compact text for LLM consumption — the
-// single renderer shared by facet expansion (CLI + autopilot).
-func (b Brief) Text() string {
+// LLMInput is the allowlist, materialized — the only shape an LLM-input
+// renderer may read.
+//
+// Default-deny is structural here, not a matter of callsite discipline: a
+// Profile or Brief field with no counterpart in this type is unreachable
+// from a renderer, so it cannot leak by a later edit. Name, Email and Phone
+// have no counterpart. Neither does Facts.CurrentLocation (free text; may
+// hold a street address) or Constraints (visa status, salary floor), both of
+// which sit on Brief but are simply not projected here.
+//
+// Every field below is on the allowlist in spec WP-DOC-8's hard constraint.
+// Adding one to the prompt means adding it here — which is the decision that
+// should be surfaced, not slipped in.
+type LLMInput struct {
+	// Facts.
+	Title       string
+	Seniority   string
+	Industry    string
+	Skills      []string
+	WorkHistory []WorkHistoryEntry
+
+	// Preferences.
+	Remote         string
+	LocationPref   []string
+	Companies      []string
+	AvoidCompanies []string
+	Keywords       []string
+
+	// Open names the brief fields still unsettled ("companies",
+	// "keywords"). Field names only, never values — brief state the model
+	// uses to know what it is guessing at, not personal data.
+	Open []string
+}
+
+// LLMInput projects a Brief onto the allowlist. This function is the whole
+// PII decision in one readable place; everything downstream is formatting
+// over a type that has nothing to leak.
+func (b Brief) LLMInput() LLMInput {
+	return LLMInput{
+		Title:          b.Facts.Title,
+		Seniority:      b.Facts.Seniority,
+		Industry:       b.Facts.Industry,
+		Skills:         b.Facts.Skills,
+		WorkHistory:    b.Facts.WorkHistory,
+		Remote:         b.Preferences.Remote,
+		LocationPref:   b.Preferences.LocationPref,
+		Companies:      b.Preferences.Companies,
+		AvoidCompanies: b.Preferences.AvoidCompanies,
+		Keywords:       b.Preferences.Keywords,
+		Open:           b.Open,
+	}
+}
+
+// Text renders the allowlist as compact prompt text — the single renderer for
+// every LLM input in the system (facet expansion, curation, and anything
+// added later). Callers add their own framing around it; the facts are
+// rendered here and nowhere else.
+//
+// This is the PII seam (spec WP-DOC-8, hard constraint "PII never reaches an
+// LLM"). It is a method on the allowlist rather than on Brief so that the
+// never-leaves fields are not merely unread but unreachable.
+//
+// TestBriefText_Allowlist asserts the allowlist against a fixture profile
+// carrying the whole never-leaves set; it covers every LLM-input builder,
+// because they all cross this one seam.
+func (i LLMInput) Text() string {
 	var sb strings.Builder
-	if b.Facts.Title != "" {
-		sb.WriteString("title: " + b.Facts.Title + "\n")
+	if i.Title != "" {
+		sb.WriteString("title: " + i.Title + "\n")
 	}
-	if b.Facts.Seniority != "" {
-		sb.WriteString("seniority: " + b.Facts.Seniority + "\n")
+	if i.Seniority != "" {
+		sb.WriteString("seniority: " + i.Seniority + "\n")
 	}
-	if len(b.Facts.Skills) > 0 {
-		sb.WriteString("skills: " + strings.Join(b.Facts.Skills, ", ") + "\n")
+	if i.Industry != "" {
+		sb.WriteString("industry: " + i.Industry + "\n")
 	}
-	if len(b.Preferences.Keywords) > 0 {
-		sb.WriteString("interests: " + strings.Join(b.Preferences.Keywords, ", ") + "\n")
+	if len(i.Skills) > 0 {
+		sb.WriteString("skills: " + strings.Join(i.Skills, ", ") + "\n")
 	}
-	if len(b.Preferences.Companies) > 0 {
-		sb.WriteString("companies liked: " + strings.Join(b.Preferences.Companies, ", ") + "\n")
+	if roles := renderWorkHistory(i.WorkHistory); roles != "" {
+		sb.WriteString("past roles: " + roles + "\n")
 	}
-	if b.Preferences.Remote != "" {
-		sb.WriteString("remote: " + b.Preferences.Remote + "\n")
+	if len(i.Keywords) > 0 {
+		sb.WriteString("interests: " + strings.Join(i.Keywords, ", ") + "\n")
 	}
-	if len(b.Open) > 0 {
-		sb.WriteString("open questions: " + strings.Join(b.Open, "; ") + "\n")
+	if len(i.Companies) > 0 {
+		sb.WriteString("companies liked: " + strings.Join(i.Companies, ", ") + "\n")
+	}
+	if len(i.AvoidCompanies) > 0 {
+		sb.WriteString("companies avoided: " + strings.Join(i.AvoidCompanies, ", ") + "\n")
+	}
+	if len(i.LocationPref) > 0 {
+		sb.WriteString("location: " + strings.Join(i.LocationPref, ", ") + "\n")
+	}
+	if i.Remote != "" {
+		sb.WriteString("remote: " + i.Remote + "\n")
+	}
+	if len(i.Open) > 0 {
+		sb.WriteString("open questions: " + strings.Join(i.Open, "; ") + "\n")
 	}
 	return sb.String()
+}
+
+// renderWorkHistory flattens the compressed history to "Role @ Company"
+// fragments, tolerating an entry missing either half.
+func renderWorkHistory(history []WorkHistoryEntry) string {
+	parts := make([]string, 0, len(history))
+	for _, w := range history {
+		switch {
+		case w.Title != "" && w.Company != "":
+			parts = append(parts, w.Title+" @ "+w.Company)
+		case w.Company != "":
+			parts = append(parts, w.Company)
+		case w.Title != "":
+			parts = append(parts, w.Title)
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
+// compressWorkHistory reduces structured experience to the LLM-visible
+// history. Entries keep their profile order, duplicates collapse, and the
+// list is capped — the three things "compressed" means here.
+func compressWorkHistory(stored string, max int) []WorkHistoryEntry {
+	entries := ParseExperienceEntries(stored)
+	out := make([]WorkHistoryEntry, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		title, company := strings.TrimSpace(e.Title), strings.TrimSpace(e.Company)
+		if title == "" && company == "" {
+			continue
+		}
+		key := strings.ToLower(title + "@" + company)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, WorkHistoryEntry{Title: title, Company: company})
+		if len(out) == max {
+			break
+		}
+	}
+	return out
 }
