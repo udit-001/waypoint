@@ -63,13 +63,15 @@ Every run ends with a **verdict** — the answer to "why did nothing show up?":
 | `quiet` | Sources ran fine, nothing new fit the brief | yes |
 | `nothing-survived` | Postings were found, none survived curation | yes |
 | `waiting-on-you` | Shortlists exist and are unreviewed | no |
-| `degraded` | A stage errored, so the run's evidence is partial | no |
+| `degraded` | A stage errored, so the run's coverage is partial | no |
 
 The per-source counts are the evidence stored *under* the verdict, not the
-answer. The record also carries a **skipped** fact per source, with its
-reason — a source fact, never a verdict. The dry streak is derived from
-verdict history: three or more consecutive `quiet` runs is the stale-search
-signal.
+answer. A posting that failed curation never changes the verdict — it is a
+count (`errored`) under it. Only a stage that errored degrades a run,
+including a curate stage that failed every posting it attempted. The record
+also carries a **skipped** fact per source, with its reason — a source fact,
+never a verdict. The dry streak is derived from verdict history: three or
+more consecutive `quiet` runs is the stale-search signal.
 
 ## Boards
 

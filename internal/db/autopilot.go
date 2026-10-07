@@ -27,7 +27,9 @@ const (
 	VerdictNothingSurvived Verdict = "nothing-survived"
 	// VerdictWaitingOnYou: shortlists exist and are unreviewed.
 	VerdictWaitingOnYou Verdict = "waiting-on-you"
-	// VerdictDegraded: a stage errored, so the run's evidence is partial.
+	// VerdictDegraded: a stage errored, so the run's coverage is partial
+	// and the run must never read as dry. Per-posting failures are a count
+	// under the verdict (PostingsErrored), not a verdict of their own.
 	VerdictDegraded Verdict = "degraded"
 )
 

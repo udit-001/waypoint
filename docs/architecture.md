@@ -37,7 +37,9 @@ shared by both surfaces.
 `degraded`); `per_source` and `stage_errors` are JSON columns holding the
 evidence stored *under* the verdict — per-source counts (`source`, `scraped`,
 `new`, `shortlisted`, `dismissed`, `errored`, `skipped` + `reason`) and
-stage-prefixed failures. One log, two renderings: the human panel and
+stage-prefixed failures. Only a stage error sets `degraded`: a per-source
+`errored` count is evidence, never the verdict. One log, two renderings: the
+human panel and
 `waypoint autopilot runs --json` read the same records. A run opened but not
 yet closed (empty `finished_at`) is the "running now" signal, and its verdict
 is empty because it has no outcome yet.

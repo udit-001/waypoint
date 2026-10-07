@@ -1,13 +1,18 @@
 package autopilot
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/scraper"
+	"github.com/udit-001/waypoint/internal/zen"
 )
 
 // WP-178: every run ends with a verdict, and the counts are the evidence
@@ -255,7 +260,8 @@ func TestRunRecord_DiscoverySuccessIsNotAStageError(t *testing.T) {
 }
 
 // TestVerdictFor_Precedence: a stage error outranks a non-empty queue,
-// which outranks nothing-survived, which outranks quiet.
+// which outranks nothing-survived, which outranks quiet. Per-posting
+// failures never degrade — they are a count under the verdict.
 func TestVerdictFor_Precedence(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -267,11 +273,100 @@ func TestVerdictFor_Precedence(t *testing.T) {
 		{"postings dismissed", db.RunLog{PostingsDismissed: 3}, 0, db.VerdictNothingSurvived},
 		{"queue holds work", db.RunLog{PostingsDismissed: 3}, 2, db.VerdictWaitingOnYou},
 		{"stage error", db.RunLog{StageErrors: []string{"sweep x: boom"}}, 5, db.VerdictDegraded},
-		{"curate errors", db.RunLog{PostingsErrored: 1}, 5, db.VerdictDegraded},
+		{"posting failures stay a count", db.RunLog{PostingsErrored: 3}, 5, db.VerdictWaitingOnYou},
+		{"posting failures do not break a dry run", db.RunLog{PostingsErrored: 1}, 0, db.VerdictQuiet},
 	}
 	for _, tc := range cases {
 		if got := verdictFor(tc.entry, tc.queued); got != tc.want {
 			t.Errorf("%s: verdict = %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+// curateSSE is one chat-completions tool-call turn that curates a posting —
+// the minimal success a fake zen upstream can serve.
+const curateSSE = `{"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"curate_posting","arguments":"{\"verdict\":\"shortlist\",\"score\":80,\"note\":\"n\",\"overview\":\"o\",\"reasons\":[{\"kind\":\"match\",\"field\":\"role\",\"text\":\"r\"}]}"}}]},"finish_reason":null}]}` + "\n" +
+	`{"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`
+
+// writeSSE serves one streamed turn in the wire's event format.
+func writeSSE(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	for _, line := range strings.Split(curateSSE, "\n") {
+		if line != "" {
+			_, _ = w.Write([]byte("data: " + line + "\n\n"))
+		}
+	}
+	_, _ = w.Write([]byte("data: [DONE]\n\n"))
+}
+
+// twoPostingScraper returns two postings that reach curation (no profile
+// rules fire), so the curate stage has something to fail on.
+func twoPostingScraper() *fixtureScraper {
+	return &fixtureScraper{
+		name: "test-scraper",
+		results: []scraper.Result{
+			{URL: "https://example.com/a", Title: "Engineer", Company: "Acme"},
+			{URL: "https://example.com/b", Title: "Engineer", Company: "Acme"},
+		},
+	}
+}
+
+// TestVerdict_Degraded_AllCurationFailed: a curate stage that failed every
+// posting it attempted is a broken stage, not per-posting noise. Without the
+// stage error the run would claim a dry verdict for a cycle that judged
+// nothing.
+func TestVerdict_Degraded_AllCurationFailed(t *testing.T) {
+	stubDiscovery(t)
+	f := db.NewFakeStore()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized) // 401 is fatal — no retry ladder
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := newCycle(f, []scraper.Scraper{twoPostingScraper()})
+	cfg.ZenClient = zen.New(zen.Config{BaseURL: srv.URL, APIKey: "k", Model: "m"})
+
+	entry := Run(context.Background(), cfg)
+
+	if entry.Verdict != db.VerdictDegraded {
+		t.Errorf("verdict = %q, want degraded when every curation failed", entry.Verdict)
+	}
+	if !strings.Contains(strings.Join(entry.StageErrors, "\n"), "curate: all 2 postings failed") {
+		t.Errorf("stageErrors = %v, want the curate stage failure recorded", entry.StageErrors)
+	}
+	if entry.PostingsErrored != 2 {
+		t.Errorf("postingsErrored = %d, want 2 — the count stays under the verdict", entry.PostingsErrored)
+	}
+}
+
+// TestVerdict_PartialCurationFailureDoesNotDegrade: one posting failing to
+// score is noise. The run looked everywhere, so a shortlist waiting to be
+// reviewed is still the answer — a count must not mask the queue.
+func TestVerdict_PartialCurationFailureDoesNotDegrade(t *testing.T) {
+	stubDiscovery(t)
+	f := db.NewFakeStore()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if bytes.Contains(body, []byte("https://example.com/a")) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		writeSSE(w)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := newCycle(f, []scraper.Scraper{twoPostingScraper()})
+	cfg.ZenClient = zen.New(zen.Config{BaseURL: srv.URL, APIKey: "k", Model: "m"})
+
+	entry := Run(context.Background(), cfg)
+
+	if len(entry.StageErrors) != 0 {
+		t.Errorf("stageErrors = %v, want none — one failed posting is not a broken stage", entry.StageErrors)
+	}
+	if entry.PostingsErrored != 1 {
+		t.Errorf("postingsErrored = %d, want 1", entry.PostingsErrored)
+	}
+	if entry.Verdict != db.VerdictWaitingOnYou {
+		t.Errorf("verdict = %q, want waiting-on-you — the count must not mask the queue", entry.Verdict)
 	}
 }

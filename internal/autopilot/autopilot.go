@@ -158,17 +158,19 @@ func (r *runRecord) rows() []db.SourceOutcome {
 }
 
 // verdictFor is the run's outcome — the answer to "why did nothing show
-// up?". Precedence: any failure outranks everything (the run's evidence is
-// partial, so it must never read as dry — §7's whole point), then a
+// up?". Precedence: a stage error outranks everything (the run's coverage
+// is partial, so it must never read as dry — §7's whole point), then a
 // non-empty review queue (the ball is with the user), then whether anything
 // survived curation, then quiet.
 //
-// A posting that failed curation counts as a failure here, not just a stage
-// error: if the curate stage breaks outright every posting errors and the
-// run would otherwise claim a dry verdict for a cycle that never ran.
+// Only a stage error degrades a run. Per-posting failures are a count under
+// the verdict, never the verdict itself: the run did look everywhere, so
+// "1 of 47 failed to score" must not outrank a shortlist waiting to be
+// reviewed. A curate stage that failed outright is a stage error, recorded
+// as one by the curate stage — not inferred from the count here.
 func verdictFor(entry db.RunLog, queued int) db.Verdict {
 	switch {
-	case len(entry.StageErrors) > 0 || entry.PostingsErrored > 0:
+	case len(entry.StageErrors) > 0:
 		return db.VerdictDegraded
 	case queued > 0:
 		return db.VerdictWaitingOnYou
@@ -468,6 +470,10 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 		cfg.ZenClient.SetPageFetcher(wf)
 	}
 
+	// Curate attempts, counted so "the stage failed outright" can be told
+	// from ordinary per-posting noise — see the stage error after the loop.
+	curateAttempts, curateFailures := 0, 0
+
 	for _, p := range postings {
 		select {
 		case <-ctx.Done():
@@ -493,6 +499,7 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 			continue
 		}
 
+		curateAttempts++
 		v, err := session.Curate(ctx, zen.Posting{
 			URL:      p.URL,
 			Markdown: p.Description,
@@ -500,6 +507,7 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 		if err != nil {
 			log.Printf("autopilot: curate %s failed: %v", p.URL, err)
 			rec.outcome(p.Source).Errored++
+			curateFailures++
 			continue
 		}
 
@@ -517,6 +525,15 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 		} else {
 			rec.record(cfg.Store, p, db.StatusShortlisted)
 		}
+	}
+
+	// A curate stage that failed every posting it attempted is a broken
+	// stage, not noise: without this the run would claim a dry verdict for a
+	// cycle that judged nothing. A partial failure stays a count under the
+	// verdict — which is what keeps one flaky posting from reading as a
+	// coverage gap and resetting the user's quiet streak.
+	if curateAttempts > 0 && curateFailures == curateAttempts {
+		rec.stageError("curate: all %d postings failed", curateAttempts)
 	}
 }
 
