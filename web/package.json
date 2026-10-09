@@ -10,15 +10,15 @@
     "test": "node --test"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.3",
-    "svelte": "^5.56.6",
+    "svelte": "^5.57.2",
     "tailwindcss": "^4.3.3",
-    "vite": "^8.1.5"
+    "vite": "^8.3.3"
   },
   "dependencies": {
     "chart.js": "^4.5.1",
-    "dompurify": "^3.4.13",
-    "marked": "^18.0.6"
+    "dompurify": "^3.4.16",
+    "marked": "^18.1.0"
   }
 }
