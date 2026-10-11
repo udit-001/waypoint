@@ -100,6 +100,25 @@ Examples:
 			return fmt.Errorf("database migration failed: %w", err)
 		}
 
+		// Daemon mode: capture this process's stdout/stderr into
+		// $DATA_DIR/autopilot.log (WP-176) — the raw layer beneath the
+		// runlog, so a cycle's stage lines and errors outlive the terminal
+		// the daemon was never attached to. Best effort: a failed open
+		// logs (to wherever output still goes) and the daemon runs on.
+		if startFlags.daemon {
+			if wcfg, err := config.Load(); err == nil {
+				if f, err := captureDaemonOutput(config.AutopilotLogPath(wcfg)); err != nil {
+					log.Printf("autopilot log capture failed: %v — output not captured", err)
+				} else {
+					defer f.Close()
+				}
+			} else {
+				// Diagnosable silence: a daemon whose config cannot load must
+				// say so wherever output still goes.
+				log.Printf("autopilot log capture skipped: %v", err)
+			}
+		}
+
 		// Autopilot scheduler (daemon mode only). Always started: it
 		// self-gates via CycleDue (enabled flag, run-request marker,
 		// cadence), so enabling mid-flight takes effect on the next poll
@@ -195,6 +214,23 @@ func waitForServerReady(port, maxAttempts int, interval time.Duration) bool {
 		time.Sleep(interval)
 	}
 	return false
+}
+
+// captureDaemonOutput points the daemon's stdout, stderr, and the default
+// logger at an append file (WP-176): the raw layer beneath the structured
+// runlog. Plain append, no rotation. Called inside the daemon process (on
+// --daemon), so both spawn paths — startDaemon and the service manager —
+// get the behavior from this one placement. Returns the open handle; the
+// caller closes it when the daemon exits.
+func captureDaemonOutput(path string) (*os.File, error) {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open log capture: %w", err)
+	}
+	os.Stdout = f
+	os.Stderr = f
+	log.SetOutput(f)
+	return f, nil
 }
 
 func init() {

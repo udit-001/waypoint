@@ -76,6 +76,16 @@ func ServiceLogPath() string {
 	return filepath.Join(ConfigDir(), "service.log")
 }
 
+// AutopilotLogPath returns the daemon's raw log file for a config —
+// <data_dir>/autopilot.log (WP-176). The append-only layer beneath the
+// structured runlog; created on first write.
+func AutopilotLogPath(cfg *Config) string {
+	if cfg != nil && cfg.DataDir != "" {
+		return filepath.Join(cfg.DataDir, "autopilot.log")
+	}
+	return filepath.Join(DefaultDataDir(), "autopilot.log")
+}
+
 // DefaultDataDir returns the default data directory (~/.waypoint/).
 func DefaultDataDir() string {
 	return filepath.Join(homeDir(), ".waypoint")

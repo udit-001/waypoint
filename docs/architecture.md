@@ -4,6 +4,11 @@
 
 All data lives in a SQLite database at `~/.waypoint/waypoint.db`.
 
+Two log files, distinct homes (WP-176): `<config_dir>/service.log` captures the
+service manager's view of the daemon lifecycle; `<data_dir>/autopilot.log` is
+the daemon process's own raw stdout/stderr appendix (cycle stage lines and
+errors — the raw layer beneath the structured runlog; no rotation in v1).
+
 | Table | Contents |
 |-------|----------|
 | `jobs` | Applications with company, position, status, notes |

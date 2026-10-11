@@ -205,3 +205,38 @@ func TestInstalledFlagsDefaultToFalse(t *testing.T) {
 		t.Errorf("ServiceInstalled = %v, want false (default)", loaded.ServiceInstalled)
 	}
 }
+
+// TestAutopilotLogPath: the daemon log follows the DBPath resolution —
+// the configured data_dir wins, nil or empty falls back to the default
+// (WP-176).
+func TestAutopilotLogPath(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *Config
+		want string
+	}{
+		{
+			name: "with config",
+			cfg:  &Config{DataDir: "/tmp/data"},
+			want: filepath.Join("/tmp/data", "autopilot.log"),
+		},
+		{
+			name: "nil config",
+			cfg:  nil,
+			want: filepath.Join(DefaultDataDir(), "autopilot.log"),
+		},
+		{
+			name: "empty data dir",
+			cfg:  &Config{DataDir: ""},
+			want: filepath.Join(DefaultDataDir(), "autopilot.log"),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := AutopilotLogPath(tc.cfg)
+			if got != tc.want {
+				t.Errorf("got %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
