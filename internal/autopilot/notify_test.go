@@ -171,6 +171,7 @@ func (panickyScraper) Search(context.Context, scraper.SearchOpts) ([]scraper.Res
 // The scheduler's cadence measures from last FINISHED run — an empty
 // FinishedAt would re-fire a panicking cycle at poll rate forever.
 func TestCycle_PanicClosesRunRow(t *testing.T) {
+	stubSelection(t)
 	stubDiscovery(t)
 	f := db.NewFakeStore()
 

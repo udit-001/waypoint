@@ -15,12 +15,21 @@ import (
 // fixtureScraper is a fake scraper that returns predetermined results.
 type fixtureScraper struct {
 	name    string
+	cats    []string // nil = ["test"]
 	results []scraper.Result
 }
 
-func (f *fixtureScraper) Name() string         { return f.name }
-func (f *fixtureScraper) Source() string       { return f.name }
-func (f *fixtureScraper) Categories() []string { return []string{"test"} }
+func (f *fixtureScraper) Name() string   { return f.name }
+func (f *fixtureScraper) Source() string { return f.name }
+func (f *fixtureScraper) Categories() []string {
+	if len(f.cats) > 0 {
+		return f.cats
+	}
+	// Default carries the aggregator category: the source-selection fallback
+	// (WP-179) sweeps aggregators when zen cannot decide, so cycle tests
+	// without a selection stub still see their scrapers swept.
+	return []string{"test", "aggregator"}
+}
 func (f *fixtureScraper) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.Result, error) {
 	return f.results, nil
 }

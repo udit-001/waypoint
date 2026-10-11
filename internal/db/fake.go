@@ -32,11 +32,12 @@ type FakeStore struct {
 	RunLogs               []RunLog
 	Companies             map[string]CompanyCandidate
 
-	changeEvents  []ChangeEvent
-	changeEventID int64
-	boardSweeps   map[string]BoardSweepState
-	facetCache    map[string][]string
-	lastDiscovery struct {
+	changeEvents   []ChangeEvent
+	changeEventID  int64
+	boardSweeps    map[string]BoardSweepState
+	facetCache     map[string][]string
+	selectionCache map[string]SourceSelection
+	lastDiscovery  struct {
 		hash, at string
 		has      bool
 	}
@@ -898,6 +899,25 @@ func (f *FakeStore) DiscoveryFacets(hash string) ([]string, bool, error) {
 	defer f.mu.Unlock()
 	facets, ok := f.facetCache[hash]
 	return facets, ok, nil
+}
+
+// --- Source-selection cache ---
+
+func (f *FakeStore) SaveSourceSelection(key string, sel SourceSelection) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.selectionCache == nil {
+		f.selectionCache = make(map[string]SourceSelection)
+	}
+	f.selectionCache[key] = sel
+	return nil
+}
+
+func (f *FakeStore) SourceSelection(key string) (SourceSelection, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	sel, ok := f.selectionCache[key]
+	return sel, ok, nil
 }
 
 func (f *FakeStore) RequestAutopilotRun() error {

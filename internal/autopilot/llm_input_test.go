@@ -57,6 +57,7 @@ func TestCurationInput_IsPIIFree(t *testing.T) {
 	}})
 	cfg.ZenClient = zen.New(zen.Config{BaseURL: srv.URL, APIKey: "k", Model: "m"})
 
+	stubSelection(t)
 	entry := Run(context.Background(), cfg)
 	if entry.PostingsShortlisted+entry.PostingsDismissed == 0 {
 		t.Fatalf("curation never ran — nothing to assert against: %+v", entry)

@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -83,5 +84,56 @@ func TestFilterByRecency_zeroTodayUsesExplicitCutoff(t *testing.T) {
 	got := FilterByRecency(results, 30, time.Time{})
 	if len(got) != 1 {
 		t.Errorf("expected recent (now-29d) kept with JobAge=30 and zero today, got %d", len(got))
+	}
+}
+
+type fpScraper struct {
+	name string
+	cats []string
+}
+
+func (s *fpScraper) Name() string                                                  { return s.name }
+func (s *fpScraper) Source() string                                                { return s.name }
+func (s *fpScraper) Categories() []string                                          { return s.cats }
+func (s *fpScraper) Search(ctx context.Context, opts SearchOpts) ([]Result, error) { return nil, nil }
+
+// TestFingerprint_coversShape: the fingerprint digests ids + categories, so
+// any registry change — a scraper added, removed, or recategorized —
+// produces a different value. Order must not matter (a re-registration
+// order is not a registry change).
+func TestFingerprint_coversShape(t *testing.T) {
+	a := &fpScraper{name: "alpha", cats: []string{"academic"}}
+	b := &fpScraper{name: "beta", cats: []string{"biotech"}}
+	base := Fingerprint([]Scraper{a, b})
+
+	if Fingerprint([]Scraper{b, a}) != base {
+		t.Error("fingerprint changed when only order changed")
+	}
+	if Fingerprint([]Scraper{a}) == base {
+		t.Error("fingerprint unchanged after a scraper was removed")
+	}
+	if Fingerprint([]Scraper{a, b, &fpScraper{name: "gamma", cats: []string{"tech"}}}) == base {
+		t.Error("fingerprint unchanged after a scraper was added")
+	}
+	// Recategorized counts as a registry change.
+	b2 := &fpScraper{name: "beta", cats: []string{"biotech", "tech"}}
+	if Fingerprint([]Scraper{a, b2}) == base {
+		t.Error("fingerprint unchanged after a recategorization")
+	}
+}
+
+// TestIsAPI_namesTheServerSideFilterers: the API tier is the fixed set of
+// scrapers that filter server-side (WP-166 audit); everything else —
+// including unknown names — is a listing page.
+func TestIsAPI_namesTheServerSideFilterers(t *testing.T) {
+	for _, name := range []string{"linkedin", "indeed", "google"} {
+		if !IsAPI(name) {
+			t.Errorf("IsAPI(%q) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"iisc", "", "unknown-portal"} {
+		if IsAPI(name) {
+			t.Errorf("IsAPI(%q) = true, want false", name)
+		}
 	}
 }

@@ -74,6 +74,11 @@ type BriefPreferences struct {
 	Dealbreakers   []string `json:"dealbreakers"`
 }
 
+// BriefFromProfile derives a Brief from a Profile — the same path the
+// stores' GetBrief takes. Exported for callers (and tests) that hold a
+// Profile outside the store and need the projection.
+func BriefFromProfile(p Profile) Brief { return getBrief(p) }
+
 // getBrief derives a Brief from a Profile. Purely functional so both
 // SQLiteStore and FakeStore share the exact same logic.
 func getBrief(p Profile) Brief {

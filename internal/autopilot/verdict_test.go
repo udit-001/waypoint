@@ -47,6 +47,7 @@ func TestVerdict_Quiet(t *testing.T) {
 	f := db.NewFakeStore()
 	s := &fixtureScraper{name: "empty-scraper"}
 
+	stubSelection(t)
 	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 
 	if entry.Verdict != db.VerdictQuiet {
@@ -136,6 +137,7 @@ func TestVerdict_WaitingOnYouFromQueue(t *testing.T) {
 // TestVerdict_Degraded_SweepFailure: a source failed, so the run's
 // coverage is partial and the verdict says so.
 func TestVerdict_Degraded_SweepFailure(t *testing.T) {
+	stubSelection(t)
 	stubDiscovery(t)
 	f := db.NewFakeStore()
 	s := failingScraper{name: "broken-portal"}

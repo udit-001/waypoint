@@ -93,6 +93,56 @@ func (s *SQLiteStore) NewPostingCounts() (map[string]int, error) {
 
 const kvFacetPrefix = "discovery_facets."
 
+// SourceSelection is the cached source-selection decision (WP-179): which
+// scrapers the cycle sweeps, in priority order, with one reason per id and
+// the model's note. The cache key is brief-hash + registry fingerprint, so
+// a stored value is only ever read back when both still match — no time
+// expiry. Only successful zen selections are cached; the aggregators-only
+// fallback is computed per cycle so an outage never pins itself.
+type SourceSelection struct {
+	IDs     []string          `json:"ids"`
+	Reasons map[string]string `json:"reasons"`
+	Note    string            `json:"note"`
+}
+
+const kvSourceSelectionPrefix = "source_selection."
+
+// SaveSourceSelection stores the selection under its key, replacing any
+// previous value.
+func (s *SQLiteStore) SaveSourceSelection(key string, sel SourceSelection) error {
+	raw, err := json.Marshal(sel)
+	if err != nil {
+		return fmt.Errorf("marshal source selection: %w", err)
+	}
+	_, err = s.Exec(
+		`INSERT INTO kv (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
+		kvSourceSelectionPrefix+key, string(raw),
+	)
+	if err != nil {
+		return fmt.Errorf("save source selection: %w", err)
+	}
+	return nil
+}
+
+// SourceSelection returns the cached selection for a key. found is false
+// when nothing was cached yet.
+func (s *SQLiteStore) SourceSelection(key string) (SourceSelection, bool, error) {
+	var raw string
+	err := s.Get(&raw, `SELECT value FROM kv WHERE key = ?`, kvSourceSelectionPrefix+key)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SourceSelection{}, false, nil
+		}
+		return SourceSelection{}, false, fmt.Errorf("load source selection: %w", err)
+	}
+	var sel SourceSelection
+	if err := json.Unmarshal([]byte(raw), &sel); err != nil {
+		return SourceSelection{}, false, fmt.Errorf("unmarshal source selection: %w", err)
+	}
+	return sel, true, nil
+}
+
 // SaveDiscoveryFacets caches the expanded facet list under a brief hash,
 // so a repeat discovery run with an unchanged brief skips the LLM
 // expansion (WP-152). Newest write wins.

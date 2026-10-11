@@ -253,8 +253,13 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 		rec.stageError("%v", err)
 	}
 
-	// Stage 1: Sweep — scrape new postings from relevant sources.
-	newPostings := stageSweep(ctx, cfg, rec)
+	// Stage 1: Source selection — zen picks which sources are worth
+	// sweeping for this brief (cached; aggregators-only fallback). The
+	// runlog's skipped rows carry the decision to the user.
+	sel := stageSelectSource(ctx, cfg, rec)
+
+	// Stage 2: Sweep — scrape the selected sources for new postings.
+	newPostings := stageSweep(ctx, cfg, rec, sel)
 	rec.PostingsNew = len(newPostings)
 
 	// Collect swept URLs to avoid double-processing.
@@ -286,30 +291,39 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 		}
 	}
 
-	// Stage 2: Detail — enrich postings with full job body.
+	// Stage 3: Detail — enrich postings with full job body.
 	stageDetail(ctx, cfg, allPostings)
 
-	// Stage 3+4: Prefilter + Curate — per-posting commit. Outcomes land in
+	// Stage 4+5: Prefilter + Curate — per-posting commit. Outcomes land in
 	// the per-source rows; sum them so the notifier sees this cycle's count.
 	stagePrefilterCurate(ctx, cfg, allPostings, rec)
 	rec.sumTotals()
 
-	// Stage 5: Notify — one nudge per cycle when shortlists exist.
+	// Stage 6: Notify — one nudge per cycle when shortlists exist.
 	notifyShortlist(ctx, cfg, rec, allPostings)
 
-	// Stage 6: Run log — closed by the deferred finish above; written by
+	// Stage 7: Run log — closed by the deferred finish above; written by
 	// RunLogged by the caller.
 	return
 }
 
-// stageSweep scrapes all configured scrapers and adds new postings to the
-// ledger. It records one per-source row per scraper swept: results
-// returned, results actually new, and any fetch failure.
-func stageSweep(ctx context.Context, cfg CycleConfig, rec *runRecord) []scraper.Result {
+// stageSweep scrapes the sources the selection chose and adds new
+// postings to the ledger. It records one per-source row per scraper:
+// results returned, results actually new, any fetch failure — and, for
+// every source the selection left out, a skipped row with its reason, so
+// "why did nothing show up" answers per source, not just per run.
+func stageSweep(ctx context.Context, cfg CycleConfig, rec *runRecord, sel *SourceSelection) []scraper.Result {
 	var allNew []scraper.Result
 
+	disabled := disabledSet(cfg)
 	for _, s := range cfg.Scrapers {
 		name := s.Name()
+		if reason, skip := skipReason(name, sel, disabled); skip {
+			row := rec.outcome(name)
+			row.Skipped = true
+			row.Reason = reason
+			continue
+		}
 		row := rec.outcome(name)
 
 		// Politeness: jittered delay between sources.
@@ -361,6 +375,24 @@ func stageSweep(ctx context.Context, cfg CycleConfig, rec *runRecord) []scraper.
 	}
 
 	return allNew
+}
+
+// skipReason answers why a source is not swept this cycle, and whether
+// that is the case. The user's disabled list wins over everything — the
+// sweep enforces it on its own read, regardless of what selection said.
+func skipReason(name string, sel *SourceSelection, disabled map[string]bool) (string, bool) {
+	if disabled[name] {
+		return "disabled by user", true
+	}
+	for _, id := range sel.IDs {
+		if id == name {
+			return "", false
+		}
+	}
+	if sel.FallbackReason != "" {
+		return "selection fallback: aggregators only (" + sel.FallbackReason + ")", true
+	}
+	return "not selected by source selection", true
 }
 
 // stageBacklog fetches existing "new" postings from the ledger and returns
@@ -502,7 +534,7 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 		default:
 		}
 
-		// Stage 3: Prefilter — deterministic Go rules.
+		// Stage 4: Prefilter — deterministic Go rules.
 		verdict := prefilter.Filter(p, profile, cfg.Store)
 		if verdict.Action == "dismiss" {
 			rec.record(cfg.Store, p, db.StatusDismissed)
@@ -513,7 +545,7 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 			continue
 		}
 
-		// Stage 4: Curate — zen LLM (when available).
+		// Stage 5: Curate — zen LLM (when available).
 		if session == nil {
 			// No zen client — escalate to shortlist for manual review.
 			rec.record(cfg.Store, p, db.StatusShortlisted)

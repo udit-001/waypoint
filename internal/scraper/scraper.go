@@ -2,6 +2,8 @@ package scraper
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"sort"
 	"strings"
 	"time"
@@ -144,4 +146,32 @@ func All() []Scraper {
 		return out[i].Name() < out[j].Name()
 	})
 	return out
+}
+
+// apiScrapers names the scrapers that filter server-side via query params —
+// the API tier of the WP-166 taxonomy audit. Every other registered scraper
+// is an HTML listing page: it publishes the portal's board and filters
+// client-side. This is knowledge the code cannot derive (the same search
+// interface hides either backend), so it lives here as the single copy —
+// the source-selection stage (WP-179) renders it as the table's kind column.
+var apiScrapers = map[string]bool{"linkedin": true, "indeed": true, "google": true}
+
+// IsAPI reports whether the named scraper is an API-tier scraper. Unknown
+// names are listing scrapers by default.
+func IsAPI(name string) bool { return apiScrapers[name] }
+
+// Fingerprint digests the registry's shape — ids and categories — into one
+// stable string. It is the registry half of the source-selection cache key
+// (WP-179): a scraper added, removed, or recategorized invalidates the
+// cached selection; registration order does not.
+func Fingerprint(all []Scraper) string {
+	lines := make([]string, 0, len(all))
+	for _, s := range all {
+		cats := append([]string(nil), s.Categories()...)
+		sort.Strings(cats)
+		lines = append(lines, s.Name()+"|"+strings.Join(cats, ","))
+	}
+	sort.Strings(lines)
+	sum := sha1.Sum([]byte(strings.Join(lines, "\n")))
+	return hex.EncodeToString(sum[:])
 }

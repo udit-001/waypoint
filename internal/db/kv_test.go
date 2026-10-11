@@ -120,3 +120,35 @@ func mustAddPostings(t *testing.T, s *SQLiteStore, results ...scraper.Result) {
 		t.Fatalf("AddPostings: %v", err)
 	}
 }
+
+// TestSourceSelection_roundTrip: a selection written under its key reads
+// back verbatim; a miss reports found=false rather than an error. The
+// selection is the cached source-selection decision (WP-179) — ids in
+// priority order, one reason per id.
+func TestSourceSelection_roundTrip(t *testing.T) {
+	s := sqliteStore(t)
+
+	sel := SourceSelection{
+		IDs:     []string{"indiabioscience", "iisc"},
+		Reasons: map[string]string{"indiabioscience": "aggregator serves any industry", "iisc": "matches the academic preference"},
+		Note:    "specialist portals cover the academic preference; aggregators ride along",
+	}
+	if err := s.SaveSourceSelection("k1", sel); err != nil {
+		t.Fatalf("SaveSourceSelection: %v", err)
+	}
+
+	got, found, err := s.SourceSelection("k1")
+	if err != nil || !found {
+		t.Fatalf("SourceSelection: found=%v err=%v", found, err)
+	}
+	if len(got.IDs) != 2 || got.IDs[0] != "indiabioscience" || got.IDs[1] != "iisc" {
+		t.Errorf("IDs = %v, want [indiabioscience iisc] in priority order", got.IDs)
+	}
+	if got.Reasons["iisc"] != sel.Reasons["iisc"] || got.Note != sel.Note {
+		t.Errorf("round-trip mismatch: %+v", got)
+	}
+
+	if _, found, _ := s.SourceSelection("k2"); found {
+		t.Error("uncached key reported found")
+	}
+}
