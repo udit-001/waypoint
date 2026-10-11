@@ -152,3 +152,30 @@ func TestSourceSelection_roundTrip(t *testing.T) {
 		t.Error("uncached key reported found")
 	}
 }
+
+// TestDiscoveryCompanies_roundTrip: the agentic-discovery cache (WP-180)
+// stores the submitted company list under a brief hash and reads it back
+// verbatim; a miss reports found=false so the caller runs the agent loop.
+func TestDiscoveryCompanies_roundTrip(t *testing.T) {
+	s := sqliteStore(t)
+
+	want := []DiscoveredCompany{
+		{Name: "MongoDB", Domain: "mongodb.com", Why: "developer data platform"},
+		{Name: "Citi", Domain: "citi.com", Why: "banking cluster"},
+	}
+	if err := s.SaveDiscoveryCompanies("hash1", want); err != nil {
+		t.Fatalf("SaveDiscoveryCompanies: %v", err)
+	}
+
+	got, found, err := s.DiscoveryCompanies("hash1")
+	if err != nil || !found {
+		t.Fatalf("DiscoveryCompanies: found=%v err=%v", found, err)
+	}
+	if len(got) != 2 || got[0].Name != "MongoDB" || got[1].Why != "banking cluster" {
+		t.Errorf("round-trip mismatch: %+v", got)
+	}
+
+	if _, found, _ := s.DiscoveryCompanies("hash2"); found {
+		t.Error("uncached hash reported found")
+	}
+}

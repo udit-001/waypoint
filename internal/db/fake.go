@@ -32,12 +32,12 @@ type FakeStore struct {
 	RunLogs               []RunLog
 	Companies             map[string]CompanyCandidate
 
-	changeEvents   []ChangeEvent
-	changeEventID  int64
-	boardSweeps    map[string]BoardSweepState
-	facetCache     map[string][]string
-	selectionCache map[string]SourceSelection
-	lastDiscovery  struct {
+	changeEvents       []ChangeEvent
+	changeEventID      int64
+	boardSweeps        map[string]BoardSweepState
+	selectionCache     map[string]SourceSelection
+	discoveryCompanies map[string][]DiscoveredCompany
+	lastDiscovery      struct {
 		hash, at string
 		has      bool
 	}
@@ -882,25 +882,6 @@ func (f *FakeStore) NewPostingCounts() (map[string]int, error) {
 	return out, nil
 }
 
-// --- Facet cache ---
-
-func (f *FakeStore) SaveDiscoveryFacets(hash string, facets []string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.facetCache == nil {
-		f.facetCache = make(map[string][]string)
-	}
-	f.facetCache[hash] = facets
-	return nil
-}
-
-func (f *FakeStore) DiscoveryFacets(hash string) ([]string, bool, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	facets, ok := f.facetCache[hash]
-	return facets, ok, nil
-}
-
 // --- Source-selection cache ---
 
 func (f *FakeStore) SaveSourceSelection(key string, sel SourceSelection) error {
@@ -918,6 +899,25 @@ func (f *FakeStore) SourceSelection(key string) (SourceSelection, bool, error) {
 	defer f.mu.Unlock()
 	sel, ok := f.selectionCache[key]
 	return sel, ok, nil
+}
+
+// --- Agentic-discovery cache ---
+
+func (f *FakeStore) SaveDiscoveryCompanies(hash string, companies []DiscoveredCompany) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.discoveryCompanies == nil {
+		f.discoveryCompanies = make(map[string][]DiscoveredCompany)
+	}
+	f.discoveryCompanies[hash] = companies
+	return nil
+}
+
+func (f *FakeStore) DiscoveryCompanies(hash string) ([]DiscoveredCompany, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	companies, ok := f.discoveryCompanies[hash]
+	return companies, ok, nil
 }
 
 func (f *FakeStore) RequestAutopilotRun() error {

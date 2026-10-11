@@ -2,7 +2,6 @@ package autopilot
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/discovery"
-	"github.com/udit-001/waypoint/internal/exa"
 )
 
 // timeNow is the clock seam for trigger decisions.
@@ -58,36 +56,6 @@ func loadBoardsForDiscovery() (*config.BoardsFile, error) {
 	}
 	return config.LoadBoards(cfg)
 }
-
-// cycleEnumerator adapts the shared Exa client to the enumerator seam.
-type cycleEnumerator struct{ c *exa.Client }
-
-func (e *cycleEnumerator) Companies(ctx context.Context, facet string) ([]discovery.Company, error) {
-	hits, err := e.c.SearchCompanies(ctx, facet, 15)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]discovery.Company, 0, len(hits))
-	for _, h := range hits {
-		u, perr := parseURLHost(h.URL)
-		if h.Name == "" || u == "" || perr != nil {
-			continue
-		}
-		out = append(out, discovery.Company{Name: h.Name, Domain: u})
-	}
-	return out, nil
-}
-
-func parseURLHost(rawURL string) (string, error) {
-	u := strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(rawURL), "https://"), "http://")
-	u = strings.SplitN(u, "/", 2)[0]
-	if u == "" {
-		return "", errEmptyDomain
-	}
-	return strings.TrimPrefix(u, "www."), nil
-}
-
-var errEmptyDomain = errors.New("empty domain")
 
 // stageDiscovery runs discovery before the cycle when a trigger fires:
 // first-run (no candidates ever), brief-hash change, or interval elapsed
@@ -146,13 +114,13 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, err er
 		return "", nil
 	}
 
-	facets, source, derr := expandEnumerateFacets(ctx, cfg, briefText)
+	out, derr := discoveryUniverse(ctx, cfg, briefText)
 	if derr != nil {
 		log.Printf("autopilot: discovery failed (%s): %v — proceeding with scoring", reason, derr)
 		return "", fmt.Errorf("discovery (%s): %w", reason, derr)
 	}
 
-	n, rerr := runAutoDiscovery(ctx, cfg, facets)
+	n, rerr := runAutoDiscovery(ctx, cfg, out.Facets)
 	if rerr != nil {
 		log.Printf("autopilot: discovery failed (%s): %v — proceeding with scoring", reason, rerr)
 		return "", fmt.Errorf("discovery (%s): %w", reason, rerr)
@@ -160,52 +128,70 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, err er
 	if serr := cfg.Store.SaveDiscoveryLastRun(discovery.BriefHash(briefText), timeNow().UTC().Format(time.RFC3339)); serr != nil {
 		log.Printf("autopilot: discovery state save failed: %v", serr)
 	}
-	log.Printf("autopilot: discovery ran (%s, facets via %s): %d new candidate(s)", reason, source, n)
+	log.Printf("autopilot: discovery ran (%s, via %s): %d new candidate(s)", reason, out.Source, n)
+	// A loop failure that fell back to the hardcoded universe is the run
+	// record's one discovery note: the stage errored (coverage narrowed to
+	// the built-in universe), the cycle ran on. Silent by design when keys
+	// are missing — the hardcoded path there is the no-key contract, not a
+	// failure.
+	if out.Fallback != "" {
+		return reason, fmt.Errorf("discovery (%s): agent loop unavailable (%s) — hardcoded universe used, sweep unaffected", reason, out.Fallback)
+	}
 	return reason, nil
 }
 
-// expandEnumerateFacets mirrors the CLI's enumeration path: brief → zen
-// facets (cached by hash) → Exa companies, falling back to the built-in
-// starter facets when either key is missing. briefText is the cycle's one
-// rendered brief (cfg.LLMInput.Text()) — this stage does not re-render it.
-func expandEnumerateFacets(ctx context.Context, cfg CycleConfig, briefText string) ([]discovery.Facet, string, error) {
+// universeOutcome carries one discovery run's universe and where it came
+// from. Fallback is non-empty only when the agent loop failed and the
+// hardcoded universe replaced it: the caller notes that in the run record.
+type universeOutcome struct {
+	Facets   []discovery.Facet
+	Source   string
+	Fallback string
+}
+
+// runAgentUniverse is the agent-loop producer seam: a package var (the
+// runAutoDiscovery precedent) so tests stub the loop without standing up a
+// second fake upstream.
+var runAgentUniverse = discovery.AgentUniverse
+
+// discoveryUniverse produces the company universe for one discovery run
+// (WP-180): cached companies when the brief hash matches, else the zen
+// agent loop. No keys, or an agent-loop failure, degrades to the built-in
+// hardcoded facets — silent by design without keys (the selection
+// contract's precedent), noted when the loop itself failed. Only a real
+// agent run is cached, so a failure never pins itself.
+func discoveryUniverse(ctx context.Context, cfg CycleConfig, briefText string) (*universeOutcome, error) {
 	settings, err := cfg.Store.GetSettings()
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	hasExa := strings.TrimSpace(settings.ExaAPIKey) != "" && cfg.ExaClient != nil
 	hasZen := strings.TrimSpace(settings.ZenAPIKey) != "" && cfg.ZenClient != nil
-	if !hasExa || !hasZen {
-		return discovery.HardcodedFacets(), "hardcoded", nil
+	hasExa := strings.TrimSpace(settings.ExaAPIKey) != "" && cfg.ExaClient != nil
+	if !hasZen || !hasExa {
+		return &universeOutcome{Facets: discovery.HardcodedFacets(), Source: "hardcoded"}, nil
 	}
 
 	hash := discovery.BriefHash(briefText)
-	if cached, ok, _ := cfg.Store.DiscoveryFacets(hash); ok && len(cached) > 0 {
-		return toFacetList(cached), "cached", nil
+	if cached, ok, cerr := cfg.Store.DiscoveryCompanies(hash); cerr != nil {
+		// A cache-read failure costs one agent run — log and run fresh.
+		log.Printf("autopilot: discovery cache read failed: %v — running the loop", cerr)
+	} else if ok && len(cached) > 0 {
+		return &universeOutcome{Facets: discovery.CachedFacets(cached), Source: "cached"}, nil
 	}
 
-	facets, err := discovery.ExpandFacets(ctx, briefText, cfg.ZenClient, 12)
-	if err != nil {
-		return nil, "", err
+	uni, aerr := runAgentUniverse(ctx, briefText, cfg.ZenClient, cfg.ExaClient)
+	if aerr != nil {
+		log.Printf("autopilot: discovery agent loop failed: %v — hardcoded facets", aerr)
+		return &universeOutcome{
+			Facets:   discovery.HardcodedFacets(),
+			Source:   "hardcoded",
+			Fallback: aerr.Error(),
+		}, nil
 	}
-	if err := cfg.Store.SaveDiscoveryFacets(hash, facets); err != nil {
-		return nil, "", err
+	if serr := cfg.Store.SaveDiscoveryCompanies(hash, discovery.ToStoredCompanies(uni.Companies)); serr != nil {
+		log.Printf("autopilot: discovery cache write failed: %v", serr)
 	}
-
-	enum := &cycleEnumerator{c: cfg.ExaClient}
-	out, err := discovery.Enumerate(ctx, facets, enum, 60)
-	if err != nil {
-		return nil, "", err
-	}
-	return out, "brief+exa", nil
-}
-
-func toFacetList(labels []string) []discovery.Facet {
-	out := make([]discovery.Facet, 0, len(labels))
-	for _, l := range labels {
-		out = append(out, discovery.Facet{Name: l})
-	}
-	return out
+	return &universeOutcome{Facets: uni.Facets, Source: "agent"}, nil
 }
 
 func parseRFC3339OrZero(s string) time.Time {

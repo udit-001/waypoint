@@ -472,6 +472,49 @@ func (c *Client) sendWire(ctx context.Context, wire familyWire, path string, bod
 	return resp, nil
 }
 
+// decodeTurn performs one request — body built from the model's family
+// wire, streamed (or plain chat-JSON when the server ignored stream:true)
+// — and returns the assembled assistant message plus the finish reason.
+// Shared by the curation loop (call) and the agent loop (AgentLoop, WP-180):
+// one decode path, two callers.
+func (c *Client) decodeTurn(ctx context.Context, wire familyWire, path, model string, msgs []message, defs []toolDef) (message, string, *Error) {
+	body, err := wire.buildBody(model, msgs, maxTokens, defs)
+	if err != nil {
+		return message{}, "", &Error{Msg: "build request: " + err.Error()}
+	}
+	resp, serr := c.sendWire(ctx, wire, path, body)
+	if serr != nil {
+		return message{}, "", serr
+	}
+	defer resp.Body.Close()
+
+	var msg message
+	finish := ""
+	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
+		// Streaming response: assemble the assistant message from deltas.
+		var serr *Error
+		finish, serr = wire.decodeStream(resp.Body, &msg)
+		if serr != nil {
+			return message{}, "", serr
+		}
+	} else if _, ok := wire.(chatWire); ok {
+		// Non-streaming fallback (chat family only): a server that ignored
+		// stream:true still speaks the plain chat-completions JSON.
+		var out completionResponse
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+			return message{}, "", &Error{Status: resp.StatusCode, Msg: "decode response: " + err.Error()}
+		}
+		if len(out.Choices) == 0 {
+			return message{}, "", &Error{Msg: "empty choices in response"}
+		}
+		msg = out.Choices[0].Message
+		finish = out.Choices[0].FinishReason
+	} else {
+		return message{}, "", &Error{Msg: "expected a streamed response"}
+	}
+	return msg, finish, nil
+}
+
 // call performs one streamed request, routed by the model's API family
 // (from the catalog metadata), and returns the assembled assistant message
 // (all tool calls intact — models may batch parallel tool calls), plus the
@@ -485,40 +528,11 @@ func (c *Client) call(ctx context.Context, model string, msgs []message) (messag
 	wire, path := c.wireFor(model)
 	// The gate client tools ride first (the free-tier tool-name gate
 	// requires >=2 known opencode tool names), then the real curation set.
-	body, err := wire.buildBody(model, msgs, maxTokens, []toolDef{gateToolDefs[0], gateToolDefs[1], curateToolDef, searchCompanyToolDef, fetchPostingToolDef})
-	if err != nil {
-		return message{}, Verdict{}, false, &Error{Msg: "build request: " + err.Error()}
-	}
-	resp, serr := c.sendWire(ctx, wire, path, body)
+	msg, finish, serr := c.decodeTurn(ctx, wire, path, model, msgs, []toolDef{gateToolDefs[0], gateToolDefs[1], curateToolDef, searchCompanyToolDef, fetchPostingToolDef})
 	if serr != nil {
 		return message{}, Verdict{}, false, serr
 	}
-	defer resp.Body.Close()
 
-	var msg message
-	finish := ""
-	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
-		// Streaming response: assemble the assistant message from deltas.
-		var serr *Error
-		finish, serr = wire.decodeStream(resp.Body, &msg)
-		if serr != nil {
-			return message{}, Verdict{}, false, serr
-		}
-	} else if _, ok := wire.(chatWire); ok {
-		// Non-streaming fallback (chat family only): a server that ignored
-		// stream:true still speaks the plain chat-completions JSON.
-		var out completionResponse
-		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
-			return message{}, Verdict{}, false, &Error{Status: resp.StatusCode, Msg: "decode response: " + err.Error()}
-		}
-		if len(out.Choices) == 0 {
-			return message{}, Verdict{}, false, &Error{Msg: "empty choices in response"}
-		}
-		msg = out.Choices[0].Message
-		finish = out.Choices[0].FinishReason
-	} else {
-		return message{}, Verdict{}, false, &Error{Msg: "expected a streamed response"}
-	}
 	if len(msg.ToolCalls) == 0 {
 		// finish_reason distinguishes truncation (length — max_tokens too
 		// small, reasoning burned the budget) from refusal (stop — model

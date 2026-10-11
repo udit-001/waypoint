@@ -1,5 +1,11 @@
 package discovery
 
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
+)
+
 // HardcodedFacets returns the validated company universe from the
 // 2026-08-19 prototype run (57 companies, 23 mapped to live boards).
 // This is the first CandidateSource adapter: plain data, one function.
@@ -77,4 +83,12 @@ func HardcodedFacets() []Facet {
 			{Name: "Corpay", Domain: "corpay.com"},
 		}},
 	}
+}
+
+// BriefHash is the cache key for the discovery universe: a stable digest
+// of the brief text it was discovered under (brought from the retired
+// enumerate.go, WP-180).
+func BriefHash(brief string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(brief)))
+	return hex.EncodeToString(sum[:])
 }

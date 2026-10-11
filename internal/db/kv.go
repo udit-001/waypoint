@@ -91,8 +91,6 @@ func (s *SQLiteStore) NewPostingCounts() (map[string]int, error) {
 	return out, rows.Err()
 }
 
-const kvFacetPrefix = "discovery_facets."
-
 // SourceSelection is the cached source-selection decision (WP-179): which
 // scrapers the cycle sweeps, in priority order, with one reason per id and
 // the model's note. The cache key is brief-hash + registry fingerprint, so
@@ -104,6 +102,18 @@ type SourceSelection struct {
 	Reasons map[string]string `json:"reasons"`
 	Note    string            `json:"note"`
 }
+
+// DiscoveredCompany is one company from the agentic-discovery cache
+// (WP-180): the agent's submit_companies payload after validation —
+// empty name/domain dropped, domains deduped — cached per brief hash so
+// the same brief never re-runs the agent loop.
+type DiscoveredCompany struct {
+	Name   string `json:"name"`
+	Domain string `json:"domain"`
+	Why    string `json:"why,omitempty"`
+}
+
+const kvDiscoveryCompaniesPrefix = "discovery_companies."
 
 const kvSourceSelectionPrefix = "source_selection."
 
@@ -143,41 +153,41 @@ func (s *SQLiteStore) SourceSelection(key string) (SourceSelection, bool, error)
 	return sel, true, nil
 }
 
-// SaveDiscoveryFacets caches the expanded facet list under a brief hash,
-// so a repeat discovery run with an unchanged brief skips the LLM
-// expansion (WP-152). Newest write wins.
-func (s *SQLiteStore) SaveDiscoveryFacets(hash string, facets []string) error {
-	raw, err := json.Marshal(facets)
+// SaveDiscoveryCompanies caches the agent's validated company list under
+// a brief hash (WP-180), replacing any previous value.
+func (s *SQLiteStore) SaveDiscoveryCompanies(hash string, companies []DiscoveredCompany) error {
+	raw, err := json.Marshal(companies)
 	if err != nil {
-		return fmt.Errorf("marshal discovery facets: %w", err)
+		return fmt.Errorf("marshal discovery companies: %w", err)
 	}
 	_, err = s.Exec(
 		`INSERT INTO kv (key, value) VALUES (?, ?)
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`,
-		kvFacetPrefix+hash, string(raw),
+		kvDiscoveryCompaniesPrefix+hash, string(raw),
 	)
 	if err != nil {
-		return fmt.Errorf("save discovery facets: %w", err)
+		return fmt.Errorf("save discovery companies: %w", err)
 	}
 	return nil
 }
 
-// DiscoveryFacets returns the cached facet list for a brief hash.
-// found is false when nothing was cached yet.
-func (s *SQLiteStore) DiscoveryFacets(hash string) ([]string, bool, error) {
+// DiscoveryCompanies returns the cached company list for a brief hash.
+// found is false when nothing was cached yet — the caller runs the agent
+// loop.
+func (s *SQLiteStore) DiscoveryCompanies(hash string) ([]DiscoveredCompany, bool, error) {
 	var raw string
-	err := s.Get(&raw, `SELECT value FROM kv WHERE key = ?`, kvFacetPrefix+hash)
+	err := s.Get(&raw, `SELECT value FROM kv WHERE key = ?`, kvDiscoveryCompaniesPrefix+hash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, false, nil
 		}
-		return nil, false, fmt.Errorf("load discovery facets: %w", err)
+		return nil, false, fmt.Errorf("load discovery companies: %w", err)
 	}
-	var facets []string
-	if err := json.Unmarshal([]byte(raw), &facets); err != nil {
-		return nil, false, fmt.Errorf("unmarshal discovery facets: %w", err)
+	var out []DiscoveredCompany
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, false, fmt.Errorf("unmarshal discovery companies: %w", err)
 	}
-	return facets, true, nil
+	return out, true, nil
 }
 
 const kvDiscoveryLastRun = "discovery_last_run"

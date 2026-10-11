@@ -98,16 +98,17 @@ type Store interface {
 	GetBoardSweepStates() (map[string]BoardSweepState, error)
 	NewPostingCounts() (map[string]int, error)
 
-	// Facet cache (WP-152) — the expanded facet list keyed by brief
-	// hash, so repeat discovery runs skip the LLM expansion.
-	SaveDiscoveryFacets(hash string, facets []string) error
-	DiscoveryFacets(hash string) ([]string, bool, error)
-
 	// Source-selection cache (WP-179) — the cached scraper-selection
 	// decision keyed by brief hash + registry fingerprint. Only real
 	// zen selections are cached; the fallback path never writes.
 	SaveSourceSelection(key string, sel SourceSelection) error
 	SourceSelection(key string) (SourceSelection, bool, error)
+
+	// Agentic-discovery cache (WP-180) — the validated company list the
+	// agent loop submitted, keyed by brief hash. Only a successful loop
+	// is cached; the hardcoded fallback never writes.
+	SaveDiscoveryCompanies(hash string, companies []DiscoveredCompany) error
+	DiscoveryCompanies(hash string) ([]DiscoveredCompany, bool, error)
 
 	// Last-discovery trigger state (WP-153).
 	// Autopilot scheduling: one-shot "run now" requests.

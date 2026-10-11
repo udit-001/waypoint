@@ -53,11 +53,13 @@ location preference, companies, keywords — and `LLMInput.Text()` renders it.
 Default-deny is structural: name, email, phone, current location and the whole
 constraints bucket have no counterpart on `LLMInput`, so no renderer can reach
 them. Callers own only the framing around the rendered text (the curation
-prompt, the facet-expansion prompt).
+prompt, the source-selection prompt, the discovery agent loop's system
+prompt).
 
 `TestBriefText_Allowlist` pins the allowlist against a fixture profile carrying
 the full never-leaves set; `TestCurationInput_IsPIIFree` and
-`TestExpandFacets_InputIsPIIFree` assert it at the wire for the two builders.
+`TestAgentUniverse_InputIsPIIFree` assert it at the wire for the builders
+beyond the renderer.
 The fixture itself lives in `internal/db/dbtest`, so the never-leaves set grows
 in one place. This is the spec WP-DOC-8 hard constraint "PII never reaches an
 LLM" — a new LLM-input builder must render through `db.LLMInput`, and adding a

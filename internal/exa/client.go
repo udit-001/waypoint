@@ -246,17 +246,32 @@ type CompanyHit struct {
 // discovery pipeline to dedup and probe. Unlike SearchCompany (which
 // summarizes one known company) this lists the universe. Cached per
 // facet; each uncached call spends budget.
+// SearchCompanies lists companies for a facet via Exa's category:company
+// pattern — the company-research shape, a thin prefix over the generic
+// Search the discovery agent loop uses (WP-180). Cached per query.
 func (c *Client) SearchCompanies(ctx context.Context, facet string, numResults int) ([]CompanyHit, error) {
 	facet = strings.TrimSpace(facet)
 	if facet == "" {
 		return nil, fmt.Errorf("exa: empty facet")
+	}
+	return c.Search(ctx, fmt.Sprintf("category:company %s", facet), numResults)
+}
+
+// Search runs one free-form web_search_exa query and returns the parsed
+// company hits. Cached per query; live calls draw the shared budget. The
+// discovery agent loop's exa_search tool lands here verbatim — no query
+// rewriting (WP-180).
+func (c *Client) Search(ctx context.Context, query string, numResults int) ([]CompanyHit, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, fmt.Errorf("exa: empty query")
 	}
 	if numResults <= 0 || numResults > 25 {
 		numResults = 15
 	}
 
 	c.mu.Lock()
-	key := "facet:" + strings.ToLower(facet)
+	key := "q:" + strings.ToLower(query)
 	if raw, ok := c.searches[key]; ok {
 		c.mu.Unlock()
 		return parseCompanyHits(raw)
@@ -268,7 +283,7 @@ func (c *Client) SearchCompanies(ctx context.Context, facet string, numResults i
 	}
 
 	raw, err := c.callTool(ctx, "web_search_exa", map[string]any{
-		"query":      fmt.Sprintf("category:company %s", facet),
+		"query":      query,
 		"numResults": numResults,
 	})
 	if err != nil {

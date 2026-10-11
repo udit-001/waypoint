@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,8 +20,10 @@ import (
 // module: a variable so CLI tests stub the network-touching pipeline.
 var runDiscovery = discovery.Discover
 
-// enumerateFacets produces the facet list for one run: brief→zen→Exa
-// when both API keys are set, otherwise the validated hardcoded list.
+// enumerateFacets produces the company universe for one run (WP-180): the
+// zen agent loop when both API keys are set, otherwise the validated
+// hardcoded list. Same seam the autopilot stage uses; the CLI surfaces the
+// error instead of silently degrading — a human is watching.
 // real reports which path ran; tests stub it.
 var enumerateFacets = func(ctx context.Context, store db.Store) ([]discovery.Facet, string, error) {
 	settings, err := store.GetSettings()
@@ -40,9 +43,11 @@ var enumerateFacets = func(ctx context.Context, store db.Store) ([]discovery.Fac
 	text := brief.LLMInput().Text()
 	hash := discovery.BriefHash(text)
 
-	// Facet cache: an unchanged brief skips the LLM expansion.
-	if cached, ok, _ := store.DiscoveryFacets(hash); ok && len(cached) > 0 {
-		return toFacets(cached), "cached", nil
+	// Company cache: an unchanged brief skips the agent loop entirely.
+	if cached, ok, cerr := store.DiscoveryCompanies(hash); cerr != nil {
+		fmt.Fprintf(os.Stderr, "  discovery cache read failed: %v — running the loop\n", cerr)
+	} else if ok && len(cached) > 0 {
+		return discovery.CachedFacets(cached), "cached", nil
 	}
 
 	zcfg := zen.DefaultConfig().WithSharedCatalog() // UA version + family routing from the curated metadata
@@ -50,66 +55,26 @@ var enumerateFacets = func(ctx context.Context, store db.Store) ([]discovery.Fac
 	zcfg.ProjectID = zen.ProjectID(storePath)        // stable per-install session
 	zcfg.Model = zen.ResolveModel(settings.ZenModel) // user's pick wins, else the shipped default
 	zenClient := zen.New(zcfg)
-	facets, err := discovery.ExpandFacets(ctx, text, zenClient, maxExpandFacets)
-	if err != nil {
-		return nil, "", err
-	}
-	if err := store.SaveDiscoveryFacets(hash, facets); err != nil {
-		return nil, "", err
-	}
 
 	var headers map[string]string
 	if hasExa {
 		headers = map[string]string{"x-api-key": strings.TrimSpace(settings.ExaAPIKey)}
 	}
-	enum := &exaEnumerator{c: exa.New("", headers)}
-	out, err := discovery.Enumerate(ctx, facets, enum, maxEnumerateCalls)
+	exaClient := exa.New("", headers)
+
+	uni, err := discovery.AgentUniverse(ctx, text, zenClient, exaClient)
 	if err != nil {
-		return nil, "", err
+		// Same contract as the autopilot stage (WP-180): a loop failure
+		// degrades to the hardcoded universe — it never aborts discovery.
+		// A human is watching, so the fallback is announced, not silent.
+		fmt.Fprintf(os.Stderr, "  discovery: agent loop unavailable (%v) — using hardcoded facets\n", err)
+		return discovery.HardcodedFacets(), "hardcoded (agent loop unavailable)", nil
 	}
-	return out, "brief+exa", nil
-}
-
-const (
-	maxExpandFacets   = 12 // LLM expansion cap
-	maxEnumerateCalls = 60 // Exa-call bound per run (~30-60 budget window)
-)
-
-// exaEnumerator adapts the Exa client to the discovery enumerator seam.
-type exaEnumerator struct{ c *exa.Client }
-
-func (e *exaEnumerator) Companies(ctx context.Context, facet string) ([]discovery.Company, error) {
-	hits, err := e.c.SearchCompanies(ctx, facet, 15)
-	if err != nil {
-		return nil, err
+	stored := discovery.ToStoredCompanies(uni.Companies)
+	if err := store.SaveDiscoveryCompanies(hash, stored); err != nil {
+		fmt.Fprintf(os.Stderr, "  discovery cache write failed: %v\n", err)
 	}
-	out := make([]discovery.Company, 0, len(hits))
-	for _, h := range hits {
-		domain := domainOf(h.URL)
-		if h.Name == "" || domain == "" {
-			continue
-		}
-		out = append(out, discovery.Company{Name: h.Name, Domain: domain})
-	}
-	return out, nil
-}
-
-// domainOf extracts the hostname minus www. from a URL; empty on garbage.
-func domainOf(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
-}
-
-// toFacets wraps plain labels in the pipeline's facet shape.
-func toFacets(labels []string) []discovery.Facet {
-	out := make([]discovery.Facet, 0, len(labels))
-	for _, l := range labels {
-		out = append(out, discovery.Facet{Name: l})
-	}
-	return out
+	return uni.Facets, "agent", nil
 }
 
 var discoverCmd = &cobra.Command{
