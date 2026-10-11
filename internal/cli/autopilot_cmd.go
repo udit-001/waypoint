@@ -13,6 +13,64 @@ import (
 	"github.com/udit-001/waypoint/internal/zen"
 )
 
+var autopilotEnableFlags struct {
+	cadence int
+}
+
+// WP-158: the CLI adapter over the enable contract (autopilot.Enable).
+// The verb matters: it is how an agent driving the CLI completes the
+// scripted setup path — enable was web-only before this.
+var autopilotEnableCmd = &cobra.Command{
+	Use:   "enable",
+	Short: "Enable the autopilot curation cycle",
+	Long: `Enable the autopilot curation cycle. Requires a complete curation
+brief — the cycle curates against it. If the daemon is running it picks
+up the toggle and cycles within one poll interval; otherwise run
+'waypoint autopilot run' for an immediate cycle.
+
+Use --cadence to set the cycle interval in hours (default: keep the
+stored cadence, 6h on a fresh install).`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := autopilot.Enable(cmd.Context(), store, autopilotEnableFlags.cadence); err != nil {
+			return formatError("enable autopilot", err)
+		}
+
+		settings, _ := store.GetSettings()
+		if jsonOut {
+			printJSON(map[string]any{
+				"enabled":      true,
+				"cadence":      settings.AutopilotCadence,
+				"runRequested": true,
+			})
+			return nil
+		}
+		fmt.Printf("  ✓ Autopilot enabled (cadence: %dh)\n", settings.AutopilotCadence)
+		fmt.Println("    The daemon cycles on cadence; 'waypoint autopilot run' cycles right now.")
+		fmt.Println("    Matches land in Matches; review via 'waypoint postings list'.")
+		return nil
+	},
+}
+
+var autopilotDisableCmd = &cobra.Command{
+	Use:   "disable",
+	Short: "Disable the autopilot curation cycle",
+	Long: `Disable the autopilot curation cycle. Cadence and every other
+setting are untouched — re-enabling restores the same search.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := autopilot.Disable(store); err != nil {
+			return formatError("disable autopilot", err)
+		}
+		if jsonOut {
+			printJSON(map[string]any{"enabled": false})
+			return nil
+		}
+		fmt.Println("  ✓ Autopilot disabled")
+		return nil
+	},
+}
+
 var autopilotCmd = &cobra.Command{
 	Use:   "autopilot",
 	Short: "Manage and run the autopilot curation cycle",
@@ -20,8 +78,8 @@ var autopilotCmd = &cobra.Command{
 cycle on a cadence (default 6h): sweep boards → detail → prefilter →
 LLM curate → store → runlog.
 
-Use 'waypoint autopilot run' to trigger an immediate cycle. Use the
-settings API to enable/disable and change the cadence.`,
+Use 'waypoint autopilot enable' to turn it on, 'autopilot disable' to
+turn it off, and 'autopilot run' to trigger an immediate cycle.`,
 }
 
 var autopilotRunFlags struct {
@@ -234,5 +292,7 @@ func init() {
 	autopilotCmd.AddCommand(autopilotRunCmd)
 	autopilotCmd.AddCommand(autopilotRunsCmd)
 	autopilotCmd.AddCommand(autopilotStatusCmd)
+	autopilotCmd.AddCommand(autopilotEnableCmd)
+	autopilotCmd.AddCommand(autopilotDisableCmd)
 	rootCmd.AddCommand(autopilotCmd)
 }

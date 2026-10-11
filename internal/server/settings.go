@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/udit-001/waypoint/internal/autopilot"
 	"github.com/udit-001/waypoint/internal/db"
 )
 
@@ -31,17 +32,13 @@ func handleUpdateSettings(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		// Gate: autopilot can only be enabled when brief is Complete.
+		// Gate: autopilot can only be enabled when brief is Complete. Same
+		// gate the CLI's 'autopilot enable' runs — one contract (WP-158).
 		if enabled, ok := body["autopilot_enabled"]; ok {
 			enableVal, _ := enabled.(float64) // JSON numbers are float64
 			if enableVal == 1 {
-				brief, err := store.GetBrief()
-				if err != nil {
-					jsonError(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				if !brief.Complete {
-					jsonError(w, "complete your curation brief before enabling autopilot", http.StatusBadRequest)
+				if err := autopilot.CanEnable(r.Context(), store); err != nil {
+					jsonError(w, err.Error(), http.StatusBadRequest)
 					return
 				}
 			}

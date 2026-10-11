@@ -52,6 +52,8 @@ Alias: `waypoint cat`
 
 | Command | Description |
 |---------|-------------|
+| `waypoint autopilot enable` | Turn the cycle on. Requires a complete curation brief (gated); asks the daemon for an immediate first run. Flag: `--cadence <hours>` (default: keep stored, 6h fresh). JSON: `{enabled, cadence, runRequested}` |
+| `waypoint autopilot disable` | Turn the cycle off. Cadence and other settings untouched — re-enabling restores the same search. JSON: `{enabled: false}` |
 | `waypoint autopilot run` | Run one full cycle immediately, ignoring the cadence. Flag: `--limit` (max new postings to curate). JSON: `{run_id, verdict, new, shortlisted, dismissed, errored, perSource, stageErrors, duration_ms, elapsed_ms}` |
 | `waypoint autopilot status` | Autopilot state and the last run. JSON adds `disabledScrapers` and the full `lastRun` record |
 | `waypoint autopilot runs` | Recent runs, newest first: verdict, per-source outcomes, stage errors. Flag: `--limit` (default 10). JSON: `{runs: [...]}` |

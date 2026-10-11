@@ -16,6 +16,17 @@ Scrape is the primary path, but Exa is a legitimate discovery fallback when scra
 
 When the user names **target companies**, already-tracked boards, or companies **discovered** by `discover run`, there is a third path: `read` [boards](references/boards.md) — company ATS boards swept on demand, plus the discovery ledger's add/dismiss review.
 
+## Autopilot — recurring search
+
+When the user wants jobs found **on a schedule** — automatic cycles rather than a one-time hunt — offer autopilot instead of manual scraping:
+
+1. Settle the curation brief first (the interview above); the cycle curates against it. `waypoint autopilot enable` refuses while the brief is incomplete.
+2. `waypoint autopilot enable` — turns the cycle on and asks the daemon for an immediate first run. `--cadence <hours>` overrides the 6h default. Recurring cycles need the daemon: `waypoint start`.
+3. `waypoint autopilot run` — one cycle right now, daemon or not. Results land in `waypoint postings list` (the review queue; promote/dismiss vocabulary).
+4. Tell the user: shortlisted jobs arrive in Matches, and a desktop notification nudges per cycle when a shortlist exists.
+
+State and history: `waypoint autopilot status --json` (enabled, cadence, last run) · `waypoint autopilot runs --json` (recent runlog).
+
 When autopilot cycled and the user asks why nothing showed up, `read` [autopilot-debug](references/autopilot-debug.md) and walk the runlog to one of the five answers.
 
 ## Pipeline
