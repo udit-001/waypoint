@@ -2,6 +2,11 @@
 
 *Resolves WP-127. Sources: [Zen docs](https://opencode.ai/docs/zen/), [gateway handler source](https://github.com/sst/opencode/blob/47f33329/packages/console/app/src/routes/zen/util/handler.ts), [issue #42029](https://github.com/anomalyco/opencode/issues/42029), working clients `pi-zen/index.ts` + `news-aggregator/app/jobs/llm_classifier.py`.*
 
+> **Addendum 2026-10-11 (WP-185, parity check against pi-zen 36626e3).** Two claims below are stale:
+>
+> 1. **"one HTTP client hitting /v1/chat/completions"** — wrong since the curated list spread across API families. Zen serves free models on three chat-capable endpoints (`/zen/v1/chat/completions`, `/zen/v1/responses`, `/zen/v1/messages`), and the curated `free-models.json` now carries each model's absolute `endpoint` URL. Waypoint routes per family (WP-162) and, since WP-185, prefers the catalog's endpoint path (relative to the production `/zen` base) over the hardcoded family path. A fourth family, `systemone` (jev), is a structured-evaluation protocol no chat client can serve — pi-zen keeps it out of its picker and waypoint drops it at catalog parse (WP-185).
+> 2. **"gated by User-Agent … 429s"** — the UA header is necessary but not sufficient. The full free-tier gate (verified live, shared.ts + zen-api.md table below): `stream: true` AND a `tools` array containing both `bash` and `read` AND `opencode/<version>` with version ≥ 1.17 in the UA AND an `x-opencode-session` matching the descending `ses_` shape. Anything short draws `403 FreeTierError` (or 426 for a stale version) — 429 is the separate quota layer.
+
 ## The one-paragraph answer
 
 Zen is an OpenAI-compatible gateway. Waypoint needs exactly **one HTTP client hitting `/v1/chat/completions`** — every model the curation seam would use (free tier + kimi/glm/deepseek) lives on that endpoint. Auth is `Authorization: Bearer <key>`. Free models are genuinely $0 but **gated by `User-Agent: opencode/<version>`** — omit it and every free-model call 429s regardless of key.

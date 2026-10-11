@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -153,13 +154,35 @@ func New(cfg Config) *Client {
 	}
 }
 
-// family resolves the endpoint family for a model: catalog metadata when a
-// catalog is attached, the chat-completions default otherwise.
-func (c *Client) family(model string) string {
-	if c.cfg.Catalog != nil {
-		return c.cfg.Catalog.Family(model)
+// zenProductionBasePath is the path of the shipped zen base URL. The
+// catalog's absolute endpoints live under it; the suffix relative to it is
+// what gets appended to whatever base the client carries — the production
+// host and a ZEN_BASE_URL proxy alike route identically.
+const zenProductionBasePath = "/zen"
+
+// wireFor resolves how one model is reached: the family wire to encode
+// with, and the request path to send it to. One catalog lookup answers
+// both halves. A curated entry routes by its family, and an endpoint of
+// its own under the production /zen prefix wins over the hardcoded family
+// path (the drift guard: if Zen moves an endpoint, the catalog's URL
+// routes). Anything else — no catalog, unknown model, endpoint under a
+// foreign prefix — falls back to the family default.
+func (c *Client) wireFor(model string) (familyWire, string) {
+	wire := familyWireFor(apiChatCompletions)
+	if c.cfg.Catalog == nil {
+		return wire, wire.endpoint()
 	}
-	return apiChatCompletions
+	m, ok := c.cfg.Catalog.Lookup(model)
+	if !ok {
+		return wire, wire.endpoint()
+	}
+	wire = familyWireFor(m.API)
+	if m.Endpoint != "" {
+		if u, err := url.Parse(m.Endpoint); err == nil && strings.HasPrefix(u.Path, zenProductionBasePath+"/") {
+			return wire, strings.TrimPrefix(u.Path, zenProductionBasePath)
+		}
+	}
+	return wire, wire.endpoint()
 }
 
 // familyWireFor is in family.go.
@@ -408,13 +431,12 @@ func truncateChars(s string, n int) string {
 // sends it with the full identity header set, and classifies non-200
 // responses into the error ladder (401/402/403 fatal). Shared by every
 // request path; the caller owns the 200 body (streamed or not).
-func (c *Client) sendWire(ctx context.Context, wire familyWire, body map[string]any) (*http.Response, *Error) {
+func (c *Client) sendWire(ctx context.Context, wire familyWire, path string, body map[string]any) (*http.Response, *Error) {
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return nil, &Error{Msg: "marshal request: " + err.Error()}
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST",
-		c.baseURL+wire.endpoint(), bytes.NewReader(raw))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+path, bytes.NewReader(raw))
 	if err != nil {
 		return nil, &Error{Msg: "build request: " + err.Error()}
 	}
@@ -460,14 +482,14 @@ func (c *Client) sendWire(ctx context.Context, wire familyWire, body map[string]
 // Streaming is the free-tier gate's other half: a non-streaming request is
 // shape-rejected (403 FreeTierError) even with perfect identity headers.
 func (c *Client) call(ctx context.Context, model string, msgs []message) (message, Verdict, bool, *Error) {
-	wire := familyWireFor(c.family(model))
+	wire, path := c.wireFor(model)
 	// The gate client tools ride first (the free-tier tool-name gate
 	// requires >=2 known opencode tool names), then the real curation set.
 	body, err := wire.buildBody(model, msgs, maxTokens, []toolDef{gateToolDefs[0], gateToolDefs[1], curateToolDef, searchCompanyToolDef, fetchPostingToolDef})
 	if err != nil {
 		return message{}, Verdict{}, false, &Error{Msg: "build request: " + err.Error()}
 	}
-	resp, serr := c.sendWire(ctx, wire, body)
+	resp, serr := c.sendWire(ctx, wire, path, body)
 	if serr != nil {
 		return message{}, Verdict{}, false, serr
 	}
@@ -697,7 +719,7 @@ func (c *Client) Complete(ctx context.Context, system, user string) (string, err
 }
 
 func (c *Client) completeOnce(ctx context.Context, system, user string) (string, error) {
-	wire := familyWireFor(c.family(c.cfg.Model))
+	wire, path := c.wireFor(c.cfg.Model)
 	msgs := []message{
 		{Role: "system", Content: system},
 		{Role: "user", Content: user},
@@ -709,7 +731,7 @@ func (c *Client) completeOnce(ctx context.Context, system, user string) (string,
 	// Tool-less turn: buildBody guarantees the free-tier shape with the
 	// gate client tools (read/bash). A stray gate-tool call resolves
 	// harmlessly: it is ignored below.
-	resp, serr := c.sendWire(ctx, wire, body)
+	resp, serr := c.sendWire(ctx, wire, path, body)
 	if serr != nil {
 		return "", serr
 	}

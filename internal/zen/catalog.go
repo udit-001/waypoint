@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -32,11 +33,14 @@ const (
 )
 
 // Model is one curated free model as callers see it: the id, the friendly
-// display name, and the API family that endpoint routing needs (WP-162).
+// display name, the API family that endpoint routing needs (WP-162), and
+// the absolute endpoint URL the curated list carries (empty on older
+// lists — routing then falls back to the family path).
 type Model struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	API  string `json:"api"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	API      string `json:"api"`
+	Endpoint string `json:"endpoint,omitempty"`
 }
 
 // CatalogConfig shapes a Catalog. Accept dependencies, don't create them:
@@ -293,54 +297,85 @@ func captureValidators(res *http.Response) validators {
 	}
 }
 
-// parseFreeModels decodes and validates the curated list. The CDN's
-// defaultModel field is deliberately NOT consumed (spec WP-160, decision
-// 2026-09-18): nothing in waypoint adopts it.
+// speakableFamilies are the API families waypoint has a wire for. The
+// curated list may carry more (pi-zen additionally speaks
+// google-generative-ai; systemone is a structured-evaluation protocol no
+// chat client can serve) — entries outside this set are dropped at parse
+// time so everything the catalog serves is guaranteed runnable: the
+// picker never offers a model the client would mis-route to
+// chat-completions. Divergence from pi-zen is deliberate: pi-zen's gate is
+// "may pi register it", waypoint's is "may waypoint route it".
+var speakableFamilies = map[string]bool{
+	apiChatCompletions:   true,
+	apiOpenAIResponses:   true,
+	apiAnthropicMessages: true,
+}
+
+// parseFreeModels decodes, validates, and filters the curated list. The
+// CDN's defaultModel field is deliberately NOT consumed (spec WP-160,
+// decision 2026-09-18): nothing in waypoint adopts it.
+//
+// Filtering, not rejecting: an entry with an id waypoint cannot serve
+// (unknown or non-speakable family) is dropped while the rest of the list
+// installs — one drifted entry must not take the whole picker down. An
+// entry whose endpoint fails to parse keeps its model but loses the
+// endpoint (family-path fallback), mirroring the lists that predate the
+// endpoint field.
 func parseFreeModels(raw []byte) ([]Model, string, error) {
 	var file struct {
 		Models []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-			API  string `json:"api"`
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			API      string `json:"api"`
+			Endpoint string `json:"endpoint"`
 		} `json:"models"`
 		OpencodeVersion string `json:"opencodeVersion"`
 	}
 	if err := json.Unmarshal(raw, &file); err != nil {
 		return nil, "", fmt.Errorf("parse curated list: %w", err)
 	}
-	if len(file.Models) == 0 {
-		return nil, "", fmt.Errorf("curated list has no models")
-	}
-	models := make([]Model, len(file.Models))
+	models := make([]Model, 0, len(file.Models))
 	for i, m := range file.Models {
 		if m.ID == "" {
 			return nil, "", fmt.Errorf("curated list entry %d has no id", i)
 		}
-		models[i] = Model{ID: m.ID, Name: m.Name, API: m.API}
-		if models[i].Name == "" {
-			models[i].Name = models[i].ID
+		api := m.API
+		if api == "" {
+			api = defaultFamilyAPI
 		}
-		if models[i].API == "" {
-			models[i].API = defaultFamilyAPI
+		if !speakableFamilies[api] {
+			continue
 		}
+		model := Model{ID: m.ID, Name: m.Name, API: api}
+		if model.Name == "" {
+			model.Name = model.ID
+		}
+		if u, err := url.Parse(m.Endpoint); err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != "" {
+			model.Endpoint = m.Endpoint
+		}
+		models = append(models, model)
+	}
+	if len(models) == 0 {
+		return nil, "", fmt.Errorf("curated list has no routable models")
 	}
 	return models, file.OpencodeVersion, nil
 }
 
-// Family returns the endpoint family for a model from the last-known-good
-// list. Unknown models default to the chat-completions family — the family
-// every other curated model uses. Passive: no network.
-func (c *Catalog) Family(model string) string {
+// Lookup returns the curated entry for a model from the last-known-good
+// list. ok=false for unknown models — callers route them by their own
+// defaults (the client falls back to chat-completions and the family
+// path). Passive: no network.
+func (c *Catalog) Lookup(model string) (Model, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.entry != nil {
 		for _, m := range c.entry.models {
 			if m.ID == model {
-				return m.API
+				return m, true
 			}
 		}
 	}
-	return defaultFamilyAPI
+	return Model{}, false
 }
 
 // sharedCatalog is the process-wide catalog for client construction sites

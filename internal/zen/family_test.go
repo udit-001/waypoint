@@ -105,14 +105,81 @@ func newFamilyClient(t *testing.T, sseURL string, cat *Catalog) *Client {
 	})
 }
 
-// TestCatalog_Family: known model → its family; unknown → chat-completions.
-func TestCatalog_Family(t *testing.T) {
-	cat := familyCatalog(t, apiAnthropicMessages)
-	if got := cat.Family("union-alpha-free"); got != apiAnthropicMessages {
-		t.Errorf("API = %q, want anthropic-messages", got)
+// TestClient_endpointRoutesFromCatalog: when the curated list carries an
+// absolute endpoint for the model (pi-zen 36626e3), the request lands on
+// that endpoint's path relative to the configured base — not the family
+// default. This is the drift guard: if Zen moves a family endpoint, the
+// catalog's URL wins over the hardcoded path.
+func TestClient_endpointRoutesFromCatalog(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"count":1,"opencodeVersion":"1.18.35","models":[{"id":"big-pickle","api":"openai-completions","endpoint":"https://opencode.ai/zen/v2/chat/completions"}]}`))
+	}))
+	t.Cleanup(up.Close)
+	cat := NewCatalog(CatalogConfig{URL: up.URL})
+	if _, err := cat.Models(context.Background()); err != nil {
+		t.Fatalf("warm catalog: %v", err)
 	}
-	if got := cat.Family("nope"); got != apiChatCompletions {
-		t.Errorf("unknown model API = %q, want the chat-completions default", got)
+
+	u := &sseUpstream{payloads: []string{chatCurateSSE()}}
+	ts := u.start(t)
+	c := newFamilyClient(t, ts.URL, cat)
+	c.cfg.Model = "big-pickle"
+
+	s := c.NewSession("system")
+	if _, err := s.Curate(context.Background(), Posting{URL: "https://x/j", Markdown: "m"}); err != nil {
+		t.Fatalf("Curate: %v", err)
+	}
+	if got := u.at(0).path; got != "/v2/chat/completions" {
+		t.Fatalf("request path = %q, want the catalog endpoint's path /v2/chat/completions", got)
+	}
+}
+
+// TestClient_foreignEndpointFallsBackToFamilyPath: an endpoint that does
+// not sit under the production /zen prefix carries no derivable relative
+// path, so routing falls back to the family default rather than guessing.
+func TestClient_foreignEndpointFallsBackToFamilyPath(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"count":1,"opencodeVersion":"1.18.35","models":[{"id":"big-pickle","api":"openai-completions","endpoint":"https://elsewhere.example.net/other/chat"}]}`))
+	}))
+	t.Cleanup(up.Close)
+	cat := NewCatalog(CatalogConfig{URL: up.URL})
+	if _, err := cat.Models(context.Background()); err != nil {
+		t.Fatalf("warm catalog: %v", err)
+	}
+
+	u := &sseUpstream{payloads: []string{chatCurateSSE()}}
+	ts := u.start(t)
+	c := newFamilyClient(t, ts.URL, cat)
+	c.cfg.Model = "big-pickle"
+
+	s := c.NewSession("system")
+	if _, err := s.Curate(context.Background(), Posting{URL: "https://x/j", Markdown: "m"}); err != nil {
+		t.Fatalf("Curate: %v", err)
+	}
+	if got := u.at(0).path; got != "/v1/chat/completions" {
+		t.Fatalf("request path = %q, want the family default /v1/chat/completions", got)
+	}
+}
+
+// chatCurateSSE scripts one chat-completions stream that answers with a
+// complete curate_posting tool call.
+func chatCurateSSE() string {
+	args := `{"verdict":"dismiss","score":10,"note":"n","overview":"o","reasons":[{"kind":"gap","field":"role","text":"x"}]}`
+	return `{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"curate_posting","arguments":` + quoteJSON(args) + `}}]}}]}` + "\n" +
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`
+}
+
+// TestCatalog_Lookup: a known model resolves to its full entry (family
+// + endpoint); an unknown model misses, and callers fall back to their
+// own defaults.
+func TestCatalog_Lookup(t *testing.T) {
+	cat := familyCatalog(t, apiAnthropicMessages)
+	m, ok := cat.Lookup("union-alpha-free")
+	if !ok || m.API != apiAnthropicMessages {
+		t.Errorf("Lookup(union-alpha-free) = %+v, %v; want the anthropic-messages entry", m, ok)
+	}
+	if _, ok := cat.Lookup("nope"); ok {
+		t.Errorf("Lookup(nope) found a model; want a miss (callers default to chat-completions)")
 	}
 }
 

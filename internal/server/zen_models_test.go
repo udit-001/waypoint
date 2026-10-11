@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/zen"
 )
 
 // Handler tests cross the public endpoint with an httptest CDN stand-in
@@ -57,6 +59,39 @@ func TestZenModels_curatedCatalog(t *testing.T) {
 	}
 	if len(out.Models) != 2 || out.Models[0].ID != "big-pickle" || out.Models[0].Name != "Big Pickle" || out.Models[1].API != "anthropic-messages" {
 		t.Errorf("models = %+v, want named curated entries", out.Models)
+	}
+}
+
+// TestZenModels_injectedCatalog: Run's shared-catalog wiring — the
+// endpoint serves from the catalog handed to the mux builder (the
+// process-wide instance the connector also uses), not from a fresh one
+// over the zenCatalogURL seam. Proven by pointing the injected catalog at
+// its own upstream and the seam at a different one: only the injected
+// list comes back.
+func TestZenModels_injectedCatalog(t *testing.T) {
+	injected := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"count":1,"models":[{"id":"from-injected","name":"From Injected"}]}`))
+	}))
+	defer injected.Close()
+	seam := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"count":1,"models":[{"id":"from-seam","name":"From Seam"}]}`))
+	}))
+	defer seam.Close()
+	orig := zenCatalogURL
+	zenCatalogURL = seam.URL
+	t.Cleanup(func() { zenCatalogURL = orig })
+
+	cat := zen.NewCatalog(zen.CatalogConfig{URL: injected.URL})
+	f := db.NewFakeStore()
+	mux := newMuxWithZenCatalog(f, nil, nil, nil, nil, cat)
+
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/zen/models", nil))
+	if w.Code != 200 {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "from-injected") || strings.Contains(w.Body.String(), "from-seam") {
+		t.Fatalf("body = %s, want the injected catalog's list", w.Body.String())
 	}
 }
 

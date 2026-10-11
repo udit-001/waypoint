@@ -113,6 +113,10 @@ Examples:
 			DB:     store,
 			NoOpen: startFlags.noOpen,
 			Silent: startFlags.daemon,
+			// One process-wide catalog: the picker's /api/zen/models and the
+			// connector's WithSharedCatalog read the same last-known-good
+			// list (WP-185).
+			ZenCatalog: zen.SharedCatalog(),
 			// ADR 0001: CLI writes boards.toml, web reads it. The loader
 			// re-reads per request so `boards add` shows up without a restart.
 			LoadBoards: func() ([]config.BoardEntry, error) {

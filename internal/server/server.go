@@ -40,6 +40,14 @@ type Config struct {
 	// against the loaded boards file and persist it when fn succeeds.
 	// Backs POST /api/candidates/{id}/add. Nil = read-only web UI.
 	WithBoards func(fn func(*config.BoardsFile) error) error
+
+	// ZenCatalog is what GET /api/zen/models serves from. Production
+	// passes the process-wide zen.SharedCatalog — the instance the zen
+	// connector also attaches — so the picker and curation read one
+	// last-known-good list instead of running two caches against the CDN.
+	// Nil defaults to a per-server catalog over the zenCatalogURL seam
+	// (Start applies the default; tests inject their own).
+	ZenCatalog *zen.Catalog
 }
 
 // newMux creates the HTTP mux with API routes, PWA routes, and static file
@@ -74,7 +82,15 @@ func newMuxWithLinkedIn(store db.Store, staticFS fs.FS, li *linkedin.Fetcher) ht
 // newMuxWithBoards builds the mux with both seams injected: the LinkedIn
 // fetcher and the boards.toml loader backing GET /api/companies. A nil
 // loadBoards means "no boards file" — the endpoint serves an empty list.
+// The zen models endpoint serves from a per-mux catalog over the
+// zenCatalogURL seam (tests); Run passes the shared instance instead.
 func newMuxWithBoards(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, loadBoards func() ([]config.BoardEntry, error), withBoards func(func(*config.BoardsFile) error) error) http.Handler {
+	return newMuxWithZenCatalog(store, staticFS, li, loadBoards, withBoards, zen.NewCatalog(zen.CatalogConfig{URL: zenCatalogURL}))
+}
+
+// newMuxWithZenCatalog is the full constructor: same mux as
+// newMuxWithBoards, but GET /api/zen/models serves from the given catalog.
+func newMuxWithZenCatalog(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, loadBoards func() ([]config.BoardEntry, error), withBoards func(func(*config.BoardsFile) error) error, zenCatalog *zen.Catalog) http.Handler {
 	mux := http.NewServeMux()
 
 	// Read-only API
@@ -95,7 +111,7 @@ func newMuxWithBoards(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, load
 	mux.HandleFunc("POST /api/profile/import-linkedin", handleImportLinkedIn(store, li))
 	mux.HandleFunc("GET /api/settings", handleGetSettings(store))
 	mux.HandleFunc("PATCH /api/settings", handleUpdateSettings(store))
-	mux.HandleFunc("GET /api/zen/models", handleZenModels(zen.NewCatalog(zen.CatalogConfig{URL: zenCatalogURL})))
+	mux.HandleFunc("GET /api/zen/models", handleZenModels(zenCatalog))
 
 	mux.HandleFunc("GET /api/candidates", handleListCandidates(store))
 	mux.HandleFunc("POST /api/candidates/{id}/add", handleAddCandidate(store, withBoards))
@@ -145,7 +161,13 @@ func Start(cfg Config) error {
 		return fmt.Errorf("static subfs: %w", err)
 	}
 
-	mux := newMuxWithBoards(cfg.DB, staticFS, linkedinFetcherFor(cfg.DB), cfg.LoadBoards, cfg.WithBoards)
+	zenCatalog := cfg.ZenCatalog
+	if zenCatalog == nil {
+		// Documented default (tests and any caller that doesn't inject):
+		// a per-server catalog over the zenCatalogURL seam.
+		zenCatalog = zen.NewCatalog(zen.CatalogConfig{URL: zenCatalogURL})
+	}
+	mux := newMuxWithZenCatalog(cfg.DB, staticFS, linkedinFetcherFor(cfg.DB), cfg.LoadBoards, cfg.WithBoards, zenCatalog)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", cfg.Port)
 	server := &http.Server{

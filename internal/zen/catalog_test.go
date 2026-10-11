@@ -120,6 +120,65 @@ func TestCatalog_firstCallFetchesAndParses(t *testing.T) {
 	}
 }
 
+// TestCatalog_dropsNonRoutableFamilies: the curated list is filtered to
+// the families waypoint can actually serve. pi-zen's live list carries
+// systemone (jev-1.13-free — a structured-evaluation protocol, not chat)
+// and may carry families waypoint has no wire for; serving them would let
+// the picker offer a model the client then mis-routes to chat-completions
+// (pi-zen commit 36626e3 keeps SystemOne out of its picker for the same
+// reason). Unknown-family entries drop rather than fail the whole list —
+// one bad entry must not take the picker down.
+func TestCatalog_dropsNonRoutableFamilies(t *testing.T) {
+	u := &cdnUpstream{body: `{
+		"generatedAt": "2026-10-11T00:00:00.000Z",
+		"count": 5,
+		"opencodeVersion": "1.18.35",
+		"models": [
+			{"id": "big-pickle", "name": "Big Pickle", "api": "openai-completions", "endpoint": "https://opencode.ai/zen/v1/chat/completions"},
+			{"id": "muse-spark-1.2-contributor-free", "api": "openai-responses", "endpoint": "https://opencode.ai/zen/v1/responses"},
+			{"id": "jev-1.13-free", "api": "systemone", "endpoint": "https://opencode.ai/zen/v1/systemone"},
+			{"id": "union-alpha-free", "api": "google-generative-ai"},
+			{"id": "future-model-free", "api": "future-family"}
+		]
+	}`}
+	cat := newTestCatalog(t, u, func() time.Time { return base })
+
+	models, err := cat.Models(context.Background())
+	if err != nil {
+		t.Fatalf("Models: %v", err)
+	}
+	if len(models) != 2 {
+		t.Fatalf("models = %d entries (%v), want 2 routable ones", len(models), models)
+	}
+	if models[0].ID != "big-pickle" || models[0].Endpoint != "https://opencode.ai/zen/v1/chat/completions" {
+		t.Errorf("models[0] = %+v, want big-pickle with its endpoint carried", models[0])
+	}
+	if models[1].ID != "muse-spark-1.2-contributor-free" || models[1].API != "openai-responses" {
+		t.Errorf("models[1] = %+v, want muse-spark on the responses family", models[1])
+	}
+}
+
+// TestCatalog_malformedEndpointTreatedAsAbsent: an endpoint that fails to
+// parse must not drop the model — the entry falls back to family-path
+// routing, exactly like the older lists that predate the endpoint field.
+func TestCatalog_malformedEndpointTreatedAsAbsent(t *testing.T) {
+	u := &cdnUpstream{body: `{
+		"count": 1,
+		"models": [
+			{"id": "big-pickle", "api": "openai-completions", "endpoint": "not a url"}
+		]
+	}`}
+	cat := newTestCatalog(t, u, func() time.Time { return base })
+
+	models, err := cat.Models(context.Background())
+	if err != nil {
+		t.Fatalf("Models: %v", err)
+	}
+	if len(models) != 1 || models[0].Endpoint != "" {
+		t.Fatalf("models = %+v, want big-pickle kept with no endpoint", models)
+	}
+}
+
 // TestCatalog_freshCacheSkipsNetwork: within the TTL the cache answers
 // without touching the upstream.
 func TestCatalog_freshCacheSkipsNetwork(t *testing.T) {
