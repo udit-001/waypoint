@@ -16,6 +16,8 @@ Scrape is the primary path, but Exa is a legitimate discovery fallback when scra
 
 When the user names **target companies**, already-tracked boards, or companies **discovered** by `discover run`, there is a third path: `read` [boards](references/boards.md) — company ATS boards swept on demand, plus the discovery ledger's add/dismiss review.
 
+When autopilot cycled and the user asks why nothing showed up, `read` [autopilot-debug](references/autopilot-debug.md) and walk the runlog to one of the five answers.
+
 ## Pipeline
 
 ### Step 1 — Enroll
