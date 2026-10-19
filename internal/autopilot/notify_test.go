@@ -30,8 +30,8 @@ func (r *recordingNotifier) NotifyShortlist(ctx context.Context, n ShortlistNoti
 func stubDiscovery(t *testing.T) {
 	t.Helper()
 	orig := runAutoDiscovery
-	runAutoDiscovery = func(_ context.Context, _ CycleConfig, _ []discovery.Facet) (int, error) {
-		return 0, nil
+	runAutoDiscovery = func(_ context.Context, _ CycleConfig, _ []discovery.Facet) (discoveryRun, error) {
+		return discoveryRun{}, nil
 	}
 	t.Cleanup(func() { runAutoDiscovery = orig })
 }

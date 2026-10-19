@@ -126,6 +126,40 @@ func TestAutopilotRunsHuman(t *testing.T) {
 	}
 }
 
+func TestAutopilotRunsDiscoveredBoards(t *testing.T) {
+	f := db.NewFakeStore()
+	if _, err := f.AddRunLog(db.RunLog{
+		Verdict:          db.VerdictQuiet,
+		StartedAt:        "2026-10-05T01:00:00Z",
+		FinishedAt:       "2026-10-05T01:00:41Z",
+		DiscoveredBoards: 2,
+	}); err != nil {
+		t.Fatalf("AddRunLog: %v", err)
+	}
+	store = f
+	jsonOut = false
+
+	out := captureStdout(t, func() {
+		if err := autopilotRunsCmd.RunE(autopilotRunsCmd, nil); err != nil {
+			t.Fatalf("runs: %v", err)
+		}
+	})
+	if !strings.Contains(out, "+2 discovered boards") {
+		t.Errorf("human output missing \"+2 discovered boards\":\n%s", out)
+	}
+
+	// A run that discovered nothing says nothing — zero is not news.
+	jsonOut = true
+	outJSON := captureStdout(t, func() {
+		if err := autopilotRunsCmd.RunE(autopilotRunsCmd, nil); err != nil {
+			t.Fatalf("runs: %v", err)
+		}
+	})
+	if !strings.Contains(outJSON, `"discoveredBoards": 2`) {
+		t.Errorf("json output missing discoveredBoards:\n%s", outJSON)
+	}
+}
+
 func TestAutopilotRunsLimit(t *testing.T) {
 	f := db.NewFakeStore()
 	seedRuns(t, f)

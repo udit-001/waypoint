@@ -32,14 +32,14 @@ func TestCycle_FirstRunTriggersDiscovery(t *testing.T) {
 
 	calls := 0
 	origRun := runAutoDiscovery
-	runAutoDiscovery = func(_ context.Context, cfg CycleConfig, _ []discovery.Facet) (int, error) {
+	runAutoDiscovery = func(_ context.Context, cfg CycleConfig, _ []discovery.Facet) (discoveryRun, error) {
 		calls++
 		// Mirror production: discovered candidates land in the ledger.
 		_ = cfg.Store.SaveCandidates([]db.CompanyCandidate{
 			{Name: "Discovered A", Status: db.StatusCandidateSuggested},
 			{Name: "Discovered B", Status: db.StatusCandidateSuggested},
 		})
-		return 2, nil
+		return discoveryRun{Discovered: 2}, nil
 	}
 	t.Cleanup(func() { runAutoDiscovery = origRun })
 
@@ -71,8 +71,8 @@ func TestCycle_DiscoveryFailureDoesNotBlock(t *testing.T) {
 	s := seedSweeperScraper()
 
 	origRun := runAutoDiscovery
-	runAutoDiscovery = func(_ context.Context, _ CycleConfig, _ []discovery.Facet) (int, error) {
-		return 0, errors.New("exa search: 429 rate limited")
+	runAutoDiscovery = func(_ context.Context, _ CycleConfig, _ []discovery.Facet) (discoveryRun, error) {
+		return discoveryRun{}, errors.New("exa search: 429 rate limited")
 	}
 	t.Cleanup(func() { runAutoDiscovery = origRun })
 
@@ -232,7 +232,9 @@ func TestCycle_FallbackNoted(t *testing.T) {
 		return nil, errors.New("no submit in budget")
 	})
 	origRun := runAutoDiscovery
-	runAutoDiscovery = func(_ context.Context, _ CycleConfig, _ []discovery.Facet) (int, error) { return 0, nil }
+	runAutoDiscovery = func(_ context.Context, _ CycleConfig, _ []discovery.Facet) (discoveryRun, error) {
+		return discoveryRun{}, nil
+	}
 	t.Cleanup(func() { runAutoDiscovery = origRun })
 
 	entry := Run(context.Background(), cfg)

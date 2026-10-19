@@ -125,6 +125,39 @@
     }
   }
 
+  // Keep/block (WP-181): the two actions on an auto-added board. Keep
+  // clears the discovered flag; block removes the board and never
+  // re-suggests the company — two-step confirm, like remove.
+  async function keepDiscovered(c) {
+    if (!guard(c.name)) return;
+    try {
+      await api.keepCompany(c.name);
+      await refresh();
+    } catch (e) {
+      sweepErr = { ...sweepErr, [c.name]: e.message };
+    } finally {
+      release(c.name);
+    }
+  }
+
+  async function blockDiscovered(c) {
+    if (confirmRemove !== c.name) {
+      confirmRemove = c.name;
+      setTimeout(() => { if (confirmRemove === c.name) confirmRemove = ''; }, 4000);
+      return;
+    }
+    confirmRemove = '';
+    if (!guard(c.name)) return;
+    try {
+      await api.blockCompany(c.name);
+      companies = companies.filter(x => x.name !== c.name);
+    } catch (e) {
+      sweepErr = { ...sweepErr, [c.name]: e.message };
+    } finally {
+      release(c.name);
+    }
+  }
+
   let flash = $state(null); // {name, msg} transient per-row success note
   let flashTimer = null;
   function showToastCount(name, n) {
@@ -172,9 +205,19 @@
               {/if}
             </span>
 
-            <!-- Identity: name leads, provider chip subordinate -->
+            <!-- Identity: name leads, provider chip subordinate. A
+                 discovered row's name links to the live board — see it
+                 before you decide keep/block. -->
             <div class="min-w-0 flex items-baseline gap-2">
-              <span class="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{c.company || c.name}</span>
+              {#if c.discovered}
+                <a href={c.url} target="_blank" rel="noopener noreferrer"
+                  class="truncate text-sm font-medium text-slate-800 dark:text-slate-200 underline decoration-slate-300 decoration-dotted underline-offset-2 hover:decoration-slate-500"
+                  title="Open the live board in a new tab">{c.company || c.name}</a>
+                <span class="shrink-0 px-1.5 py-px rounded bg-amber-100 text-[10px] uppercase tracking-wide text-amber-700"
+                  title="Auto-added by your autopilot — keep or block it">discovered</span>
+              {:else}
+                <span class="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{c.company || c.name}</span>
+              {/if}
               {#if c.provider}
                 <span class="shrink-0 px-1.5 py-px rounded bg-slate-100 dark:bg-slate-700 text-[10px] font-mono uppercase tracking-wide text-slate-600">{c.provider}</span>
               {/if}
@@ -202,10 +245,23 @@
               {/if}
             </div>
 
-            <!-- Controls (WP-155): pause/resume/remove via the boards
-                 manager seam; Sweep now runs one board through the shared
-                 sweeper and records state like the CLI does. -->
+            <!-- Controls: a discovered row's one decision is keep or
+                 block (WP-181); normal rows keep the WP-155 controls. -->
             <div class="flex items-center gap-1.5 shrink-0">
+              {#if c.discovered}
+                <button
+                  class="px-2 py-0.5 text-[11px] rounded-md bg-slate-800 text-white hover:opacity-90 cursor-pointer disabled:opacity-50 transition-colors"
+                  disabled={acting.has(c.name)}
+                  onclick={() => keepDiscovered(c)}
+                >Keep</button>
+                <button
+                  class="px-2 py-0.5 text-[11px] rounded-md {confirmRemove === c.name
+                    ? 'bg-red-600 text-white hover:bg-red-500'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'} cursor-pointer disabled:opacity-50 transition-colors"
+                  disabled={acting.has(c.name)}
+                  onclick={() => blockDiscovered(c)}
+                >{confirmRemove === c.name ? 'Confirm block?' : 'Block'}</button>
+              {:else}
               <button
                 class="px-2 py-0.5 text-[11px] rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer disabled:opacity-50 transition-colors"
                 disabled={acting.has(c.name)}
@@ -223,6 +279,7 @@
                 disabled={acting.has(c.name)}
                 onclick={() => sweepNow(c)}
               >{acting.has(c.name) ? 'Sweeping…' : 'Sweep now'}</button>
+              {/if}
             </div>
           </li>
         {/each}

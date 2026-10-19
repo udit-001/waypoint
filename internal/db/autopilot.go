@@ -67,24 +67,29 @@ type SourceOutcome struct {
 // An unfinished run (FinishedAt empty) is the "running now" signal; its
 // Verdict is empty because the run has no outcome yet.
 type RunLog struct {
-	ID                  int64           `json:"id" db:"id"`
-	Verdict             Verdict         `json:"verdict" db:"verdict"`
-	StartedAt           string          `json:"startedAt" db:"started_at"`
-	FinishedAt          string          `json:"finishedAt,omitempty" db:"finished_at"`
-	DurationMs          int64           `json:"durationMs,omitempty" db:"duration_ms"`
-	PostingsNew         int             `json:"postingsNew" db:"postings_new"`
-	PostingsShortlisted int             `json:"postingsShortlisted" db:"postings_shortlisted"`
-	PostingsDismissed   int             `json:"postingsDismissed" db:"postings_dismissed"`
-	PostingsErrored     int             `json:"postingsErrored" db:"postings_errored"`
-	PerSource           []SourceOutcome `json:"perSource" db:"-"`
-	StageErrors         []string        `json:"stageErrors" db:"-"`
+	ID                  int64   `json:"id" db:"id"`
+	Verdict             Verdict `json:"verdict" db:"verdict"`
+	StartedAt           string  `json:"startedAt" db:"started_at"`
+	FinishedAt          string  `json:"finishedAt,omitempty" db:"finished_at"`
+	DurationMs          int64   `json:"durationMs,omitempty" db:"duration_ms"`
+	PostingsNew         int     `json:"postingsNew" db:"postings_new"`
+	PostingsShortlisted int     `json:"postingsShortlisted" db:"postings_shortlisted"`
+	PostingsDismissed   int     `json:"postingsDismissed" db:"postings_dismissed"`
+	PostingsErrored     int     `json:"postingsErrored" db:"postings_errored"`
+	// DiscoveredBoards counts boards the discovery stage auto-landed
+	// this run (WP-181) — evidence under the verdict, never a verdict
+	// input: "+3 discovered boards" is awareness, not news.
+	DiscoveredBoards int             `json:"discoveredBoards" db:"discovered_boards"`
+	PerSource        []SourceOutcome `json:"perSource" db:"-"`
+	StageErrors      []string        `json:"stageErrors" db:"-"`
 }
 
 // runLogColumns selects a full record, coalescing the nullable and
 // pre-migration columns so an in-flight or legacy row still scans.
 const runLogColumns = `id, COALESCE(verdict, ''), started_at, COALESCE(finished_at, ''),
 	COALESCE(duration_ms, 0), postings_new, postings_shortlisted,
-	postings_dismissed, postings_errored, COALESCE(per_source, '[]'),
+	postings_dismissed, postings_errored, COALESCE(discovered_boards, 0),
+	COALESCE(per_source, '[]'),
 	COALESCE(stage_errors, '[]')`
 
 // scanRunLog reads one runlog row, decoding the JSON columns.
@@ -97,7 +102,7 @@ func scanRunLog(row interface{ Scan(...any) error }) (RunLog, error) {
 	if err := row.Scan(
 		&entry.ID, &verdict, &entry.StartedAt, &entry.FinishedAt, &entry.DurationMs,
 		&entry.PostingsNew, &entry.PostingsShortlisted, &entry.PostingsDismissed,
-		&entry.PostingsErrored, &perSourceRaw, &stageErrRaw,
+		&entry.PostingsErrored, &entry.DiscoveredBoards, &perSourceRaw, &stageErrRaw,
 	); err != nil {
 		return RunLog{}, err
 	}
@@ -127,11 +132,11 @@ func (s *SQLiteStore) AddRunLog(entry RunLog) (int64, error) {
 	result, err := s.Exec(
 		`INSERT INTO autopilot_runs (verdict, started_at, finished_at, duration_ms,
 			postings_new, postings_shortlisted, postings_dismissed, postings_errored,
-			per_source, stage_errors)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			discovered_boards, per_source, stage_errors)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(entry.Verdict), entry.StartedAt, entry.FinishedAt, entry.DurationMs,
 		entry.PostingsNew, entry.PostingsShortlisted, entry.PostingsDismissed,
-		entry.PostingsErrored, perSource, stageErrors,
+		entry.PostingsErrored, entry.DiscoveredBoards, perSource, stageErrors,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("insert run log: %w", err)
@@ -154,12 +159,12 @@ func (s *SQLiteStore) UpdateRunLog(id int64, entry RunLog) error {
 			verdict = ?, finished_at = ?, duration_ms = ?,
 			postings_new = ?, postings_shortlisted = ?,
 			postings_dismissed = ?, postings_errored = ?,
-			per_source = ?, stage_errors = ?
+			discovered_boards = ?, per_source = ?, stage_errors = ?
 		 WHERE id = ?`,
 		string(entry.Verdict), entry.FinishedAt, entry.DurationMs,
 		entry.PostingsNew, entry.PostingsShortlisted,
 		entry.PostingsDismissed, entry.PostingsErrored,
-		perSource, stageErrors, id,
+		entry.DiscoveredBoards, perSource, stageErrors, id,
 	)
 	if err != nil {
 		return fmt.Errorf("update run log: %w", err)

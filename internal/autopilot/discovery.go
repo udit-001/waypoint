@@ -15,20 +15,39 @@ import (
 // timeNow is the clock seam for trigger decisions.
 var timeNow = time.Now
 
+// discoverCandidates is the Discover seam: a package var so the stage's
+// body (filtering, landing, ledger writes) runs offline in tests.
+var discoverCandidates = discovery.Discover
+
+// discoveryRun is one discovery stage's yield: candidates that survived
+// verification, and boards that auto-landed in boards.toml (WP-181).
+type discoveryRun struct {
+	Discovered int
+	Landed     int
+}
+
 // runAutoDiscovery is the seam for the discovery pipeline; tests stub it.
-var runAutoDiscovery = func(ctx context.Context, cfg CycleConfig, facets []discovery.Facet) (int, error) {
+var runAutoDiscovery = func(ctx context.Context, cfg CycleConfig, facets []discovery.Facet) (discoveryRun, error) {
+	blocked, berr := cfg.Store.BlockedDomains()
+	if berr != nil {
+		return discoveryRun{}, fmt.Errorf("blocklist: %w", berr)
+	}
+	// Blocked domains never reach the prober: re-discovery skips them
+	// entirely, whatever board link they resurface under (WP-181).
+	facets = filterBlockedDomains(facets, blocked)
+
 	bf, err := loadBoardsForDiscovery()
 	if err != nil {
-		return 0, err
+		return discoveryRun{}, err
 	}
 	watched := make(map[string]bool, len(bf.Boards))
 	for _, b := range bf.Boards {
 		watched[b.URL] = true
 	}
 
-	cands, err := discovery.Discover(ctx, facets, watched, discovery.Options{})
+	cands, err := discoverCandidates(ctx, facets, watched, discovery.Options{})
 	if err != nil {
-		return 0, err
+		return discoveryRun{}, err
 	}
 	rows := make([]db.CompanyCandidate, 0, len(cands))
 	for _, c := range cands {
@@ -42,9 +61,97 @@ var runAutoDiscovery = func(ctx context.Context, cfg CycleConfig, facets []disco
 		})
 	}
 	if err := cfg.Store.SaveCandidates(rows); err != nil {
-		return 0, err
+		return discoveryRun{}, err
 	}
-	return len(rows), nil
+
+	// Auto-promote (WP-181): verified candidates land now. A company the
+	// ledger holds dismissed (a pre-auto-promote review decision) is a
+	// standing no — it never re-enters boards.toml.
+	status, serr := candidateStatuses(cfg.Store)
+	if serr != nil {
+		return discoveryRun{}, serr
+	}
+	landable := make([]discovery.Candidate, 0, len(cands))
+	for _, c := range cands {
+		if cand, ok := status[c.Name]; ok && cand.Status == db.StatusCandidateDismissed {
+			continue
+		}
+		landable = append(landable, c)
+	}
+	landed, skipped, lerr := discovery.LandVerified(landable, bf)
+	if lerr != nil {
+		return discoveryRun{Discovered: len(cands)}, fmt.Errorf("auto-promote: %w", lerr)
+	}
+	if skipped > 0 {
+		log.Printf("autopilot: auto-promote skipped %d extra verified board(s) — one entry per company; boards add can add the rest", skipped)
+	}
+	if len(landed) > 0 {
+		if serr := saveBoardsForDiscovery(bf); serr != nil {
+			return discoveryRun{Discovered: len(cands)}, fmt.Errorf("auto-promote: %w", serr)
+		}
+		if serr := markCandidatesAdded(cfg.Store, status, landed); serr != nil {
+			return discoveryRun{Discovered: len(cands)}, fmt.Errorf("auto-promote ledger: %w", serr)
+		}
+	}
+	return discoveryRun{Discovered: len(cands), Landed: len(landed)}, nil
+}
+
+// filterBlockedDomains drops blocked companies from the facet universe
+// before probing — a blocked domain costs zero fetches. Passes the input
+// through untouched when nothing is blocked.
+func filterBlockedDomains(facets []discovery.Facet, blocked []string) []discovery.Facet {
+	if len(blocked) == 0 {
+		return facets
+	}
+	set := make(map[string]bool, len(blocked))
+	for _, d := range blocked {
+		set[db.NormalizeDomain(d)] = true
+	}
+	out := make([]discovery.Facet, 0, len(facets))
+	for _, f := range facets {
+		kept := make([]discovery.Company, 0, len(f.Companies))
+		for _, c := range f.Companies {
+			if !set[db.NormalizeDomain(c.Domain)] {
+				kept = append(kept, c)
+			}
+		}
+		out = append(out, discovery.Facet{Name: f.Name, Companies: kept})
+	}
+	return out
+}
+
+// candidateStatuses reads the ledger once and indexes it by company
+// name, so the dismissed check and the status flip inside one
+// runAutoDiscovery call share a single read.
+func candidateStatuses(store db.Store) (map[string]db.CompanyCandidate, error) {
+	cands, err := store.Candidates("")
+	if err != nil {
+		return nil, fmt.Errorf("read candidates: %w", err)
+	}
+	out := make(map[string]db.CompanyCandidate, len(cands))
+	for _, c := range cands {
+		out[c.Name] = c
+	}
+	return out, nil
+}
+
+// markCandidatesAdded flips a landed company's ledger row from suggested
+// to added — the auto-promoted twin of the manual promote's status flip.
+// statuses is the name->candidate map already read by candidateStatuses
+// in the same run, so no second full ledger read is needed.
+func markCandidatesAdded(store db.Store, statuses map[string]db.CompanyCandidate, landed []string) error {
+	want := make(map[string]bool, len(landed))
+	for _, n := range landed {
+		want[n] = true
+	}
+	for name, c := range statuses {
+		if want[name] && c.Status == db.StatusCandidateSuggested {
+			if err := store.SetCandidateStatus(c.ID, db.StatusCandidateAdded); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // loadBoardsForDiscovery reads boards.toml from the data dir (the daemon
@@ -57,6 +164,16 @@ func loadBoardsForDiscovery() (*config.BoardsFile, error) {
 	return config.LoadBoards(cfg)
 }
 
+// saveBoardsForDiscovery writes boards.toml back through the same config
+// resolution loadBoardsForDiscovery reads from.
+func saveBoardsForDiscovery(bf *config.BoardsFile) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	return config.SaveBoards(cfg, bf)
+}
+
 // stageDiscovery runs discovery before the cycle when a trigger fires:
 // first-run (no candidates ever), brief-hash change, or interval elapsed
 // (new setting discovery_interval_days, default 30). Discovery never
@@ -66,7 +183,7 @@ func loadBoardsForDiscovery() (*config.BoardsFile, error) {
 //
 // The returned reason names the trigger that fired (empty when no trigger
 // did); the error is a stage failure, never a reason to skip the sweep.
-func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, err error) {
+func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, landed int, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("autopilot: discovery panicked: %v — proceeding without it", r)
@@ -77,7 +194,7 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, err er
 	settings, serr := cfg.Store.GetSettings()
 	if serr != nil {
 		log.Printf("autopilot: discovery skipped (settings): %v", serr)
-		return "", nil
+		return "", 0, nil
 	}
 	interval := settings.DiscoveryIntervalDays
 	if interval <= 0 {
@@ -91,14 +208,14 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, err er
 	brief, berr := cfg.Store.GetBrief()
 	if berr != nil {
 		log.Printf("autopilot: discovery skipped (brief): %v", berr)
-		return "", nil
+		return "", 0, nil
 	}
 	briefText := brief.LLMInput().Text()
 
 	lastHash, lastAt, hasLast, lerr := cfg.Store.DiscoveryLastRun()
 	if lerr != nil {
 		log.Printf("autopilot: discovery skipped (trigger state): %v", lerr)
-		return "", nil
+		return "", 0, nil
 	}
 	cands, _ := cfg.Store.Candidates("")
 	reason = discovery.ShouldRunDiscovery(discovery.TriggerInput{
@@ -111,33 +228,33 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, err er
 		LastRunAt:     parseRFC3339OrZero(lastAt),
 	})
 	if reason == "" {
-		return "", nil
+		return "", 0, nil
 	}
 
 	out, derr := discoveryUniverse(ctx, cfg, briefText)
 	if derr != nil {
 		log.Printf("autopilot: discovery failed (%s): %v — proceeding with scoring", reason, derr)
-		return "", fmt.Errorf("discovery (%s): %w", reason, derr)
+		return "", 0, fmt.Errorf("discovery (%s): %w", reason, derr)
 	}
 
-	n, rerr := runAutoDiscovery(ctx, cfg, out.Facets)
+	run, rerr := runAutoDiscovery(ctx, cfg, out.Facets)
 	if rerr != nil {
 		log.Printf("autopilot: discovery failed (%s): %v — proceeding with scoring", reason, rerr)
-		return "", fmt.Errorf("discovery (%s): %w", reason, rerr)
+		return "", 0, fmt.Errorf("discovery (%s): %w", reason, rerr)
 	}
 	if serr := cfg.Store.SaveDiscoveryLastRun(discovery.BriefHash(briefText), timeNow().UTC().Format(time.RFC3339)); serr != nil {
 		log.Printf("autopilot: discovery state save failed: %v", serr)
 	}
-	log.Printf("autopilot: discovery ran (%s, via %s): %d new candidate(s)", reason, out.Source, n)
+	log.Printf("autopilot: discovery ran (%s, via %s): %d new candidate(s), %d board(s) landed", reason, out.Source, run.Discovered, run.Landed)
 	// A loop failure that fell back to the hardcoded universe is the run
 	// record's one discovery note: the stage errored (coverage narrowed to
 	// the built-in universe), the cycle ran on. Silent by design when keys
 	// are missing — the hardcoded path there is the no-key contract, not a
 	// failure.
 	if out.Fallback != "" {
-		return reason, fmt.Errorf("discovery (%s): agent loop unavailable (%s) — hardcoded universe used, sweep unaffected", reason, out.Fallback)
+		return reason, run.Landed, fmt.Errorf("discovery (%s): agent loop unavailable (%s) — hardcoded universe used, sweep unaffected", reason, out.Fallback)
 	}
-	return reason, nil
+	return reason, run.Landed, nil
 }
 
 // universeOutcome carries one discovery run's universe and where it came

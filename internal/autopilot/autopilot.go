@@ -249,9 +249,12 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	// Stage 0: Discovery — widen the company universe when a trigger
 	// fires (first-run / brief change / interval). Never blocks scoring:
 	// a failure is recorded as a stage error and the cycle proceeds.
-	if _, err := stageDiscovery(ctx, cfg); err != nil {
-		rec.stageError("%v", err)
+	// Landed boards ride the runlog as evidence, never a verdict input.
+	_, landed, derr := stageDiscovery(ctx, cfg)
+	if derr != nil {
+		rec.stageError("%v", derr)
 	}
+	rec.DiscoveredBoards = landed
 
 	// Stage 1: Source selection — zen picks which sources are worth
 	// sweeping for this brief (cached; aggregators-only fallback). The

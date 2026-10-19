@@ -38,6 +38,13 @@ type BoardEntry struct {
 	Enabled bool `toml:"enabled"`
 	// AddedAt records when the board was added (RFC3339).
 	AddedAt string `toml:"added_at,omitempty"`
+	// Discovered marks an auto-added board (WP-181): the autopilot landed
+	// it after the verify gate. The human action is keep (clear the flag)
+	// or block (remove + never re-suggest). Manual adds never set it.
+	Discovered bool `toml:"discovered,omitempty"`
+	// Domain is the company's careers domain, set only for discovered
+	// entries — the blocklist keys on it.
+	Domain string `toml:"domain,omitempty"`
 }
 
 // BoardsPath returns the path to the boards file inside the data dir.

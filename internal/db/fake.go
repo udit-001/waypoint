@@ -31,6 +31,7 @@ type FakeStore struct {
 	Postings              map[string]Posting
 	RunLogs               []RunLog
 	Companies             map[string]CompanyCandidate
+	BlockedDomainsSet     map[string]bool
 
 	changeEvents       []ChangeEvent
 	changeEventID      int64
@@ -828,6 +829,34 @@ func (f *FakeStore) Candidates(status string) ([]CompanyCandidate, error) {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+// BlockDomain adds a domain to the fake blocklist, normalized like the
+// SQLite adapter.
+func (f *FakeStore) BlockDomain(domain string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.BlockedDomainsSet == nil {
+		f.BlockedDomainsSet = make(map[string]bool)
+	}
+	d := NormalizeDomain(domain)
+	if d == "" {
+		return fmt.Errorf("block domain: empty domain")
+	}
+	f.BlockedDomainsSet[d] = true
+	return nil
+}
+
+// BlockedDomains returns the fake blocklist, sorted for determinism.
+func (f *FakeStore) BlockedDomains() ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, 0, len(f.BlockedDomainsSet))
+	for d := range f.BlockedDomainsSet {
+		out = append(out, d)
+	}
+	sort.Strings(out)
 	return out, nil
 }
 

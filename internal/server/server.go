@@ -126,6 +126,9 @@ func newMuxWithZenCatalog(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, 
 	mux.HandleFunc("DELETE /api/companies/{name}", handleRemoveCompany(withBoards))
 	mux.HandleFunc("PUT /api/companies/{name}", handleRestoreCompany(withBoards))
 	mux.HandleFunc("POST /api/companies/{name}/sweep", handleSweepCompany(store, loadBoards))
+	// Keep/block (WP-181): the two human actions on an auto-added board.
+	mux.HandleFunc("POST /api/companies/{name}/keep", handleKeepCompany(withBoards))
+	mux.HandleFunc("POST /api/companies/{name}/block", handleBlockCompany(store, withBoards))
 
 	// Postings review queue
 	mux.HandleFunc("GET /api/postings", handleListPostings(store))

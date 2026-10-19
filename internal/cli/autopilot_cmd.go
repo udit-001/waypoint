@@ -130,16 +130,17 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 
 		if jsonOut {
 			printJSON(map[string]any{
-				"run_id":      entry.ID,
-				"verdict":     entry.Verdict,
-				"new":         entry.PostingsNew,
-				"shortlisted": entry.PostingsShortlisted,
-				"dismissed":   entry.PostingsDismissed,
-				"errored":     entry.PostingsErrored,
-				"perSource":   entry.PerSource,
-				"stageErrors": entry.StageErrors,
-				"duration_ms": entry.DurationMs,
-				"elapsed_ms":  elapsed.Milliseconds(),
+				"run_id":           entry.ID,
+				"verdict":          entry.Verdict,
+				"new":              entry.PostingsNew,
+				"shortlisted":      entry.PostingsShortlisted,
+				"dismissed":        entry.PostingsDismissed,
+				"errored":          entry.PostingsErrored,
+				"perSource":        entry.PerSource,
+				"stageErrors":      entry.StageErrors,
+				"duration_ms":      entry.DurationMs,
+				"elapsed_ms":       elapsed.Milliseconds(),
+				"discoveredBoards": entry.DiscoveredBoards,
 			})
 			return nil
 		}
@@ -150,6 +151,9 @@ The cycle: sweep boards → detail → prefilter → LLM curate → store → ru
 		fmt.Printf("    Shortlisted:      %d\n", entry.PostingsShortlisted)
 		fmt.Printf("    Dismissed:        %d\n", entry.PostingsDismissed)
 		fmt.Printf("    Errors:           %d\n", entry.PostingsErrored)
+		if entry.DiscoveredBoards > 0 {
+			fmt.Printf("    Discovered boards: +%d\n", entry.DiscoveredBoards)
+		}
 		fmt.Printf("    Duration:         %s\n", elapsed.Round(time.Second))
 		fmt.Println()
 		return nil
@@ -206,6 +210,9 @@ func printRuns(runs []db.RunLog) {
 		fmt.Printf("    new %d  shortlisted %d  dismissed %d  errored %d  %s\n",
 			r.PostingsNew, r.PostingsShortlisted, r.PostingsDismissed, r.PostingsErrored,
 			formatRunDuration(r.DurationMs))
+		if r.DiscoveredBoards > 0 {
+			fmt.Printf("    +%d discovered boards\n", r.DiscoveredBoards)
+		}
 		for _, s := range r.PerSource {
 			if s.Skipped {
 				fmt.Printf("    %-18s skipped  %s\n", sourceLabel(s.Source), s.Reason)

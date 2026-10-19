@@ -19,6 +19,9 @@ type CompanyView struct {
 	URL      string `json:"url"`
 	Provider string `json:"provider,omitempty"`
 	Enabled  bool   `json:"enabled"`
+	// Discovered: auto-added by the autopilot (WP-181) — the row shows
+	// the badge and offers keep/block until the user decides.
+	Discovered bool `json:"discovered,omitempty"`
 
 	// New postings awaiting review, matched case-insensitively by company.
 	NewCount int `json:"newCount"`
@@ -71,12 +74,13 @@ func handleListCompanies(store db.Store, loadBoards func() ([]config.BoardEntry,
 		out := make([]CompanyView, 0, len(boards))
 		for _, b := range boards {
 			view := CompanyView{
-				Name:     b.Name,
-				Company:  b.Company,
-				URL:      b.URL,
-				Provider: b.Provider,
-				Enabled:  b.Enabled,
-				NewCount: counts[strings.ToLower(b.Company)],
+				Name:       b.Name,
+				Company:    b.Company,
+				URL:        b.URL,
+				Provider:   b.Provider,
+				Enabled:    b.Enabled,
+				Discovered: b.Discovered,
+				NewCount:   counts[strings.ToLower(b.Company)],
 			}
 			if st, ok := states[b.Name]; ok {
 				view.LastSweptAt = st.At

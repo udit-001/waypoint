@@ -91,6 +91,10 @@ type Store interface {
 	SaveCandidates(cands []CompanyCandidate) error
 	Candidates(status string) ([]CompanyCandidate, error)
 	SetCandidateStatus(id int64, status string) error
+	// Blocklist: domains the user blocked after a discovery auto-add
+	// (WP-181). Re-discovery skips blocked domains entirely.
+	BlockDomain(domain string) error
+	BlockedDomains() ([]string, error)
 
 	// Board sweep state + per-company new counts (WP-149) — the raw
 	// material of the Companies page's trust strip.

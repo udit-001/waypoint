@@ -157,7 +157,7 @@ func TestAgentLoop_submitsUnderBudget(t *testing.T) {
 // named back at it once, then the loop continues.
 func TestAgentLoop_nudgesProseTurn(t *testing.T) {
 	s := &agentScriptServer{script: []map[string]any{
-		map[string]any{"role": "assistant", "content": "Here is what I found so far..."},
+		{"role": "assistant", "content": "Here is what I found so far..."},
 		toolMsg("submit_companies", submitArgs),
 	}}
 	c := s.start(t)

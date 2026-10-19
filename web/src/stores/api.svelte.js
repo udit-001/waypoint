@@ -239,6 +239,9 @@ async function companyAction(name, action) {
 export function pauseCompany(name) { return companyAction(name, 'pause'); }
 export function resumeCompany(name) { return companyAction(name, 'resume'); }
 export function sweepCompany(name) { return companyAction(name, 'sweep'); }
+// Keep/block (WP-181): the two actions on an auto-added board.
+export function keepCompany(name) { return companyAction(name, 'keep'); }
+export function blockCompany(name) { return companyAction(name, 'block'); }
 
 export async function removeCompany(name) {
   return apiMutate('DELETE', '/companies/' + encodeURIComponent(name));

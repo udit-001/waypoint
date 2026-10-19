@@ -90,3 +90,56 @@ func Promote(ctx context.Context, companyName string, links []BoardLink, bf *con
 func BoardEntryName(name string) string {
 	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(name), " ", "-"))
 }
+
+// LandVerified lands already-verified candidates into boards.toml — the
+// auto-promote half of the promote path (WP-181). Discover's verify gate
+// has already proven each board link live, so no re-probe happens here;
+// the caller pays the network once. Entries are flagged Discovered and
+// carry the company domain, so keep/block on the Companies page acts
+// without consulting the ledger. Already-watched URLs are skipped;
+// a same-name board pointing elsewhere is the same conflict Promote
+// raises, and writes nothing (atomic: a conflict lands nothing). One
+// entry name = one board in boards.toml, so of a candidate's verified
+// boards the first lands and the rest skip — the company name links to
+// the first verified board. Returns the landed companies' names, in
+// candidate order, plus the number of extra verified boards skipped (one
+// entry name = one board, so beyond the first they cannot land — the
+// caller logs the count rather than dropping it silently).
+func LandVerified(cands []Candidate, bf *config.BoardsFile) (landed []string, skipped int, err error) {
+	for _, c := range cands {
+		entryName := BoardEntryName(c.Name)
+		wrote := false // one entry name = one board: the first verified wins
+		for _, l := range c.Boards {
+			if wrote {
+				skipped++
+				break
+			}
+			watched := false
+			for _, e := range bf.Boards {
+				if e.URL == l.URL {
+					watched = true
+					break
+				}
+			}
+			if watched {
+				continue
+			}
+			if existing := bf.Find(entryName); existing != nil && existing.URL != l.URL {
+				return landed, skipped, fmt.Errorf("board %q already exists with a different URL (%s)", entryName, existing.URL)
+			}
+			bf.Upsert(config.BoardEntry{
+				Name:       entryName,
+				Company:    c.Name,
+				URL:        l.URL,
+				Provider:   l.Provider,
+				Enabled:    true,
+				Discovered: true,
+				Domain:     strings.ToLower(strings.TrimSpace(c.Domain)),
+				AddedAt:    time.Now().UTC().Format(time.RFC3339),
+			})
+			wrote = true
+			landed = append(landed, c.Name)
+		}
+	}
+	return landed, skipped, nil
+}
