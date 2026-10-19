@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chipState, verdictMeta, dotColor, shortWhen, CHIP_TONE, DOT_TONE } from './autopilotCard.js';
+import { chipState, verdictMeta, verdictSentence, dotColor, shortWhen, CHIP_TONE, DOT_TONE } from './autopilotCard.js';
 
 // WP-183: the state chip answers "does anything need me?" in one chip.
 // waiting-on-you wins (people over broken machines), then degraded.
@@ -83,6 +83,46 @@ test('dotColor maps each verdict', () => {
   assert.equal(dotColor('nothing-survived'), 'blue');
   assert.equal(dotColor('degraded'), 'red');
   assert.equal(dotColor(''), 'faint');
+});
+
+// WP-182: the empty Matches page states the last run's verdict in one
+// sentence — verdictMeta's vocabulary, plus a recovery pointer where
+// the verdict names one.
+test('verdictSentence: quiet states the count and outcome', () => {
+  assert.deepEqual(
+    verdictSentence({ verdict: 'quiet', postingsNew: 42 }),
+    { text: 'Quiet — 42 postings, none fit.', dotClass: DOT_TONE.faint, href: null, pointer: '' },
+  );
+});
+
+test('verdictSentence: nothing-survived counts the dismissals', () => {
+  assert.deepEqual(
+    verdictSentence({ verdict: 'nothing-survived', postingsNew: 17, postingsDismissed: 17 }),
+    { text: 'Nothing survived — 17 postings, all dismissed.', dotClass: DOT_TONE.blue, href: null, pointer: '' },
+  );
+});
+
+test('verdictSentence: waiting-on-you points at the review queue', () => {
+  assert.deepEqual(
+    verdictSentence({ verdict: 'waiting-on-you', postingsShortlisted: 3 }),
+    { text: 'Needs you — 3 shortlists waiting in the review queue.', dotClass: DOT_TONE.amber, href: null, pointer: '' },
+  );
+});
+
+test('verdictSentence: degraded points at the Settings run log', () => {
+  assert.deepEqual(
+    verdictSentence({ verdict: 'degraded', stageErrors: ['sweep ncbs: timeout'] }),
+    { text: 'Degraded — sweep ncbs: timeout.', dotClass: DOT_TONE.red, href: '/settings', pointer: 'run log in Settings' },
+  );
+});
+
+test('verdictSentence: no run is null — never a fabricated verdict', () => {
+  assert.equal(verdictSentence(null), null);
+  assert.equal(verdictSentence(undefined), null);
+});
+
+test('verdictSentence: no verdict yet (run in progress) is null', () => {
+  assert.equal(verdictSentence({ verdict: '', startedAt: '2026-10-20T06:00:00' }), null);
 });
 
 // shortWhen: the artifact's "Today 06:12 / Yesterday / Mon" forms.

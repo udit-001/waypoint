@@ -38,6 +38,32 @@ export function verdictMeta(run) {
   }
 }
 
+// verdictSentence states the last run's verdict in one sentence for the
+// empty Matches page (WP-182). Derived from verdictMeta's vocabulary —
+// label + evidence fragment — plus a recovery pointer where the verdict
+// names one: waiting-on-you -> the review queue (woven into the
+// sentence), degraded -> the run log in Settings (the href/pointer
+// pair). Returns null when there is nothing to state — no run at all,
+// or a run still in progress (no verdict yet; the header status chip
+// carries "running now") — so the never-run state keeps its own line
+// and no fabricated verdict ever renders.
+export function verdictSentence(run) {
+  if (!run) return null;
+  const m = verdictMeta(run);
+  const dotClass = DOT_TONE[dotColor(run.verdict)];
+  switch (run.verdict) {
+    case 'waiting-on-you':
+      return { text: `${m.label} — ${m.what} in the review queue.`, dotClass, href: null, pointer: '' };
+    case 'degraded':
+      return { text: `${m.label} — ${m.what}.`, dotClass, href: '/settings', pointer: 'run log in Settings' };
+    case 'quiet':
+    case 'nothing-survived':
+      return { text: `${m.label} — ${m.what}.`, dotClass, href: null, pointer: '' };
+    default:
+      return null;
+  }
+}
+
 // dotColor maps a verdict to its state hue name (color = state only):
 // quiet idle, waiting amber, nothing-survived blue, degraded red.
 export function dotColor(verdict) {

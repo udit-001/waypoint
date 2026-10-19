@@ -21,6 +21,7 @@
   import { formatDateShort, relTime } from '../lib/format.js';
   import { candidateBoardLabel, pendingCandidates } from '../lib/discovery.js';
   import { renderMarkdown } from '../lib/markdown.js';
+  import { verdictSentence } from '../lib/autopilotCard.js';
   import { subscribeLive } from '../lib/live.js';
   import Skeleton from '../components/Skeleton.svelte';
   import * as api from '../stores/api.svelte.js';
@@ -188,6 +189,12 @@
     }
     return parts.join(' · ');
   });
+
+  // Empty-state verdict line (WP-182): when a run has happened, the
+  // empty Matches page answers "why did nothing show up?" with the
+  // last run's verdict in one sentence — copy from autopilotCard.js,
+  // dot color = state. No run yet keeps the original never-run lines.
+  let emptyVerdict = $derived(verdictSentence(autopilotData?.lastRun));
 
   let status = $derived.by(() => {
     if (!autopilotData) return null;
@@ -438,6 +445,17 @@
   <div class="text-center py-20 text-slate-400 dark:text-slate-500">
     <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('target', 48)}</div>
     <p class="text-sm">No matches yet — autopilot puts new matches here for review.</p>
+    {#if emptyVerdict}
+      <!-- Last run's verdict in one sentence: dot = state hue, copy
+           from the shared vocabulary. A pointer link only where the
+           verdict names somewhere to recover (degraded -> run log). -->
+      <p class="text-xs mt-3 flex items-center justify-center gap-1.5">
+        <span class="size-2 rounded-full shrink-0 {emptyVerdict.dotClass}"></span>
+        <span>{emptyVerdict.text}{#if emptyVerdict.href}
+          <a href={emptyVerdict.href} class="underline">· {emptyVerdict.pointer}</a>
+        {/if}</span>
+      </p>
+    {/if}
     {#if autopilotData?.enabled && !autopilotData.zenKeySet && autopilotData.lastRun?.finishedAt !== ''}
       <p class="text-xs mt-2 text-amber-600 dark:text-amber-400">
         Scoring is off — <a href="/settings" class="underline">add your Zen API key in Settings</a> so matches arrive scored.
