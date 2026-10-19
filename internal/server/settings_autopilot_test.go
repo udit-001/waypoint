@@ -198,3 +198,27 @@ func TestUpdateSettingsAcceptsDiscoveryInterval(t *testing.T) {
 		t.Errorf("DiscoveryIntervalDays = %d, want 14", stored.DiscoveryIntervalDays)
 	}
 }
+
+// WP-183: the Sources tab's discovery toggle must persist. The PATCH
+// whitelist is the seam — an unlisted key is silently dropped, so the
+// round-trip is the test.
+func TestUpdateSettingsDiscoveryEnabledRoundTrip(t *testing.T) {
+	f := db.NewFakeStore()
+	mux := newMuxWithLinkedIn(f, nil, nil)
+
+	req := httptest.NewRequest("PATCH", "/api/settings",
+		strings.NewReader(`{"discovery_enabled": 0}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("status = %d (%s), want 200", w.Code, w.Body.String())
+	}
+
+	st, err := f.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	if st.DiscoveryEnabled != 0 {
+		t.Errorf("DiscoveryEnabled = %d, want 0 — key silently dropped?", st.DiscoveryEnabled)
+	}
+}

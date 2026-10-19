@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/scraper"
 )
 
 // WP-178: the REST routes expose the same runlog records the CLI renders.
@@ -131,5 +132,35 @@ func TestAutopilotPayloadCarriesRuns(t *testing.T) {
 	}
 	if len(got.Runs) != 2 {
 		t.Errorf("runs = %d, want 2", len(got.Runs))
+	}
+}
+
+// WP-183: the state chip answers "does anything need me?" — the waiting
+// count is the current review-queue depth (shortlisted postings), read
+// from the same store, in the same payload.
+func TestAutopilotPayloadCarriesPendingShortlists(t *testing.T) {
+	f := db.NewFakeStore()
+	for _, u := range []string{"https://example.com/s1", "https://example.com/s2"} {
+		if err := f.AddPostings([]scraper.Result{{URL: u, Title: "Eng", Company: "Acme"}}); err != nil {
+			t.Fatalf("AddPostings: %v", err)
+		}
+		if err := f.SetPostingStatus(u, db.StatusShortlisted); err != nil {
+			t.Fatalf("SetPostingStatus: %v", err)
+		}
+	}
+	mux := newMuxWithLinkedIn(f, nil, nil)
+
+	req := httptest.NewRequest("GET", "/api/autopilot", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	var got struct {
+		PendingShortlists int `json:"pendingShortlists"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal %q: %v", w.Body.String(), err)
+	}
+	if got.PendingShortlists != 2 {
+		t.Errorf("pendingShortlists = %d, want 2", got.PendingShortlists)
 	}
 }

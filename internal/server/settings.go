@@ -69,7 +69,7 @@ func handleUpdateSettings(store db.Store) http.HandlerFunc {
 					names = append(names, s)
 				}
 				updates[k] = db.DisabledScrapersJSON(names)
-			case "items_per_page", "autopilot_cadence", "discovery_interval_days":
+			case "items_per_page", "autopilot_cadence", "discovery_interval_days", "discovery_enabled":
 				// Accept both float64 (JSON) and int.
 				if f, ok := v.(float64); ok {
 					updates[k] = int(f)

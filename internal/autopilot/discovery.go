@@ -196,6 +196,12 @@ func stageDiscovery(ctx context.Context, cfg CycleConfig) (reason string, landed
 		log.Printf("autopilot: discovery skipped (settings): %v", serr)
 		return "", 0, nil
 	}
+	// The Sources tab's discovery toggle is a hard off (WP-183): no
+	// trigger fires and no trigger state is written, so re-enabling
+	// starts from "first run", not a stale clock.
+	if settings.DiscoveryEnabled == 0 {
+		return "", 0, nil
+	}
 	interval := settings.DiscoveryIntervalDays
 	if interval <= 0 {
 		interval = 30

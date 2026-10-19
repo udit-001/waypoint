@@ -31,7 +31,7 @@ func init() {
 
 func (LinkedIn) Name() string         { return "linkedin" }
 func (LinkedIn) Source() string       { return sourceName }
-func (LinkedIn) Categories() []string { return []string{"tech", "biotech", "academic"} }
+func (LinkedIn) Categories() []string { return []string{"tech", "biotech", "academic", "aggregator"} }
 
 func (n LinkedIn) Search(ctx context.Context, opts scraper.SearchOpts) ([]scraper.Result, error) {
 	f := n.Fetcher

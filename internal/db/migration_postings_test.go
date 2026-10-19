@@ -105,6 +105,9 @@ func TestMigration00008_existingDB(t *testing.T) {
 		// rule as V16/V17/V18 — drop the column itself.
 		`ALTER TABLE autopilot_runs DROP COLUMN discovered_boards`,
 		`DELETE FROM goose_db_version WHERE version_id = 19`,
+		// V20 added settings.discovery_enabled; same ADD COLUMN rule.
+		`ALTER TABLE settings DROP COLUMN discovery_enabled`,
+		`DELETE FROM goose_db_version WHERE version_id = 20`,
 	} {
 		if _, err := raw.Exec(stmt); err != nil {
 			t.Fatalf("revert to V7 (%q): %v", stmt, err)

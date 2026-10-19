@@ -105,6 +105,9 @@ type Settings struct {
 	ZenModel              string `db:"zen_model" json:"zenModel"`
 	ExaAPIKey             string `db:"exa_api_key" json:"exaApiKey"`
 	DiscoveryIntervalDays int    `db:"discovery_interval_days" json:"discoveryIntervalDays"`
+	// Company-discovery toggle (WP-183): 0 = discovery never runs, no
+	// matter which trigger fires. Default 1.
+	DiscoveryEnabled int `db:"discovery_enabled" json:"discoveryEnabled"`
 }
 
 // MarshalJSON emits AutopilotDisabledScrapers as a JSON array (the same
@@ -151,6 +154,7 @@ var defaultSettings = Settings{
 	ItemsPerPage:          25,
 	AutopilotCadence:      6, // default 6 hours
 	DiscoveryIntervalDays: 30,
+	DiscoveryEnabled:      1,
 }
 
 // GetProfile returns the user profile. If no profile row exists yet, it
@@ -245,6 +249,7 @@ func ensureAutopilotSettingsColumns(s *SQLiteStore) {
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN exa_api_key TEXT DEFAULT ''`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN discovery_interval_days INTEGER NOT NULL DEFAULT 30`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_disabled_scrapers TEXT NOT NULL DEFAULT ''`)
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN discovery_enabled INTEGER NOT NULL DEFAULT 1`)
 }
 
 // GetSettings returns the app settings. If no settings row exists yet, it
@@ -253,7 +258,7 @@ func (s *SQLiteStore) GetSettings() (Settings, error) {
 	var st Settings
 	ensureAutopilotSettingsColumns(s)
 
-	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key, zen_model, exa_api_key, discovery_interval_days, autopilot_disabled_scrapers FROM settings WHERE id = 1`)
+	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key, zen_model, exa_api_key, discovery_interval_days, discovery_enabled, autopilot_disabled_scrapers FROM settings WHERE id = 1`)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return defaultSettings, nil
@@ -284,6 +289,7 @@ func (s *SQLiteStore) UpsertSettings(updates map[string]any) error {
 		"zen_model":               "zen_model",
 		"exa_api_key":             "exa_api_key",
 		"discovery_interval_days": "discovery_interval_days",
+		"discovery_enabled":       "discovery_enabled",
 
 		"autopilot_disabled_scrapers": "autopilot_disabled_scrapers",
 	}

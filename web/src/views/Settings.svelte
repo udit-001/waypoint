@@ -5,64 +5,172 @@ import { setPage } from '../stores/page.svelte.js';
   import Spinner from '../components/Spinner.svelte';
   import ZenModelPicker from '../components/ZenModelPicker.svelte';
   import Card from '../components/Card.svelte';
-  import { formatDateTime } from '../lib/format.js';
   import * as api from '../stores/api.svelte.js';
+  import { chipState, verdictMeta, dotColor, shortWhen, CHIP_TONE, DOT_TONE } from '../lib/autopilotCard.js';
 
-  let settingsData = $state(null);
-  let currentFont = $state('sans');
-  let autopilotEnabled = $state(null);
-  let autopilotCadence = $state(6);
-  let lastRun = $state(null);
+  // WP-183: one tabbed autopilot card (locked Harbor variation 4).
+  // Always visible: state chip + enable toggle. Tabs carry the rest.
+  let tab = $state('runs');
+
+  let autopilot = $state(null);
+  let toggling = $state(false);
   let autopilotError = $state(null);
-  let zenKeySet = $state(false);
+
+  let scrapers = $state([]);
+  let togglingScraper = $state('');
+
+  let togglingDiscovery = $state(false);
+  let cadenceSaving = $state(false);
+
+  let discoveredCount = $state(null);
+
+  // Keys: state chips in Setup (artifact). A missing key's chip opens
+  // the inline editor row — the one affordance the chip state needs.
+  let keyEditor = $state('');
   let zenKeyValue = $state('');
+  let zenKeySet = $state(false);
+  let zenKeySaving = $state(false);
+  let zenKeyError = $state(null);
+  let exaKeyValue = $state('');
+  let exaKeySet = $state(false);
+  let exaKeySaving = $state(false);
+  let exaKeyError = $state(null);
+
   let zenModel = $state('');
   let zenModels = $state([]);
   let zenModelSaving = $state(false);
   let zenModelSaved = $state(false);
-  let zenKeySaving = $state(false);
-  let zenKeySaved = $state(false);
-  let zenKeyError = $state(null);
-  let exaKeySet = $state(false);
-  let exaKeyValue = $state('');
-  let exaKeySaving = $state(false);
-  let exaKeySaved = $state(false);
-  let exaKeyError = $state(null);
-  let autopilotToggling = $state(false);
+
+  let settingsData = $state(null);
+  let currentFont = $state('sans');
   let briefComplete = $state(null);
-  let briefOpenCount = $state(0);
 
   onMount(async () => {
     setPage({ title: 'Settings' });
 
     await api.settings.ensure();
     settingsData = api.settings.value;
-    zenModel = settingsData.zenModel || ''; // empty = shipped default (big-pickle)
+    zenModel = settingsData.zenModel || '';
     currentFont = document.documentElement.dataset.font || localStorage.getItem('waypoint_font') || 'sans';
 
-    // Load autopilot data + brief status.
+    // The card reads four stores; each refreshes independently so one
+    // slow endpoint can't blank the others.
+    try { await api.autopilot.ensure(); autopilot = api.autopilot.value; zenKeySet = !!autopilot?.zenKeySet; exaKeySet = !!autopilot?.exaKeySet; } catch { autopilot = null; }
+
+    // Preserve the enable gate the old card carried: autopilot cannot
+    // turn on until the curation brief is complete (server enforces it
+    // too; this keeps the toggle honest before the attempt).
     try {
-      const [autopRes, briefRes] = await Promise.all([
-        fetch('/api/autopilot'),
-        fetch('/api/brief'),
-      ]);
-      if (autopRes.ok) {
-        const data = await autopRes.json();
-        autopilotEnabled = data.enabled;
-        autopilotCadence = data.cadence || 6;
-        lastRun = data.lastRun;
-        zenKeySet = !!data.zenKeySet;
-        exaKeySet = !!data.exaKeySet;
-      }
-      if (briefRes.ok) {
-        const b = await briefRes.json();
-        briefComplete = !!b.complete;
-        briefOpenCount = (b.open || []).length;
-      } else {
-        briefComplete = false;
-      }
+      const b = await (await fetch('/api/brief')).json();
+      briefComplete = !!b.complete;
     } catch { briefComplete = false; }
+    try { await api.scrapers.ensure(); scrapers = api.scrapers.value; } catch { scrapers = []; }
+    try { await api.companies.ensure(); discoveredCount = (api.companies.value || []).filter((c) => c.discovered).length; } catch { discoveredCount = null; }
+
+    try {
+      const res = await fetch('/api/zen/models');
+      if (res.ok) zenModels = (await res.json()).models || [];
+    } catch { /* dropdown falls back to current selection only */ }
   });
+
+  const pendingShortlists = $derived(autopilot?.pendingShortlists ?? 0);
+  const lastRun = $derived(autopilot?.lastRun ?? null);
+  const chip = $derived(autopilot ? chipState(lastRun?.verdict ?? '', pendingShortlists) : null);
+  const discoveryOn = $derived(settingsData ? settingsData.discoveryEnabled !== false : true);
+  const discoveryInterval = $derived(settingsData?.discoveryIntervalDays || 30);
+  const cadence = $derived(autopilot?.cadence || 6);
+  const enableBlocked = $derived(briefComplete === false && !autopilot?.enabled);
+
+  // The verdict line is the hero run; the rows beneath are the NEXT 4
+  // (trust over time, no duplicate hero row).
+  const hero = $derived(lastRun ? verdictMeta(lastRun) : null);
+  const recentRuns = $derived(
+    (autopilot?.runs || []).slice(1, 5).map((r) => ({ meta: verdictMeta(r), verdict: r.verdict, when: shortWhen(r.startedAt) })),
+  );
+  const noRunMeta = $derived(verdictMeta(null));
+
+  const chipTone = CHIP_TONE;
+  const dotTone = DOT_TONE;
+
+  async function toggleAutopilot() {
+    if (toggling) return;
+    toggling = true;
+    autopilotError = null;
+    const newState = !autopilot.enabled;
+    try {
+      await api.saveSetting('autopilot_enabled', newState ? 1 : 0);
+      autopilot = { ...autopilot, enabled: newState };
+    } catch (e) {
+      autopilotError = e.message;
+    } finally {
+      toggling = false;
+    }
+  }
+
+  // One scraper's opt-out flips one entry in the disabled list; the
+  // PATCH replaces the whole canonical array (the WP-175 whitelist).
+  async function toggleScraper(s) {
+    if (togglingScraper) return;
+    togglingScraper = s.id;
+    try {
+      const disabledIds = scrapers.filter((x) => x.disabled && x.id !== s.id).map((x) => x.id);
+      const next = s.disabled ? disabledIds : [...disabledIds, s.id];
+      await api.saveSetting('autopilot_disabled_scrapers', next);
+      scrapers = scrapers.map((x) => (x.id === s.id ? { ...x, disabled: !x.disabled } : x));
+    } catch (e) {
+      autopilotError = e.message;
+    } finally {
+      togglingScraper = '';
+    }
+  }
+
+  async function toggleDiscovery() {
+    if (togglingDiscovery) return;
+    togglingDiscovery = true;
+    try {
+      const next = !discoveryOn;
+      await api.saveSetting('discovery_enabled', next ? 1 : 0);
+      settingsData = { ...settingsData, discoveryEnabled: next };
+    } catch (e) {
+      autopilotError = e.message;
+    } finally {
+      togglingDiscovery = false;
+    }
+  }
+
+  async function stepCadence(delta) {
+    if (cadenceSaving) return;
+    const next = Math.min(24, Math.max(1, cadence + delta));
+    if (next === cadence) return;
+    cadenceSaving = true;
+    try {
+      await api.saveSetting('autopilot_cadence', next);
+      autopilot = { ...autopilot, cadence: next };
+    } catch (e) {
+      autopilotError = e.message;
+    } finally {
+      cadenceSaving = false;
+    }
+  }
+
+  async function saveZenKey() {
+    zenKeyError = null;
+    if (!zenKeyValue.trim()) {
+      zenKeyError = 'Paste a key first.';
+      return;
+    }
+    zenKeySaving = true;
+    try {
+      await api.saveSetting('zen_api_key', zenKeyValue.trim());
+      zenKeySet = true;
+      zenKeyValue = '';
+      keyEditor = '';
+    } catch (e) {
+      zenKeyError = e.message;
+    } finally {
+      zenKeySaving = false;
+    }
+  }
 
   async function saveExaKey() {
     exaKeyError = null;
@@ -72,19 +180,10 @@ import { setPage } from '../stores/page.svelte.js';
     }
     exaKeySaving = true;
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ exa_api_key: exaKeyValue.trim() }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${res.status}`);
-      }
+      await api.saveSetting('exa_api_key', exaKeyValue.trim());
       exaKeySet = true;
       exaKeyValue = '';
-      exaKeySaved = true;
-      setTimeout(() => { exaKeySaved = false; }, 2000);
+      keyEditor = '';
     } catch (e) {
       exaKeyError = e.message;
     } finally {
@@ -92,98 +191,16 @@ import { setPage } from '../stores/page.svelte.js';
     }
   }
 
-  async function loadZenModels() {
-    try {
-      const res = await fetch('/api/zen/models');
-      if (res.ok) {
-        const data = await res.json();
-        zenModels = data.models || [];
-      }
-    } catch { /* dropdown falls back to current selection only */ }
-  }
-  loadZenModels();
-
   async function saveZenModel() {
     if (zenModelSaving) return;
     zenModelSaving = true;
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zen_model: zenModel }),
-      });
-      if (res.ok) {
-        zenModelSaved = true;
-        setTimeout(() => { zenModelSaved = false; }, 1500);
-      }
+      await api.saveSetting('zen_model', zenModel);
+      zenModelSaved = true;
+      setTimeout(() => { zenModelSaved = false; }, 1500);
     } finally {
       zenModelSaving = false;
     }
-  }
-
-  async function toggleAutopilot() {
-    if (autopilotToggling) return;
-    autopilotToggling = true;
-    autopilotError = null;
-    const newState = !autopilotEnabled;
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ autopilot_enabled: newState ? 1 : 0 }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        autopilotError = data.error || 'Failed to toggle';
-        return;
-      }
-      const updated = await res.json();
-      autopilotEnabled = updated.autopilotEnabled === 1;
-    } catch (e) {
-      autopilotError = e.message;
-    } finally {
-      autopilotToggling = false;
-    }
-  }
-
-  async function saveZenKey() {
-    zenKeyError = null;
-    if (!zenKeyValue.trim()) {
-      zenKeyError = 'Paste a key first — it starts with oc_.';
-      return;
-    }
-    zenKeySaving = true;
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zen_api_key: zenKeyValue.trim() }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        zenKeyError = data.error || 'Failed to save key';
-        return;
-      }
-      zenKeySet = true;
-      zenKeyValue = '';
-      zenKeySaved = true;
-      setTimeout(() => { zenKeySaved = false; }, 2000);
-    } catch (e) {
-      zenKeyError = e.message;
-    } finally {
-      zenKeySaving = false;
-    }
-  }
-
-  function runErrors(run) {
-    return Array.isArray(run?.stageErrors) ? run.stageErrors : [];
-  }
-
-  function formatDuration(ms) {
-    if (!ms) return '';
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${Math.round(ms / 100) / 10}s`;
-    return `${Math.round(ms / 60000)}m`;
   }
 
   function setFont(font) {
@@ -191,181 +208,198 @@ import { setPage } from '../stores/page.svelte.js';
     document.documentElement.dataset.font = font;
     localStorage.setItem('waypoint_font', font);
   }
-
 </script>
 
-<div class="space-y-4">  <div class="pt-2">
+<div class="space-y-4">
+  <div class="pt-2">
     <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">Autopilot</h2>
   </div>
 
-<!-- Autopilot -->
-  <Card hover={false}>
-    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
-      {@html iconSvg('zap', 20)} Autopilot
-    </h3>
-    {#if autopilotEnabled !== null}
-      <div class="space-y-3">
-        {#if briefComplete === false && !autopilotEnabled}
-          <div class="flex items-start gap-2 p-3 bg-tint-amber border border-warning rounded-lg">
-            <span class="text-warning-strong mt-0.5">{@html iconSvg('alert-circle', 14)}</span>
-            <div class="text-xs text-warning leading-relaxed">
-              <span class="font-medium text-warning-strong">Curation brief incomplete</span> — complete your preferences first (location, remote, salary, etc.) before enabling autopilot.
-              <a href="/get-started" class="underline ml-1 text-link">Open wizard →</a>
-            </div>
-          </div>
+  <Card hover={false} class="!p-4">
+    <!-- Always visible: the answer to "does anything need me?" + the one enable toggle -->
+    <div class="flex items-center justify-between gap-3">
+      <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">Autopilot</span>
+      <span class="flex items-center gap-2">
+        {#if chip}
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold {chipTone[chip.tone]}">{chip.copy}</span>
         {/if}
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-slate-700">Enabled</span>
+        <button
+          role="switch"
+          aria-checked={!!autopilot?.enabled}
+          aria-label="Autopilot enabled"
+          disabled={toggling || !autopilot || enableBlocked}
+          title={enableBlocked ? 'Complete your curation brief first' : ''}
+          class="relative inline-flex h-[17px] w-[30px] items-center rounded-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 {autopilot?.enabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'}"
+          onclick={toggleAutopilot}
+        >
+          <span class="inline-block h-[13px] w-[13px] transform rounded-full bg-white transition-transform {autopilot?.enabled ? 'translate-x-[15px]' : 'translate-x-[2px]'}" />
+        </button>
+      </span>
+    </div>
+    {#if autopilotError}
+      <p class="text-xs text-red-600 mt-2">{autopilotError}</p>
+    {/if}
+
+    <!-- Tabs: Runs / Review / Sources / Setup (variation 4) -->
+    <div class="flex gap-0.5 bg-slate-100 dark:bg-slate-700 rounded-lg p-[3px] mt-3">
+      {#each [['runs', 'Runs'], ['review', 'Review'], ['sources', 'Sources'], ['setup', 'Setup']] as [id, label]}
+        <button
+          class="flex-1 rounded-md py-1.5 text-xs font-medium cursor-pointer {tab === id
+            ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 shadow-sm'
+            : 'text-slate-500 dark:text-slate-400'}"
+          onclick={() => (tab = id)}
+        >{label}</button>
+      {/each}
+    </div>
+
+    {#if !autopilot}
+      <div class="py-4"><Spinner text="Loading autopilot..." /></div>
+    {:else if tab === 'runs'}
+      <!-- Last-run verdict line + 4 recent runs + the one rule -->
+      {#if lastRun}
+        <div class="row flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold {chipTone[hero.chipClass || 'slate']}">{hero.label}</span>
+          <span class="text-xs text-slate-500 flex-1 text-left">{hero.what}</span>
+        </div>
+      {/if}
+      {#each recentRuns as r}
+        <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+          <span class="flex items-center gap-2 text-[13px] text-slate-700 dark:text-slate-200 shrink-0">
+            <span class="inline-block size-2 rounded-full {dotTone[dotColor(r.verdict)]}"></span>
+            {r.when}
+          </span>
+          <span class="text-xs text-slate-500 flex-1 text-left">{r.meta.label} — {r.meta.what}</span>
+        </div>
+      {:else}
+        <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+          <span class="text-[13px] text-slate-700 dark:text-slate-200">Runs</span>
+          <span class="text-xs text-slate-500 flex-1 text-left">{noRunMeta.label} — {noRunMeta.what}</span>
+        </div>
+      {/each}
+      <div class="flex items-center min-h-[30px] py-1">
+        <span class="text-[11px] text-slate-400 dark:text-slate-500">3 quiet in a row = stale search</span>
+      </div>
+    {:else if tab === 'review'}
+      <!-- The two entry points into the human gates -->
+      <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+        <span class="text-[13px] text-slate-700 dark:text-slate-200">Review queue</span>
+        <span class="text-xs text-slate-500 flex-1 text-left">{pendingShortlists} shortlists</span>
+        <a href="/found" class="text-xs font-medium text-link hover:underline shrink-0">Open →</a>
+      </div>
+      <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+        <span class="text-[13px] text-slate-700 dark:text-slate-200">New boards</span>
+        <span class="text-xs text-slate-500 flex-1 text-left">{discoveredCount === null ? '—' : discoveredCount} — keep = ignore, block = gone</span>
+        <a href="/companies" class="text-xs font-medium text-link hover:underline shrink-0">Companies →</a>
+      </div>
+    {:else if tab === 'sources'}
+      <!-- Per-scraper opt-outs; off here = autopilot never uses it -->
+      {#each scrapers as s (s.id)}
+        <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+          <span class="text-[13px] text-slate-700 dark:text-slate-200 shrink-0">{s.name}</span>
+          <span class="text-xs text-slate-500 flex-1 text-left">{s.aggregator ? 'aggregator' : 'portal'}</span>
           <button
             role="switch"
-            aria-checked={!!autopilotEnabled}
-            aria-label="Autopilot enabled"
-            disabled={autopilotToggling || (briefComplete === false && !autopilotEnabled)}
-            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-[120ms] ease-[var(--ease-in-out)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 {autopilotEnabled ? 'bg-slate-800' : 'bg-slate-300'}"
-            onclick={toggleAutopilot}
+            aria-checked={!s.disabled}
+            aria-label="{s.name} enabled"
+            disabled={togglingScraper === s.id}
+            class="relative inline-flex h-[17px] w-[30px] items-center rounded-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 {!s.disabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'}"
+            onclick={() => toggleScraper(s)}
           >
-            <span
-              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-[120ms] ease-[var(--ease-in-out)] active:scale-90 {autopilotEnabled ? 'translate-x-6' : 'translate-x-1'}"
-            />
+            <span class="inline-block h-[13px] w-[13px] transform rounded-full bg-white transition-transform {!s.disabled ? 'translate-x-[15px]' : 'translate-x-[2px]'}" />
           </button>
         </div>
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-slate-700">Cadence</span>
-          <span class="text-sm text-slate-500">Every {autopilotCadence}h</span>
-        </div>
-        {#if lastRun}
-          <div class="flex items-center justify-between">
-            <span class="text-sm text-slate-700">Last run</span>
-            <span class="text-sm text-slate-500">
-              {formatDateTime(lastRun.startedAt) || lastRun.startedAt}
-            </span>
-          </div>
-          {#if lastRun.finishedAt}
-            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-600 grid grid-cols-2 gap-y-1.5 text-xs">
-              <span class="text-slate-400">Found</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{lastRun.postingsNew}</span>
-              <span class="text-slate-400">Shortlisted</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{lastRun.postingsShortlisted}</span>
-              <span class="text-slate-400">Dismissed</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{lastRun.postingsDismissed}</span>
-              <span class="text-slate-400">Errored</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{lastRun.postingsErrored}</span>
-              <span class="text-slate-400">Duration</span><span class="text-slate-600 dark:text-slate-300 tabular-nums text-right">{formatDuration(lastRun.durationMs)}</span>
-            </div>
-            {#if runErrors(lastRun).length > 0}
-              <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-600">
-                <p class="text-[11px] font-semibold uppercase tracking-wide text-red-500 mb-1.5">Last run errors</p>
-                <ul class="space-y-1">
-                  {#each runErrors(lastRun).slice(0, 5) as err}
-                    <li class="text-xs text-red-500 dark:text-red-400 break-words">{err}</li>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
-          {:else}
-            <p class="text-xs text-slate-400 mt-2 flex items-center gap-1.5">
-              <span class="inline-block size-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Running now — this page updates when it finishes.
-            </p>
-          {/if}
-        {/if}
-        {#if autopilotError}
-          <p class="text-xs text-red-600 mt-2">{autopilotError}</p>
-        {/if}
-      </div>
-    {:else}
-      <p class="text-sm text-slate-400">Loading...</p>
-    {/if}
-  </Card>
-
-
-<!-- Zen API key -->
-  <Card hover={false}>
-    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
-      {@html iconSvg('zap', 20)} Zen API key
-    </h3>
-
-    {#if zenKeySet}
-      <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
-        {@html iconSvg('check-circle', 14)}
-        Key saved — scoring is active.
-      </p>
-    {/if}
-    <div class="flex gap-2">
-      <input
-        type="password"
-        bind:value={zenKeyValue}
-        placeholder={zenKeySet ? 'Replace saved key…' : 'oc_…'}
-        autocomplete="off"
-        aria-label="Zen API key"
-        maxlength="128"
-        class="flex-1 min-w-0 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-slate-400"
-      />
-      <button
-        class="px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"
-        disabled={zenKeySaving}
-        onclick={saveZenKey}
-      >{zenKeySaving ? 'Saving…' : zenKeySaved ? 'Saved' : 'Save'}</button>
-    </div>
-    {#if zenKeyError}
-      <p class="text-xs text-red-600 mt-2">{zenKeyError}</p>
-    {/if}
-    {#if !zenKeySet}
-      <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">No Zen key — the 25 freshest postings per cycle arrive unscored. Add a key to score everything.</p>
-    {/if}
-    <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-600">
-      <label class="wp-label" for="zen-model">Curation model</label>
-      <div class="flex gap-2">
-        <ZenModelPicker models={zenModels} bind:value={zenModel} />
+      {/each}
+      <!-- Company discovery: one toggle; the interval is the knob's value -->
+      <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px]">
+        <span class="text-[13px] text-slate-700 dark:text-slate-200 shrink-0">Discovery (Exa)</span>
+        <span class="text-xs text-slate-500 flex-1 text-left">every {discoveryInterval} days</span>
         <button
-          class="px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"
-          disabled={zenModelSaving || !zenKeySet}
-          title={zenKeySet ? '' : 'Save a Zen key first'}
-          onclick={saveZenModel}
-        >{zenModelSaving ? 'Saving…' : zenModelSaved ? 'Saved' : 'Apply'}</button>
+          role="switch"
+          aria-checked={discoveryOn}
+          aria-label="Company discovery enabled"
+          disabled={togglingDiscovery}
+          class="relative inline-flex h-[17px] w-[30px] items-center rounded-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 {discoveryOn ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'}"
+          onclick={toggleDiscovery}
+        >
+          <span class="inline-block h-[13px] w-[13px] transform rounded-full bg-white transition-transform {discoveryOn ? 'translate-x-[15px]' : 'translate-x-[2px]'}" />
+        </button>
       </div>
-    </div>
-    <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">
-      Sign up at <a href="https://opencode.ai/auth" target="_blank" rel="noopener noreferrer" class="text-link underline">opencode.ai/auth</a> → open <span class="font-medium">Billing</span> → copy your key (starts with <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">oc_</code>) and paste it above. Uses free-tier models.
-    </p>
+    {:else if tab === 'setup'}
+      <!-- Cadence stepper + keys as state chips -->
+      <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+        <span class="text-[13px] text-slate-700 dark:text-slate-200">Cadence</span>
+        <span class="inline-flex items-center border border-slate-200 dark:border-slate-600 rounded-md overflow-hidden shrink-0">
+          <button class="w-7 h-7 bg-slate-50 dark:bg-slate-700 text-slate-500 cursor-pointer" aria-label="Decrease cadence" onclick={() => stepCadence(-1)}>−</button>
+          <span class="min-w-[74px] text-center text-xs font-medium text-slate-700 dark:text-slate-200">every {cadence}h</span>
+          <button class="w-7 h-7 bg-slate-50 dark:bg-slate-700 text-slate-500 cursor-pointer" aria-label="Increase cadence" onclick={() => stepCadence(1)}>+</button>
+        </span>
+      </div>
+      <!-- Zen key row -->
+      <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+        <span class="text-[13px] text-slate-700 dark:text-slate-200">Zen key</span>
+        <span class="text-xs text-slate-500 flex-1 text-left">scoring</span>
+        {#if keyEditor === 'zen'}
+          <span class="flex items-center gap-2 shrink-0">
+            <input
+              type="password"
+              bind:value={zenKeyValue}
+              placeholder="oc_…"
+              autocomplete="off"
+              aria-label="Zen API key"
+              maxlength="128"
+              class="w-44 px-2 py-1 text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:border-slate-400"
+            />
+            <button class="px-2 py-1 text-[11px] font-medium bg-slate-800 text-white rounded-md hover:opacity-90 cursor-pointer disabled:opacity-50" disabled={zenKeySaving} onclick={saveZenKey}>{zenKeySaving ? 'Saving…' : 'Save'}</button>
+          </span>
+        {:else}
+          <button
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold cursor-pointer {zenKeySet ? chipTone.green + ' cursor-default' : chipTone.amber}"
+            aria-label={zenKeySet ? 'Zen key set' : 'Add Zen key'}
+            onclick={() => (zenKeySet ? null : (keyEditor = 'zen'))}
+          >{zenKeySet ? 'ok' : 'missing'}</button>
+        {/if}
+      </div>
+      {#if keyEditor === 'zen' && zenKeyError}
+        <p class="text-xs text-red-600">{zenKeyError}</p>
+      {/if}
+      <!-- Exa key row -->
+      <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+        <span class="text-[13px] text-slate-700 dark:text-slate-200">Exa key</span>
+        <span class="text-xs text-slate-500 flex-1 text-left">discovery</span>
+        {#if keyEditor === 'exa'}
+          <span class="flex items-center gap-2 shrink-0">
+            <input
+              type="password"
+              bind:value={exaKeyValue}
+              placeholder="exa key"
+              autocomplete="off"
+              aria-label="Exa API key"
+              maxlength="128"
+              class="w-44 px-2 py-1 text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:border-slate-400"
+            />
+            <button class="px-2 py-1 text-[11px] font-medium bg-slate-800 text-white rounded-md hover:opacity-90 cursor-pointer disabled:opacity-50" disabled={exaKeySaving} onclick={saveExaKey}>{exaKeySaving ? 'Saving…' : 'Save'}</button>
+          </span>
+        {:else}
+          <button
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold cursor-pointer {exaKeySet ? chipTone.green + ' cursor-default' : chipTone.amber}"
+            aria-label={exaKeySet ? 'Exa key set' : 'Add Exa key'}
+            onclick={() => (exaKeySet ? null : (keyEditor = 'exa'))}
+          >{exaKeySet ? 'ok' : 'missing'}</button>
+        {/if}
+      </div>
+      {#if keyEditor === 'exa' && exaKeyError}
+        <p class="text-xs text-red-600">{exaKeyError}</p>
+      {/if}
+      <!-- Curation model: shipped in WP-163; kept here until its fate is decided -->
+      <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px]">
+        <span class="text-[13px] text-slate-700 dark:text-slate-200">Curation model</span>
+        <span class="flex items-center gap-2 shrink-0">
+          <ZenModelPicker models={zenModels} bind:value={zenModel} />
+          <button class="px-2 py-1 text-[11px] font-medium bg-slate-800 text-white rounded-md hover:opacity-90 cursor-pointer disabled:opacity-50" disabled={zenModelSaving || !zenKeySet} title={zenKeySet ? '' : 'Save a Zen key first'} onclick={saveZenModel}>{zenModelSaving ? 'Saving…' : zenModelSaved ? 'Saved' : 'Apply'}</button>
+        </span>
+      </div>
+    {/if}
   </Card>
-
-
-<!-- Exa API key -->
-  <Card hover={false}>
-    <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-200 mb-2">
-      {@html iconSvg('search', 20)} Exa API key
-    </h3>
-    {#if !exaKeySet}
-    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">Optional — suggests new companies to watch. Uses your Zen key.</p>
-    {/if}
-    {#if exaKeySet}
-      <p class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-3">
-        {@html iconSvg('check-circle', 14)}
-        Key saved — brief-driven discovery is active.
-      </p>
-    {/if}
-    <div class="flex gap-2">
-      <input
-        type="password"
-        bind:value={exaKeyValue}
-        placeholder={exaKeySet ? 'Replace saved key…' : 'exa key'}
-        autocomplete="off"
-        aria-label="Exa API key"
-        maxlength="128"
-        class="flex-1 min-w-0 px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-slate-400"
-      />
-      <button
-        class="px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:opacity-90 transition-colors cursor-pointer disabled:opacity-50"
-        disabled={exaKeySaving}
-        onclick={saveExaKey}
-      >{exaKeySaving ? 'Saving…' : exaKeySaved ? 'Saved' : 'Save'}</button>
-    </div>
-    {#if exaKeyError}
-      <p class="text-xs text-red-600 mt-2">{exaKeyError}</p>
-    {/if}
-    <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">
-      Create a free account at <a href="https://dashboard.exa.ai" target="_blank" rel="noopener noreferrer" class="text-link underline">dashboard.exa.ai</a> (no credit card needed), then copy a key from <span class="font-medium">API Keys</span> and paste it above.
-    </p>
-    <p class="text-xs text-slate-400 dark:text-slate-500 mt-2 leading-relaxed">A discovery run makes ~30–60 paid lookups.</p>
-  </Card>
-
 
   <div class="pt-2">
     <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1">Preferences</h2>
@@ -406,7 +440,7 @@ import { setPage } from '../stores/page.svelte.js';
     <h3 class="flex items-center gap-2 text-base font-semibold text-slate-800 mb-2">
       <span class="text-lg">{@html iconSvg('type', 20)}</span> Typography
     </h3>
-    
+
     <div class="flex gap-3">
       <button
         class="flex-1 p-4 rounded-lg border-2 text-center cursor-pointer transition-[border-color] {currentFont === 'sans' ? 'border-slate-700 bg-slate-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'}"

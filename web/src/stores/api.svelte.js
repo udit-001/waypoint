@@ -173,7 +173,18 @@ export const settings = createStore(async () => {
     defaultView: s.defaultView || 'dashboard',
     itemsPerPage: s.itemsPerPage || 25,
     zenModel: s.zenModel || '',
+    // Company-discovery toggle + interval (WP-183 Sources tab). Absent
+    // field = enabled: the toggle only turns discovery off.
+    discoveryEnabled: s.discoveryEnabled !== 0,
+    discoveryIntervalDays: s.discoveryIntervalDays || 30,
   };
+});
+
+// Scrapers for the Sources tab (WP-183): the compile-time registry
+// joined with each scraper's opt-out state.
+export const scrapers = createStore(async () => {
+  const data = await api('/scrapers');
+  return Array.isArray(data.scrapers) ? data.scrapers : [];
 });
 
 // ─── Artifacts ──────────────────────────────────────────

@@ -139,6 +139,7 @@ func newMuxWithZenCatalog(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, 
 	// Autopilot
 	mux.HandleFunc("GET /api/autopilot", handleGetAutopilot(store))
 	mux.HandleFunc("GET /api/autopilot/runs", handleAutopilotRuns(store))
+	mux.HandleFunc("GET /api/scrapers", handleListScrapers(store))
 
 	// Live-sync (SSE — tails the change_events table)
 	mux.HandleFunc("GET /api/events", handleEvents(store))
@@ -569,6 +570,9 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 
 		lastRun, hasRun, _ := store.GetLastRun()
 		runs, _ := store.ListRunLogs(db.DefaultRunLogLimit)
+		// The state chip's "N postings waiting" (WP-183): the review
+		// queue's depth, read from the same store in the same payload.
+		pending, _ := store.CountPostings(db.StatusShortlisted)
 
 		cadence := settings.AutopilotCadence
 		if cadence <= 0 {
@@ -576,12 +580,13 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 		}
 
 		resp := map[string]any{
-			"enabled":   settings.AutopilotEnabled == 1,
-			"cadence":   cadence,
-			"zenKeySet": settings.ZenAPIKey != "",
-			"exaKeySet": settings.ExaAPIKey != "",
-			"lastRun":   nil,
-			"runs":      runs,
+			"enabled":           settings.AutopilotEnabled == 1,
+			"cadence":           cadence,
+			"zenKeySet":         settings.ZenAPIKey != "",
+			"exaKeySet":         settings.ExaAPIKey != "",
+			"lastRun":           nil,
+			"runs":              runs,
+			"pendingShortlists": pending,
 		}
 		if hasRun {
 			resp["lastRun"] = lastRun
