@@ -112,7 +112,7 @@ func newFamilyClient(t *testing.T, sseURL string, cat *Catalog) *Client {
 // catalog's URL wins over the hardcoded path.
 func TestClient_endpointRoutesFromCatalog(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"count":1,"opencodeVersion":"1.18.35","models":[{"id":"big-pickle","api":"openai-completions","endpoint":"https://opencode.ai/zen/v2/chat/completions"}]}`))
+		w.Write([]byte(`{"count":1,"opencodeVersion":"1.18.35","models":[{"id":"big-pickle","api":"openai-completions","endpoint":"https://opencode.ai/inference/v2/chat/completions"}]}`))
 	}))
 	t.Cleanup(up.Close)
 	cat := NewCatalog(CatalogConfig{URL: up.URL})
@@ -135,7 +135,7 @@ func TestClient_endpointRoutesFromCatalog(t *testing.T) {
 }
 
 // TestClient_foreignEndpointFallsBackToFamilyPath: an endpoint that does
-// not sit under the production /zen prefix carries no derivable relative
+// not sit under the production /inference prefix carries no derivable relative
 // path, so routing falls back to the family default rather than guessing.
 func TestClient_foreignEndpointFallsBackToFamilyPath(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -347,8 +347,8 @@ func TestClient_familyDefaultsToChat(t *testing.T) {
 	if !strings.HasSuffix(u.at(0).path, "/v1/chat/completions") {
 		t.Errorf("endpoint = %q, want chat-completions", u.at(0).path)
 	}
-	if !regexp.MustCompile(`^opencode/1\.18\.31 ai-sdk/provider-utils`).MatchString(u.at(0).ua) {
-		t.Errorf("UA = %q, want the floored opencode UA", u.at(0).ua)
+	if !regexp.MustCompile(`^opencode/latest/2\.0\.26/cli`).MatchString(u.at(0).ua) {
+		t.Errorf("UA = %q, want the floored opencode v2 UA", u.at(0).ua)
 	}
 }
 

@@ -70,47 +70,31 @@ func TestOpencodeID_counterInTime(t *testing.T) {
 	}
 }
 
-// TestOpencodeIDFromSeed_stable: same seed, same id; matches the documented
-// sha1 split (6 time bytes + 14 body bytes).
-func TestOpencodeIDFromSeed_stable(t *testing.T) {
-	a := opencodeIDFromSeed("ses", "install-seed")
-	b := opencodeIDFromSeed("ses", "install-seed")
-	if a != b {
-		t.Fatalf("seed ids differ: %q vs %q", a, b)
-	}
-	if !regexp.MustCompile(sesShape).MatchString(a) {
-		t.Errorf("seed id = %q, want %s", a, sesShape)
-	}
-	if a == opencodeIDFromSeed("ses", "other-seed") {
-		t.Error("different seeds produced the same id")
-	}
-}
-
-// TestOpencodeUserAgent: full UA = opencode/<version> + AI-SDK suffix.
+// TestOpencodeUserAgent: full v2 UA = opencode/<channel>/<version>/<client>.
 func TestOpencodeUserAgent(t *testing.T) {
-	got := opencodeUserAgent("1.18.31")
-	want := "opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
-	if got != want {
+	if got, want := opencodeUserAgent("2.1.3"), "opencode/latest/2.1.3/cli"; got != want {
+		t.Errorf("UA = %q, want %q", got, want)
+	}
+	if got, want := opencodeUserAgent(openCodeMinUAVersion), "opencode/latest/"+openCodeMinUAVersion+"/cli"; got != want {
 		t.Errorf("UA = %q, want %q", got, want)
 	}
 }
 
-// TestValidOpencodeVersion: stale/garbage versions clamp to the floor;
-// fresh ones pass through untouched.
+// TestValidOpencodeVersion: v1 versions (major < 2, the form the pre-v2
+// curated lists carried) and garbage clamp to the floor; v2 versions pass
+// through untouched.
 func TestValidOpencodeVersion(t *testing.T) {
 	cases := []struct {
 		in, want string
 	}{
 		{"", openCodeMinUAVersion},
 		{"garbage", openCodeMinUAVersion},
-		{"1.16.9", openCodeMinUAVersion}, // below the 1.17 server gate
+		{"1.19.3", openCodeMinUAVersion}, // a v1 catalogue version — clamps
 		{"1.9", openCodeMinUAVersion},
 		{"0.5.1", openCodeMinUAVersion},
-		{"1.17.0", "1.17.0"},
-		{"1.18.31", "1.18.31"},
-		{"1.19.2", "1.19.2"},
 		{"2.0.0", "2.0.0"},
-		{"1.18.31\n", "1.18.31"},
+		{"2.0.26", "2.0.26"},
+		{"2.1.3\n", "2.1.3"},
 	}
 	for _, c := range cases {
 		if got := validOpencodeVersion(c.in); got != c.want {
@@ -146,19 +130,42 @@ func TestGateToolsPerFamily(t *testing.T) {
 	}
 }
 
-// TestEnsureFreeTierShape: empty/missing tools gain the placeholder in the
-// payload's family wrapper; non-empty tools are untouched.
+// TestWithGateDecoys: the gate seam — decoys ride first, caller's tools
+// follow, and the caller's slice is never aliased.
+func TestWithGateDecoys(t *testing.T) {
+	edefs := []toolDef{curateToolDef, searchCompanyToolDef}
+	got := withGateDecoys(edefs)
+	if len(got) != 4 {
+		t.Fatalf("len = %d, want decoys + 2 caller tools", len(got))
+	}
+	if got[0].Name != gateToolDefs[0].Name || got[1].Name != gateToolDefs[1].Name {
+		t.Errorf("gate decoys missing at the front: %v, %v", got[0].Name, got[1].Name)
+	}
+	if got[2].Name != curateToolDef.Name || got[3].Name != searchCompanyToolDef.Name {
+		t.Errorf("caller tools not preserved: %v, %v", got[2].Name, got[3].Name)
+	}
+	edefs[0] = toolDef{Name: "mutated"}
+	if got[2].Name != curateToolDef.Name {
+		t.Error("result aliases the caller's slice")
+	}
+}
+
+// TestEnsureFreeTierShape: empty tools gain the two gate decoys; populated
+// tools are untouched; the decoy turn carries tool_choice "none".
 func TestEnsureFreeTierShape(t *testing.T) {
 	payload := map[string]any{"model": "m"}
 	ensureFreeTierShape(payload, apiChatCompletions)
 	tools, _ := payload["tools"].([]any)
 	if len(tools) != 2 {
-		t.Fatalf("tools = %v, want the two gate tools", payload["tools"])
+		t.Fatalf("tools = %v, want the two gate decoys", payload["tools"])
 	}
 	fn0, _ := tools[0].(map[string]any)["function"].(map[string]any)
 	fn1, _ := tools[1].(map[string]any)["function"].(map[string]any)
 	if fn0["name"] != "read" || fn1["name"] != "bash" {
 		t.Errorf("gate tools = %v, %v, want read + bash", fn0["name"], fn1["name"])
+	}
+	if got, _ := payload["tool_choice"]; got != "none" {
+		t.Errorf("tool_choice = %v, want \"none\" on the decoy turn", got)
 	}
 
 	populated := map[string]any{"tools": []any{wireTool(curateToolDef, apiChatCompletions)}}
@@ -176,7 +183,7 @@ func TestEnsureFreeTierShape(t *testing.T) {
 	unknown := map[string]any{}
 	ensureFreeTierShape(unknown, "some-unknown-family")
 	if got, _ := unknown["tools"].([]any); len(got) != 2 {
-		t.Errorf("unknown family tools = %v, want the two chat-completions gate tools", unknown["tools"])
+		t.Errorf("unknown family tools = %v, want the two chat-completions gate decoys", unknown["tools"])
 	}
 	google := map[string]any{}
 	ensureFreeTierShape(google, apiGoogleGenerativeAI)
@@ -185,12 +192,11 @@ func TestEnsureFreeTierShape(t *testing.T) {
 	}
 }
 
-// TestEnsureFreeTierShape_toolChoiceNoneOnInjectedDecoys: tool-less turns
-// gain the decoys AND tool_choice "none" on completions-shaped families, so
-// the model cannot call a tool it was told is unavailable (verified 200
-// against the live gateway 2026-09-20). Reasoning models were
-// observed wandering into a decoy call without it. Anthropic has no "none";
-// responses coerces to "auto" in its own buildBody.
+// TestEnsureFreeTierShape_toolChoice: tool-less turns gain tool_choice
+// "none" on completions-shaped families (verified 200 against the live
+// gateway 2026-09-20, so the model cannot call a decoy) — anthropic has no
+// "none"; the Responses lane always carries "auto" (verified by pi-zen,
+// Oct 2026); google-generative-ai is skipped.
 func TestEnsureFreeTierShape_toolChoiceNoneOnInjectedDecoys(t *testing.T) {
 	cases := []struct {
 		api     string
@@ -199,7 +205,7 @@ func TestEnsureFreeTierShape_toolChoiceNoneOnInjectedDecoys(t *testing.T) {
 	}{
 		{apiChatCompletions, "none", true},
 		{"some-unknown-family", "none", true},
-		{apiOpenAIResponses, nil, false},   // handled by responsesWire.buildBody
+		{apiOpenAIResponses, "auto", true},
 		{apiAnthropicMessages, nil, false}, // Anthropic has no "none"
 		{apiGoogleGenerativeAI, nil, false},
 	}
@@ -210,6 +216,67 @@ func TestEnsureFreeTierShape_toolChoiceNoneOnInjectedDecoys(t *testing.T) {
 		if ok != tc.wantSet || got != tc.want {
 			t.Errorf("api %q: tool_choice = %v (set=%v), want %v (set=%v)", tc.api, got, ok, tc.want, tc.wantSet)
 		}
+	}
+	// Real tools must not ride a "none" choice — deleted (mimo rejects any
+	// explicit choice on real-tool turns).
+	populated := map[string]any{
+		"tools":       []any{wireTool(curateToolDef, apiChatCompletions)},
+		"tool_choice": "none",
+	}
+	ensureFreeTierShape(populated, apiChatCompletions)
+	if _, ok := populated["tool_choice"]; ok {
+		t.Error("real-tool turn must not carry tool_choice \"none\" (mimo rejects it)")
+	}
+}
+
+// TestEnsureFreeTierShape_reasoningPlaceholder: chat-lane assistant turns
+// gain the reasoning_content placeholder (a v2-era rule, verified by
+// pi-zen, Oct 2026: reasoning models 400 multi-turn replays without it);
+// non-assistant turns and turns that already carry one pass through; the
+// responses/anthropic/google lanes are excluded.
+func TestEnsureFreeTierShape_reasoningPlaceholder(t *testing.T) {
+	payload := map[string]any{
+		"messages": []message{
+			{Role: "system", Content: "sys"},
+			{Role: "user", Content: "u1"},
+			{Role: "assistant", Content: "a1", ToolCalls: []toolCall{{ID: "call_1"}}},
+			{Role: "tool", Content: "t1"},
+		},
+	}
+	turns, _ := payload["messages"].([]message) // the caller's original slice
+	ensureFreeTierShape(payload, apiChatCompletions)
+	msgs, _ := payload["messages"].([]message)
+	if len(msgs) != 4 {
+		t.Fatalf("messages = %d, want the same 4 turns", len(msgs))
+	}
+	if turns[0].ReasoningContent != "" || turns[1].ReasoningContent != "" || turns[3].ReasoningContent != "" {
+		t.Errorf("non-assistant turns must not gain the placeholder: %+v", turns)
+	}
+	if msgs[2].ReasoningContent != " " {
+		t.Errorf("assistant placeholder = %q, want single space", msgs[2].ReasoningContent)
+	}
+	// The caller's slice is never mutated in place (turn history is reused
+	// across retry attempts).
+	if turns[2].ReasoningContent != "" {
+		t.Errorf("original assistant message was mutated in place: %+v", turns[2])
+	} // A turn that already carries one keeps it.
+	withRC := map[string]any{"messages": []message{{Role: "assistant", ReasoningContent: "real reasoning"}}}
+	ensureFreeTierShape(withRC, apiChatCompletions)
+	got, _ := withRC["messages"].([]message)
+	if got[0].ReasoningContent != "real reasoning" {
+		t.Errorf("existing reasoning_content overwritten: %q", got[0].ReasoningContent)
+	}
+	// Responses and anthropic lanes are excluded.
+	resp := map[string]any{"input": []any{}}
+	ensureFreeTierShape(resp, apiOpenAIResponses)
+	if _, ok := resp["messages"]; ok {
+		t.Error("responses lane must not gain chat messages")
+	}
+	anth := map[string]any{"messages": []message{{Role: "assistant", Content: "a"}}}
+	ensureFreeTierShape(anth, apiAnthropicMessages)
+	anthMsgs, _ := anth["messages"].([]message)
+	if anthMsgs[0].ReasoningContent != "" {
+		t.Error("anthropic lane must not gain the chat placeholder")
 	}
 }
 

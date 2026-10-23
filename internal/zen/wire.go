@@ -2,13 +2,11 @@ package zen
 
 // OpenCode wire parity (WP-162): the identity algorithms and free-tier
 // request shape the zen gateway's free tier validates, mirrored from
-// upstream opencode (captured live requests and 9router PR #4105). Everything
+// upstream opencode (captured live requests and opencode's upstream identifier fix). Everything
 // here is internal to the package; callers see only the client's
 // Config/Curate/Complete.
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -23,14 +21,21 @@ const (
 	apiGoogleGenerativeAI = "google-generative-ai"
 )
 
-// openCodeMinUAVersion is the verified-good opencode version: the server
-// serves the free tier only to User-Agent opencode/<version> with
-// major > 1 or (major == 1 && minor >= 17). Stale catalog versions clamp
-// here (the verified-good UA floor parity).
-const openCodeMinUAVersion = "1.18.31"
+// OpenCode v2 identity (verified against the live gateway from a captured
+// live 2.0.26 request — see docs/research/zen-api.md and pi-zen shared.ts):
+// since OpenCode v2 (2026-10-14) the server enforces the UA shape
+// opencode/<channel>/<version>/<client> with major >= 2. The v1 form
+// (opencode/<version>, optionally with the AI-SDK suffix) and any
+// x-opencode-request header are rejected with 403 FreeTierError.
+const (
+	openCodeUAChannel = "latest"
+	openCodeUAClient  = "cli"
 
-// openCodeUASuffix is the AI-SDK suffix opencode's client appends.
-const openCodeUASuffix = "ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+	// openCodeMinUAVersion is the verified-good opencode v2 version floor:
+	// the UA version must have major >= 2 or the free tier 403s. Stale
+	// catalog versions clamp here (the verified-good UA floor parity).
+	openCodeMinUAVersion = "2.0.26"
+)
 
 // The free-tier tool-name gate (verified by live bisection 2026-09-19,
 // see docs/research/zen-api.md): the request's tools array must include at
@@ -38,10 +43,16 @@ const openCodeUASuffix = "ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
 // otherwise 403 FreeTierError regardless of everything else. Custom tools
 // (curate_posting, search_company, ...) ride along freely once the gate is
 // satisfied. The gate validates the NAMES, not the schemas (verified live
-// with empty properties), so the definitions are decoys: the descriptions
-// tell the model they are unavailable, which keeps reasoning models on
-// tool-less turns from wandering into a call (executeTool would answer
-// harmlessly, but the detour burns a retry).
+// with empty properties), so the definitions are decoys — the deliberate
+// Waypoint choice, keeping the client tool-free: the descriptions tell the
+// model they are unavailable, which keeps reasoning models from wandering
+// into a call (executeTool would answer harmlessly, but the detour burns a
+// retry).
+//
+// A v2-era report (pi-zen, Oct 2026) claimed the gate hardens to full
+// definition comparison; a subsequent probe (2026-09-20) returned 200 on
+// both routes with these stubs — keep the stubs, and if the gate ever
+// hardens the ZEN_LIVE=1 probe is the canary that says so.
 const gateToolDescription = "This tool is currently unavailable and must not be used. Do not call it, and do not mention it."
 
 var gateToolDefs = []toolDef{
@@ -63,30 +74,31 @@ var gateToolDefs = []toolDef{
 	},
 }
 
-// opencodeUserAgent builds the UA opencode sends.
+// opencodeUserAgent builds the v2 UA opencode sends:
+// opencode/<channel>/<version>/<client>.
 func opencodeUserAgent(version string) string {
-	return "opencode/" + version + " " + openCodeUASuffix
+	return "opencode/" + openCodeUAChannel + "/" + validOpencodeVersion(version) + "/" + openCodeUAClient
 }
 
-var versionShape = regexp.MustCompile(`^(\d+)\.(\d+)(?:\.(\d+))?`)
+// versionShape anchors a bare X.Y.Z version: the only form the v2 UA clamp
+// accepts verbatim (a bare "2.1" or junk clamps to the floor).
+var versionShape = regexp.MustCompile(`^(\d+)\.\d+\.\d+`)
 
-// validOpencodeVersion clamps a catalog version to one the free tier
-// accepts: untouched when major > 1 or (major == 1 && minor >= 17), the
-// verified-good floor otherwise (including unparseable input).
+// validOpencodeVersion clamps a configured opencode version to one the v2
+// free tier accepts: untouched when major >= 2, the verified-good floor
+// otherwise (including unparseable input) — the verified-good floor the
+// gateway enforces: a v1 form or low version draws 403
+// FreeTierError from OpenCode before the request is ever served.
 func validOpencodeVersion(version string) string {
 	m := versionShape.FindStringSubmatch(strings.TrimSpace(version))
 	if m == nil {
 		return openCodeMinUAVersion
 	}
-	major, majorErr := strconv.Atoi(m[1])
-	minor, minorErr := strconv.Atoi(m[2])
-	if majorErr != nil || minorErr != nil {
+	major, err := strconv.Atoi(m[1])
+	if err != nil || major < 2 {
 		return openCodeMinUAVersion
 	}
-	if major > 1 || (major == 1 && minor >= 17) {
-		return m[0]
-	}
-	return openCodeMinUAVersion
+	return m[0]
 }
 
 // opencodeIDAlphabet is opencode's base62 id alphabet, upstream order.
@@ -121,19 +133,13 @@ func opencodeID(prefix string, timestampMS int64, counter int, random []byte) st
 	return b.String()
 }
 
-// opencodeIDFromSeed derives a stable opencode-shaped id from a seed
-// (sha1: 6 time bytes + 14 body bytes) — used for the process-stable
-// session id so zen's sticky provider routing survives restarts.
-func opencodeIDFromSeed(prefix, seed string) string {
-	digest := sha1.Sum([]byte(seed))
-	var b strings.Builder
-	b.WriteString(prefix)
-	b.WriteByte('_')
-	b.WriteString(hex.EncodeToString(digest[:6]))
-	for _, r := range digest[6:20] {
-		b.WriteByte(opencodeIDAlphabet[r%byte(len(opencodeIDAlphabet))])
-	}
-	return b.String()
+// withGateDecoys is the gate seam: the decoys ride first, then the
+// caller's tools. Composition detail (which decoys, how many, what
+// position) lives here — callers state intent, not recipe.
+func withGateDecoys(defs []toolDef) []toolDef {
+	out := make([]toolDef, 0, len(defs)+len(gateToolDefs))
+	out = append(out, gateToolDefs...)
+	return append(out, defs...)
 }
 
 // ---- free-tier request shape -------------------------------------------------
@@ -208,32 +214,98 @@ var curateToolDef = toolDef{
 	},
 }
 
-// ensureFreeTierShape guarantees the agent-turn shape the free tier
-// requires: stream stays true and the tools array gains the gate-satisfying
-// client tools wrapped for the payload's family when the caller passed
-// none. Unknown families default to chat-completions (the family every
-// free model uses); google-generative-ai is skipped entirely (verified
-// parity — a different tool shape with no free models today, left untouched
-// rather than mangled).
+// ensureFreeTierShape guarantees the free-tier request shape:
+//
+//  1. an empty tools array gains the gate decoys (read/bash placeholders,
+//     wrapped for the payload's family) — the deliberate Waypoint policy:
+//     the client stays tool-free, the decoy names satisfy the tool-name
+//     gate, and on chat-completions (and unknown families, which default
+//     to its shape) tool_choice is forced to "none" so the model cannot
+//     call a tool it was told is unavailable (verified 200 against the
+//     live gateway 2026-09-20; mimo's tool_choice rejection was observed
+//     on real-tool turns, which never take this path);
+//  2. non-empty tools are left untouched, together with any tool_choice
+//     already set (mimo — WP-127);
+//  3. openai-responses: tool_choice is coerced to "auto" (the only value
+//     the Responses lane accepts; store:false stays buildBody's own
+//     invariant);
+//  4. anthropic-messages: no tool_choice handling (no "none" exists);
+//  5. chat-completions assistant history gains a reasoning_content
+//     placeholder when one is missing — a v2-era wire rule (verified by
+//     pi-zen Oct 2026): reasoning models 400 multi-turn replays without
+//     it, and the response pipeline strips the field, so a placeholder can
+//     never echo real reasoning back; non-reasoning models ignore the
+//     field.
+//
+// The shape pass never mutates the caller's message slice in place — the
+// system prompt and turn history are reused across attempts, and a mutated
+// placeholder would compound. It copies first. google-generative-ai is
+// skipped entirely (verified parity — a different tool shape with no free
+// models today, left untouched rather than mangled).
 func ensureFreeTierShape(payload map[string]any, api string) {
 	if api == apiGoogleGenerativeAI {
 		return
 	}
-	if tools, ok := payload["tools"].([]any); ok && len(tools) > 0 {
-		return
+
+	tools, _ := payload["tools"].([]any)
+	chatLane := api != apiOpenAIResponses && api != apiAnthropicMessages
+	if len(tools) == 0 {
+		gate := []any{wireTool(gateToolDefs[0], api), wireTool(gateToolDefs[1], api)}
+		payload["tools"] = gate
+		if chatLane {
+			if _, set := payload["tool_choice"]; !set {
+				payload["tool_choice"] = "none"
+			}
+		}
+	} else if choice, ok := payload["tool_choice"]; ok && choice == "none" {
+		// Real tools must not ride a "none" choice (mimo — WP-127); delete
+		// a lingered one defensively.
+		delete(payload, "tool_choice")
 	}
-	gate := []any{wireTool(gateToolDefs[0], api), wireTool(gateToolDefs[1], api)}
-	payload["tools"] = gate
-	// The decoys exist only to satisfy the gate; on chat-completions (and
-	// unknown families, which default to its shape) force tool_choice "none"
-	// so the model cannot call a tool it was told is unavailable — verified
-	// 200 against the live gateway. (mimo's tool_choice rejection was
-	// observed on real-tool curation turns, which never take this path).
-	// Responses coerces to "auto" instead (see responsesWire.buildBody);
-	// Anthropic has no "none".
-	if api != apiOpenAIResponses && api != apiAnthropicMessages {
-		if _, set := payload["tool_choice"]; !set {
-			payload["tool_choice"] = "none"
+
+	if api == apiOpenAIResponses {
+		payload["tool_choice"] = "auto"
+	}
+	if chatLane {
+		injectReasoningPlaceholder(payload)
+	}
+}
+
+// injectReasoningPlaceholder maps the chat-shaped messages so every
+// assistant turn carries a nonempty reasoning_content — Zen reasoning
+// models 400 multi-turn chats without it, and the response pipeline strips
+// the field, so a placeholder can never echo real reasoning (verified
+// live Oct 2026). Non-assistant turns and turns that already carry one pass
+// through; the input slice is copied, never mutated.
+func injectReasoningPlaceholder(payload map[string]any) {
+	switch msgs := payload["messages"].(type) {
+	case []message:
+		out := make([]message, len(msgs))
+		copy(out, msgs)
+		changed := false
+		for i := range out {
+			if out[i].Role == "assistant" && strings.TrimSpace(out[i].ReasoningContent) == "" {
+				out[i].ReasoningContent = " "
+				changed = true
+			}
+		}
+		if changed {
+			payload["messages"] = out
+		}
+	case []map[string]any:
+		out := make([]map[string]any, len(msgs))
+		copy(out, msgs)
+		changed := false
+		for i := range out {
+			if role, _ := out[i]["role"].(string); role == "assistant" {
+				if rc, ok := out[i]["reasoning_content"].(string); !ok || strings.TrimSpace(rc) == "" {
+					out[i]["reasoning_content"] = " "
+					changed = true
+				}
+			}
+		}
+		if changed {
+			payload["messages"] = out
 		}
 	}
 }

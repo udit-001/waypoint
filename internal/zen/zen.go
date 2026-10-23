@@ -2,17 +2,23 @@
 // chat-completions client with client-side session history and
 // tool-call verdicts (WP-138).
 //
-// Wire research (docs/research/zen-api.md, WP-127): zen is an
-// OpenAI-compatible gateway; free models are gated by the
-// User-Agent header (omit it and every free call 429s). The
-// conversation lives client-side — the wire is stateless per call;
-// x-opencode-session only feeds metrics + provider stickiness.
+// Wire research (docs/research/zen-api.md, WP-127; v2 recipe verified
+// against the live gateway, Oct 2026): zen is an
+// OpenAI-compatible gateway; the free tier serves only OpenCode v2-CLI-
+// shaped traffic — identity headers (UA opencode/latest/<v>/cli, the
+// x-opencode-* set WITHOUT the v1 x-opencode-request), a streaming
+// request whose tools array carries the free-tier gate decoys (read and
+// bash placeholders carrying opencode tool NAMES), and opencode-shaped
+// ses_ ids whose time fields are real
+// epoch timestamps. The conversation lives client-side — the wire is
+// stateless per call; x-opencode-session only feeds metrics + provider
+// stickiness.
 //
 // Tool schema is locked by the WP-131 curation prototype (14/14
 // live verdicts): curate_posting{verdict, score, reasons}. No
-// explicit tool_choice on real-tool turns (mimo rejects it) — but injected
-// tool-less turns force tool_choice "none" (see ensureFreeTierShape);
-// max_tokens >= 1024.
+// explicit tool_choice on real-tool turns (mimo rejects it); v2 also
+// rejects tool_choice "none" (the v1 cloak) with 403 FreeTierError — see
+// ensureFreeTierShape. max_tokens >= 1024.
 package zen
 
 import (
@@ -28,7 +34,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -87,11 +92,11 @@ func ResolveModel(saved string) string {
 // DefaultConfig returns the shipped configuration: the zen gateway,
 // free-tier default model, no paid fallback.
 //
-// The UA is the full opencode shape with the verified-good floor version
-// (the free tier 426/403s waypoint's own version or stale opencode UAs);
-// attaching a Catalog upgrades it to the catalog's fresh opencodeVersion.
+// The UA is the full opencode v2 shape with the verified-good floor version
+// (the free tier 403s anything below major 2); attaching a Catalog upgrades
+// it to a fresh v2 opencodeVersion when the curated list carries one.
 func DefaultConfig() Config {
-	baseURL := "https://opencode.ai/zen"
+	baseURL := "https://opencode.ai/inference"
 	// Test escape hatch: route through a proxy / local capture server
 	// without touching stored settings.
 	if env := strings.TrimSpace(os.Getenv("ZEN_BASE_URL")); env != "" {
@@ -124,31 +129,30 @@ type Client struct {
 	fallbackModel string
 	searcher      CompanySearcher // optional company research
 	pageFetcher   PageFetcher     // optional posting-page fetch
-
-	idMu      sync.Mutex
-	idMS      int64 // millisecond of the current request id
-	idCounter int   // msg_ counter within that millisecond
 }
 
-// New builds a Client with a stable opencode-shaped ses_ identity: derived
-// from the project seed when set, so zen's sticky provider routing and
-// prompt cache survive restarts; a random per-process seed otherwise.
+// New builds a Client with an opencode-v2 ses_ identity minted once per
+// client (a real epoch-ms timestamp — a hash-derived time field draws 403,
+// see the comment in New).
 func New(cfg Config) *Client {
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = &http.Client{Timeout: 120 * time.Second}
 	}
-	seed := strings.TrimSpace(cfg.ProjectID)
-	if seed == "" {
-		b := make([]byte, 16)
-		if _, err := rand.Read(b); err != nil {
-			panic("zen: crypto/rand unavailable: " + err.Error())
-		}
-		seed = hex.EncodeToString(b)
+	// The session id must carry a plausible epoch-ms timestamp in its 12
+	// hex chars: verified live Oct 2026 (pi-zen), a ses_ whose time field
+	// derives from a hash — the previous opencodeIDFromSeed scheme — draws
+	// 403 FreeTierError, while any real timestamp passes (7 days old
+	// verified 200). Mint the id exactly once per client and cache it, so
+	// zen's sticky provider routing and prompt cache stay warm within the
+	// process; sessions never outlive the timestamp's validity.
+	nonce := make([]byte, 14)
+	if _, err := rand.Read(nonce); err != nil {
+		panic("zen: crypto/rand unavailable: " + err.Error())
 	}
 	return &Client{
 		cfg:           cfg,
 		httpClient:    cfg.HTTPClient,
-		sessionID:     opencodeIDFromSeed("ses", seed),
+		sessionID:     opencodeID("ses", time.Now().UnixMilli(), 0, nonce),
 		baseURL:       strings.TrimRight(cfg.BaseURL, "/"),
 		fallbackModel: cfg.FallbackModel,
 	}
@@ -157,8 +161,11 @@ func New(cfg Config) *Client {
 // zenProductionBasePath is the path of the shipped zen base URL. The
 // catalog's absolute endpoints live under it; the suffix relative to it is
 // what gets appended to whatever base the client carries — the production
-// host and a ZEN_BASE_URL proxy alike route identically.
-const zenProductionBasePath = "/zen"
+// host and a ZEN_BASE_URL proxy alike route identically. The free tier
+// moved from /zen/v1 to /inference/* with OpenCode v2 (Oct 2026,
+// verified live);
+// /zen/v1 answers every free request with 403 FreeTierError.
+const zenProductionBasePath = "/inference"
 
 // wireFor resolves how one model is reached: the family wire to encode
 // with, and the request path to send it to. One catalog lookup answers
@@ -207,23 +214,6 @@ func (c *Client) authorization() string {
 		return "Bearer public"
 	}
 	return "Bearer " + c.cfg.APIKey
-}
-
-// nextRequestID mints a fresh ascending opencode msg_ id per request.
-func (c *Client) nextRequestID() string {
-	c.idMu.Lock()
-	defer c.idMu.Unlock()
-	now := time.Now().UnixMilli()
-	if now != c.idMS {
-		c.idMS = now
-		c.idCounter = 0
-	}
-	c.idCounter++
-	nonce := make([]byte, 14)
-	if _, err := rand.Read(nonce); err != nil {
-		panic("zen: crypto/rand unavailable: " + err.Error())
-	}
-	return opencodeID("msg", now, c.idCounter, nonce)
 }
 
 // SetCompanySearcher injects a company research backend.
@@ -280,10 +270,11 @@ func (e *Error) Error() string {
 // ---- wire types ---------------------------------------------------------
 
 type message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
-	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
+	Role             string     `json:"role"`
+	Content          string     `json:"content,omitempty"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	ToolCalls        []toolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string     `json:"tool_call_id,omitempty"`
 }
 
 type toolCall struct {
@@ -445,7 +436,12 @@ func (c *Client) sendWire(ctx context.Context, wire familyWire, path string, bod
 	req.Header.Set("User-Agent", c.userAgent()) // free-tier gate
 	req.Header.Set("x-opencode-client", "cli")
 	req.Header.Set("x-opencode-session", c.sessionID)
-	req.Header.Set("x-opencode-request", c.nextRequestID())
+	// OpenCode v2 session headers (verified live Oct 2026): the same ses_ value under
+	// all four names; the v1 per-request x-opencode-request header is gone —
+	// v2 rejects it with 403 FreeTierError.
+	req.Header.Set("x-opencode-session-id", c.sessionID)
+	req.Header.Set("x-session-affinity", c.sessionID)
+	req.Header.Set("x-session-id", c.sessionID)
 	if c.cfg.ProjectID != "" {
 		req.Header.Set("x-opencode-project", c.cfg.ProjectID)
 	}
@@ -526,9 +522,10 @@ func (c *Client) decodeTurn(ctx context.Context, wire familyWire, path, model st
 // shape-rejected (403 FreeTierError) even with perfect identity headers.
 func (c *Client) call(ctx context.Context, model string, msgs []message) (message, Verdict, bool, *Error) {
 	wire, path := c.wireFor(model)
-	// The gate client tools ride first (the free-tier tool-name gate
-	// requires >=2 known opencode tool names), then the real curation set.
-	msg, finish, serr := c.decodeTurn(ctx, wire, path, model, msgs, []toolDef{gateToolDefs[0], gateToolDefs[1], curateToolDef, searchCompanyToolDef, fetchPostingToolDef})
+	// Gate decoys + the curation set: the decoys satisfy the free-tier
+	// tool-name gate (see withGateDecoys), then the real tools.
+	msg, finish, serr := c.decodeTurn(ctx, wire, path, model, msgs,
+		withGateDecoys([]toolDef{curateToolDef, searchCompanyToolDef, fetchPostingToolDef}))
 	if serr != nil {
 		return message{}, Verdict{}, false, serr
 	}
@@ -635,9 +632,10 @@ func (c *Client) toolLoop(ctx context.Context, model string, msgs []message) (Ve
 func (c *Client) executeTool(ctx context.Context, tc toolCall) string {
 	switch tc.Function.Name {
 	case "read", "bash":
-		// Gate tools: present to satisfy the free-tier tool-name gate, not
+		// Gate decoys: present to satisfy the free-tier tool-name gate, not
 		// wired to anything. Answer with guidance so the loop stays
-		// protocol-valid and the model falls back to the posting text.
+		// protocol-valid and the model falls back to the posting text or
+		// the other tools it was given.
 		return "Tool not available in this environment. Judge on the posting text alone."
 	case "curate_posting":
 		// The verdict is already captured by call(); this ack only keeps

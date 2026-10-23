@@ -2,6 +2,7 @@ package zen
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -31,7 +32,9 @@ type capturedRequest struct {
 	client    string
 	project   string
 	session   string
-	request   string
+	sessionID string // x-opencode-session-id (v2)
+	affinity  string // x-session-affinity / x-session-id (v2)
+	request   string // x-opencode-request — the v1 header v2 rejects
 	body      map[string]any
 	rawBody   string
 	lastModel string
@@ -122,6 +125,8 @@ func (f *fakeZen) handler(w http.ResponseWriter, r *http.Request) {
 		client:    r.Header.Get("X-Opencode-Client"),
 		project:   r.Header.Get("X-Opencode-Project"),
 		session:   r.Header.Get("X-Opencode-Session"),
+		sessionID: r.Header.Get("X-Opencode-Session-Id"),
+		affinity:  r.Header.Get("X-Session-Affinity"),
 		request:   r.Header.Get("X-Opencode-Request"),
 		body:      body,
 		rawBody:   string(raw),
@@ -292,8 +297,16 @@ func TestCurate_sendsLockedWireShape(t *testing.T) {
 	if !regexp.MustCompile(`^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`).MatchString(req.session) {
 		t.Errorf("x-opencode-session = %q, want ses_<12hex><14base62>", req.session)
 	}
-	if !regexp.MustCompile(`^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$`).MatchString(req.request) {
-		t.Errorf("x-opencode-request = %q, want msg_<12hex><14base62>", req.request)
+	// v2 identity: the ses_ value echoed under all four header names; the
+	// v1 per-request msg_ header is gone (v2 rejects it with 403).
+	if req.sessionID != req.session {
+		t.Errorf("x-opencode-session-id = %q, want the x-opencode-session value", req.sessionID)
+	}
+	if req.affinity != req.session {
+		t.Errorf("x-session-affinity = %q, want the x-opencode-session value", req.affinity)
+	}
+	if req.request != "" {
+		t.Errorf("x-opencode-request = %q, want absent (v1 header — v2 rejects it)", req.request)
 	}
 
 	// Request body: locked curation wire shape.
@@ -308,23 +321,26 @@ func TestCurate_sendsLockedWireShape(t *testing.T) {
 	}
 	tools, _ := req.body["tools"].([]any)
 	if len(tools) != 5 {
-		t.Fatalf("tools = %d, want read + bash (gate) + curate_posting + search_company + fetch_posting", len(tools))
+		t.Fatalf("tools = %d, want read + bash (gate decoys) + curate_posting + search_company + fetch_posting", len(tools))
 	}
-	fn0 := tools[0].(map[string]any)["function"].(map[string]any)
-	if fn0["name"] != "read" {
-		t.Errorf("tool[0] name = %v, want the gate tool read", fn0["name"])
+	getfn := func(i int) map[string]any {
+		return tools[i].(map[string]any)["function"].(map[string]any)
 	}
-	fn2 := tools[2].(map[string]any)["function"].(map[string]any)
-	if fn2["name"] != "curate_posting" {
-		t.Errorf("tool[2] name = %v", fn2["name"])
+	// The gate decoys ride first (names carry the gate — stub descriptions).
+	if getfn(0)["name"] != "read" || getfn(0)["description"] != gateToolDescription {
+		t.Errorf("tool[0] = %v, want the decoy read", getfn(0))
 	}
-	fn3 := tools[3].(map[string]any)["function"].(map[string]any)
-	if fn3["name"] != "search_company" {
-		t.Errorf("tool[3] name = %v", fn3["name"])
+	if getfn(1)["name"] != "bash" || getfn(1)["description"] != gateToolDescription {
+		t.Errorf("tool[1] = %v, want the decoy bash", getfn(1))
 	}
-	fn4 := tools[4].(map[string]any)["function"].(map[string]any)
-	if fn4["name"] != "fetch_posting" {
-		t.Errorf("tool[4] name = %v", fn4["name"])
+	if getfn(2)["name"] != "curate_posting" {
+		t.Errorf("tool[2] name = %v", getfn(2)["name"])
+	}
+	if getfn(3)["name"] != "search_company" {
+		t.Errorf("tool[3] name = %v", getfn(3)["name"])
+	}
+	if getfn(4)["name"] != "fetch_posting" {
+		t.Errorf("tool[4] name = %v", getfn(4)["name"])
 	}
 
 	// Messages: system prompt verbatim, then the posting turn.
@@ -587,7 +603,7 @@ func TestNew_sessionIDPerClient(t *testing.T) {
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.BaseURL != "https://opencode.ai/zen" {
+	if cfg.BaseURL != "https://opencode.ai/inference" {
 		t.Errorf("BaseURL = %q", cfg.BaseURL)
 	}
 	if cfg.Model != "big-pickle" {
@@ -833,35 +849,54 @@ func TestCurate_overviewRequiredRetried(t *testing.T) {
 
 // ---- WP-162: opencode wire identity ----------------------------------------
 
-// TestNew_sessionStableFromSeed: the session id is opencode-shaped and
-// derived from the project seed, so zen's sticky provider routing and
-// prompt cache survive restarts (same seed → same ses_).
-func TestNew_sessionStableFromSeed(t *testing.T) {
-	a := New(Config{ProjectID: "install-seed"})
-	b := New(Config{ProjectID: "install-seed"})
-	if a.sessionID != b.sessionID {
-		t.Errorf("same seed produced different sessions: %q vs %q", a.sessionID, b.sessionID)
+// TestNew_sessionTimeMinted: the session id is opencode-shaped and minted
+// from a real epoch-ms timestamp — the gateway decodes the time field and
+// rejects ids that are not plausible ms-since-epoch (verified live Oct
+// 2026: hash-derived ids 403, real timestamps pass).
+func TestNew_sessionTimeMinted(t *testing.T) {
+	before := time.Now().UnixMilli()
+	c := New(Config{})
+	after := time.Now().UnixMilli()
+	sid := c.sessionID
+	if !regexp.MustCompile(`^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`).MatchString(sid) {
+		t.Fatalf("session = %q, want opencode ses_ shape", sid)
 	}
-	if !regexp.MustCompile(`^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`).MatchString(a.sessionID) {
-		t.Errorf("session = %q, want opencode ses_ shape", a.sessionID)
+	// Decode the ses_ time field: bitwise complement of timestamp<<12, low
+	// 48 bits. The 48-bit field truncates top bits of the scaled timestamp
+	// (upstream reads only the encoded 6 bytes), so compare against the
+	// truncated candidate values from the minting window — the assertion is
+	// that the field is a real scaled timestamp, not a hash digest.
+	raw, err := hex.DecodeString(sid[4:16])
+	if err != nil {
+		t.Fatalf("decode time field: %v", err)
 	}
-	c := New(Config{ProjectID: "other-install"})
-	if c.sessionID == a.sessionID {
-		t.Error("different seeds produced the same session")
+	var time48 uint64
+	for _, b := range raw {
+		time48 = time48<<8 | uint64(b)
 	}
-	// No seed: per-process fallback, still opencode-shaped and distinct.
+	decoded := (^time48) & ((1 << 48) - 1) // the scale field: ts<<12, low 48 bits
+	mask := uint64(1)<<48 - 1
+	matches := decoded == (uint64(before)<<12)&mask || decoded == (uint64(after)<<12)&mask
+	// A millisecond boundary mid-mint widens the window by one tick.
+	if !matches {
+		for ts := before - 10; ts <= after+10 && !matches; ts++ {
+			matches = decoded == (uint64(ts)<<12)&mask
+		}
+	}
+	if !matches {
+		t.Errorf("session time field = %d (scaled), want a ts<<12 value from [%d, %d] — a hash-derived id lands here", uint64(decoded)>>12, before, after)
+	}
+	// Two clients: two ids.
 	d := New(Config{})
-	e := New(Config{})
-	if !regexp.MustCompile(`^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`).MatchString(d.sessionID) {
-		t.Errorf("fallback session = %q, want opencode ses_ shape", d.sessionID)
-	}
-	if d.sessionID == e.sessionID {
-		t.Error("seedless clients must not share a session")
+	if d.sessionID == sid {
+		t.Error("two clients must not share a session id")
 	}
 }
 
-// TestClient_requestIDPerCall: every request mints a fresh ascending msg_.
-func TestClient_requestIDPerCall(t *testing.T) {
+// TestClient_sessionHeadersPerCall: the ses_ value rides under all four
+// v2 session header names on every request, unchanged across calls
+// (sticky routing), and no v1 msg_ header is ever sent.
+func TestClient_sessionHeadersPerCall(t *testing.T) {
 	f := &fakeZen{script: []fakeResponse{{toolCall: true, decision: "shortlist", score: 50, reasons: []string{"ok"}, overview: "overview text"}}}
 	c := f.start(t)
 	sess := c.NewSession(briefPrompt)
@@ -870,21 +905,26 @@ func TestClient_requestIDPerCall(t *testing.T) {
 			t.Fatalf("Curate %d: %v", i, err)
 		}
 	}
-	r1, r2 := f.at(0).request, f.at(1).request
-	shape := regexp.MustCompile(`^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$`)
-	if !shape.MatchString(r1) || !shape.MatchString(r2) {
-		t.Fatalf("request ids = %q, %q — want msg_ shape", r1, r2)
+	r1, r2 := f.at(0), f.at(1)
+	for i, r := range []capturedRequest{r1, r2} {
+		if r.sessionID != r.session || r.affinity != r.session {
+			t.Errorf("request %d: session headers = %q/%q, want the x-opencode-session value %q", i, r.sessionID, r.affinity, r.session)
+		}
+		if r.request != "" {
+			t.Errorf("request %d: x-opencode-request = %q, want absent (v1 header)", i, r.request)
+		}
 	}
-	if r1 == r2 {
-		t.Error("request ids must be fresh per call")
+	if r1.session != r2.session {
+		t.Error("session id must hold across requests (sticky routing)")
 	}
 }
 
 // TestClient_uaFromCatalog: with a catalog attached, the UA version comes
-// from the curated opencodeVersion (clamped), not waypoint's own version.
+// from the curated opencodeVersion (clamped to the v2 floor), not
+// waypoint's own version. A fresh v2 version rides verbatim.
 func TestClient_uaFromCatalog(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"count":1,"opencodeVersion":"1.19.0","models":[{"id":"m","name":"M"}]}`))
+		w.Write([]byte(`{"count":1,"opencodeVersion":"2.0.45","models":[{"id":"m","name":"M"}]}`))
 	}))
 	defer upstream.Close()
 	cat := NewCatalog(CatalogConfig{URL: upstream.URL})
@@ -900,7 +940,7 @@ func TestClient_uaFromCatalog(t *testing.T) {
 	if _, err := c.NewSession(briefPrompt).Curate(context.Background(), Posting{URL: "https://x.io/1", Markdown: "m"}); err != nil {
 		t.Fatalf("Curate: %v", err)
 	}
-	want := "opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+	want := "opencode/latest/2.0.45/cli"
 	if got := f.last().ua; got != want {
 		t.Errorf("UA = %q, want %q", got, want)
 	}
@@ -926,7 +966,7 @@ func TestClient_uaClampedWhenCatalogStale(t *testing.T) {
 	if _, err := c.NewSession(briefPrompt).Curate(context.Background(), Posting{URL: "https://x.io/1", Markdown: "m"}); err != nil {
 		t.Fatalf("Curate: %v", err)
 	}
-	want := "opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+	want := "opencode/latest/2.0.26/cli"
 	if got := f.last().ua; got != want {
 		t.Errorf("UA = %q, want the clamped floor %q", got, want)
 	}
@@ -948,12 +988,12 @@ func TestClient_bearerPublicWhenKeyless(t *testing.T) {
 	}
 }
 
-// TestDefaultConfig_validUA: the shipped UA is a full opencode UA with the
-// verified-good floor version — never waypoint's own version (the free
-// tier 426/403s third-party or old opencode UAs).
+// TestDefaultConfig_validUA: the shipped UA is the full opencode v2 shape
+// with the verified-good floor version — the v2 server rejects v1-shaped
+// UAs outright with 403 FreeTierError.
 func TestDefaultConfig_validUA(t *testing.T) {
 	cfg := DefaultConfig()
-	want := "opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+	want := "opencode/latest/2.0.26/cli"
 	if cfg.UserAgent != want {
 		t.Errorf("DefaultConfig UA = %q, want %q", cfg.UserAgent, want)
 	}
@@ -994,7 +1034,7 @@ func TestCurate_streamsTheWire(t *testing.T) {
 }
 
 // TestComplete_streamsAndInjectsGateTools: tool-less turns stream and
-// carry the gate-satisfying client tools (read/bash) so the free-tier
+// carry the gate decoys (read/bash + tool_choice "none") so the free-tier
 // tool-name gate passes.
 func TestComplete_streamsAndInjectsGateTools(t *testing.T) {
 	f := &fakeZen{script: []fakeResponse{{}}} // default script: plain content chunks
@@ -1012,12 +1052,15 @@ func TestComplete_streamsAndInjectsGateTools(t *testing.T) {
 	}
 	tools, _ := body["tools"].([]any)
 	if len(tools) != 2 {
-		t.Fatalf("tools = %v, want the two gate tools (read, bash)", body["tools"])
+		t.Fatalf("tools = %v, want the two gate decoys (read, bash)", body["tools"])
 	}
 	fn0, _ := tools[0].(map[string]any)["function"].(map[string]any)
 	fn1, _ := tools[1].(map[string]any)["function"].(map[string]any)
 	if fn0["name"] != "read" || fn1["name"] != "bash" {
 		t.Errorf("gate tools = %v, %v", fn0["name"], fn1["name"])
+	}
+	if got, _ := body["tool_choice"]; got != "none" {
+		t.Errorf("tool_choice = %v, want \"none\" (decoys must be uncalled)", got)
 	}
 }
 

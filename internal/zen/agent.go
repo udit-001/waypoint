@@ -37,10 +37,10 @@ type AgentExec func(name, argsJSON string) (reply string, done bool)
 // call's raw arguments. Budgets and validation live in the executor — the
 // loop enforces only the turn cap and the call-a-tool rule.
 func (c *Client) AgentLoop(ctx context.Context, system, user string, tools []AgentTool, exec AgentExec, maxTurns int) (args string, turns int, err error) {
-	defs := make([]toolDef, 0, len(tools)+2)
-	// The gate decoys ride first: the free-tier gate requires >= 2 known
-	// opencode tool names in the request.
-	defs = append(defs, gateToolDefs[0], gateToolDefs[1])
+	real := make([]toolDef, 0, len(tools))
+	// withGateDecoys carries the gate composition (decoys first); the
+	// loop's tools follow.
+	defs := withGateDecoys(real)
 	terminal := ""
 	for _, t := range tools {
 		defs = append(defs, toolDef{Name: t.Name, Description: t.Description, Parameters: t.Parameters})

@@ -54,8 +54,10 @@ func (chatWire) buildBody(model string, msgs []message, maxTokens int, tools []t
 		"max_tokens": maxTokens,
 		"stream":     true,
 		// No tool_choice here: real-tool turns must not send one (mimo
-		// rejects it — WP-127). ensureFreeTierShape adds "none" only on
-		// turns where it stands in the gate decoys.
+		// rejects it — WP-127); tool-less turns must not send "none" either
+		// (v2 rejects it with 403 FreeTierError — verified live Oct 2026).
+		// Per-family extras live in
+		// ensureFreeTierShape (wire.go).
 	}
 	wrapped := make([]any, len(tools))
 	for i, t := range tools {
