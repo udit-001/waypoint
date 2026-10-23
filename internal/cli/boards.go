@@ -131,7 +131,22 @@ Exit non-zero when no provider claims the URL or verification fails.`,
 		if err != nil {
 			return err
 		}
-		if bf.Find(entry.Name) != nil {
+		if existing := bf.Find(entry.Name); existing != nil {
+			// Board identity reads through boards.SameBoard, not the raw
+			// string: re-adding an existing board from a different URL
+			// spelling (same API pin) is "already watched" — user feedback,
+			// no error. A genuinely different board keeps the conflict.
+			if boards.SameBoard(existing.URL, entry.URL) {
+				if jsonOut {
+					printJSON(map[string]any{"meta": map[string]any{
+						"board": entry.Name, "provider": p.Name(), "verified": true,
+						"saved": false, "error": "already watched",
+					}})
+				} else {
+					fmt.Printf("  %s is already watched (same board under a different URL spelling) — boards.toml unchanged\n", existing.Name)
+				}
+				return nil
+			}
 			if jsonOut {
 				printJSON(map[string]any{"meta": map[string]any{
 					"board": entry.Name, "provider": p.Name(), "verified": true,

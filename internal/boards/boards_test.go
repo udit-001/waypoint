@@ -373,3 +373,30 @@ func TestWorkdayPolicyBlocksForeignHost(t *testing.T) {
 		t.Fatalf("policy rejected legitimate URL: %v", err)
 	}
 }
+
+// TestSameBoard: board identity is the provider API pin, not the raw
+// URL string — spelling variants of one ATS board are the same board;
+// a different tenant/board token is not; unclaimed URLs fall back to
+// string equality.
+func TestSameBoard(t *testing.T) {
+	same := [][2]string{
+		{"https://boards.greenhouse.io/vercel", "https://job-boards.greenhouse.io/vercel/"},
+		{"https://jobs.lever.co/acme", "https://jobs.lever.co/acme/"},
+		{"https://example.com/careers", "https://example.com/careers/"},
+	}
+	for i := range same {
+		if !SameBoard(same[i][0], same[i][1]) {
+			t.Errorf("SameBoard(%q, %q) = false, want true", same[i][0], same[i][1])
+		}
+	}
+	diff := [][2]string{
+		{"https://boards.greenhouse.io/vercel", "https://boards.greenhouse.io/shopify"},
+		{"https://jobs.lever.co/acme", "https://jobs.lever.co/other"},
+		{"https://example.com/careers", "https://example.com/about"},
+	}
+	for i := range diff {
+		if SameBoard(diff[i][0], diff[i][1]) {
+			t.Errorf("SameBoard(%q, %q) = true, want false", diff[i][0], diff[i][1])
+		}
+	}
+}

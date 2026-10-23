@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/udit-001/waypoint/internal/scraper"
@@ -78,6 +79,33 @@ func All() []Provider {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name() < out[j].Name() })
 	return out
+}
+
+// apiPin resolves a board URL to its provider-derived JSON API pin
+// (the board's one identity across URL spellings); ok=false when no
+// provider claims it or the pin is not derived yet.
+func apiPin(raw string) (string, bool) {
+	p, hit, err := DetectProvider(Board{URL: raw, Enabled: true})
+	if err != nil || p == nil || hit == nil || hit.API == "" {
+		return "", false
+	}
+	return hit.API, true
+}
+
+// SameBoard reports whether two board URLs are one board. Board identity
+// is the provider's derived API pin, not the raw URL string:
+// boards.greenhouse.io/x and job-boards.greenhouse.io/x/ are two
+// spellings of the same Greenhouse board (same pin). URLs no provider
+// claims (custom careers pages) fall back to slash-insensitive string
+// equality. This is the seam the promote/conflict gates compare through,
+// so the discovery surface never judges a user on URL spelling.
+func SameBoard(a, b string) bool {
+	if strings.TrimRight(a, "/") == strings.TrimRight(b, "/") {
+		return true
+	}
+	pina, aok := apiPin(a)
+	pinb, bok := apiPin(b)
+	return aok && bok && strings.TrimRight(pina, "/") == strings.TrimRight(pinb, "/")
 }
 
 // DetectProvider returns the provider whose Detect claims the board.

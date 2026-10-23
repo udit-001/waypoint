@@ -34,9 +34,13 @@ type PromoteOutcome struct {
 // by 'discover add' (CLI) and POST /api/candidates/{id}/add (web): run
 // each of the candidate's boards through the verify gate — page 1 must
 // answer before anything is written — then land survivors as enabled
-// entries in bf. A URL already watched counts as AlreadyWatched; a
-// same-name board pointing elsewhere is a conflict error that writes
-// nothing. The caller saves bf and flips the candidate's status.
+// entries in bf. A URL already watched counts as AlreadyWatched — and
+// "watched" reads through boards.SameBoard (the provider API pin, not the
+// raw string), so boards.greenhouse.io/x and job-boards.greenhouse.io/x/
+// count as one board and skip instead of erroring; the spelling the
+// entry already carries is never rewritten. A same-name board pointing at
+// a genuinely different board is a conflict error that writes nothing.
+// The caller saves bf and flips the candidate's status.
 func Promote(ctx context.Context, companyName string, links []BoardLink, bf *config.BoardsFile) (PromoteOutcome, error) {
 	if len(links) == 0 {
 		return PromoteOutcome{}, fmt.Errorf("candidate has no boards to promote")
@@ -47,7 +51,7 @@ func Promote(ctx context.Context, companyName string, links []BoardLink, bf *con
 	for _, l := range links {
 		watched := false
 		for _, e := range bf.Boards {
-			if e.URL == l.URL {
+			if boards.SameBoard(e.URL, l.URL) {
 				watched = true
 				break
 			}
@@ -64,8 +68,10 @@ func Promote(ctx context.Context, companyName string, links []BoardLink, bf *con
 			Enabled: true,
 			AddedAt: time.Now().UTC().Format(time.RFC3339),
 		}
-		// A same-name board pointing elsewhere must never be silently
-		// replaced — surface the conflict instead.
+		// A same-name board pointing at a genuinely different board must
+		// never be silently replaced — surface the conflict instead. The
+		// same board under a different spelling already hit the watched
+		// check above.
 		if existing := bf.Find(entry.Name); existing != nil {
 			return PromoteOutcome{}, fmt.Errorf("board %q already exists with a different URL (%s)", entry.Name, existing.URL)
 		}
@@ -96,9 +102,11 @@ func BoardEntryName(name string) string {
 // has already proven each board link live, so no re-probe happens here;
 // the caller pays the network once. Entries are flagged Discovered and
 // carry the company domain, so keep/block on the Companies page acts
-// without consulting the ledger. Already-watched URLs are skipped;
-// a same-name board pointing elsewhere is the same conflict Promote
-// raises, and writes nothing (atomic: a conflict lands nothing). One
+// without consulting the ledger. Already-watched URLs (same board under
+// any URL spelling — boards.SameBoard reads the provider API pin) are
+// skipped; a same-name board pointing at a genuinely different board is
+// the same conflict Promote raises, and writes nothing (atomic: a
+// conflict lands nothing). One
 // entry name = one board in boards.toml, so of a candidate's verified
 // boards the first lands and the rest skip — the company name links to
 // the first verified board. Returns the landed companies' names, in
@@ -116,7 +124,7 @@ func LandVerified(cands []Candidate, bf *config.BoardsFile) (landed []string, sk
 			}
 			watched := false
 			for _, e := range bf.Boards {
-				if e.URL == l.URL {
+				if boards.SameBoard(e.URL, l.URL) {
 					watched = true
 					break
 				}
@@ -124,7 +132,7 @@ func LandVerified(cands []Candidate, bf *config.BoardsFile) (landed []string, sk
 			if watched {
 				continue
 			}
-			if existing := bf.Find(entryName); existing != nil && existing.URL != l.URL {
+			if existing := bf.Find(entryName); existing != nil {
 				return landed, skipped, fmt.Errorf("board %q already exists with a different URL (%s)", entryName, existing.URL)
 			}
 			bf.Upsert(config.BoardEntry{

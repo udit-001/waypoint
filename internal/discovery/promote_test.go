@@ -57,8 +57,9 @@ func TestPromote_skipsAlreadyWatched(t *testing.T) {
 	}
 }
 
-// TestPromote_nameConflictFails: a same-name board pointing elsewhere
-// must fail loudly instead of silently replacing the user's entry.
+// TestPromote_nameConflictFails: a same-name board pointing at a
+// genuinely different board must fail loudly instead of silently
+// replacing the user's entry.
 func TestPromote_nameConflictFails(t *testing.T) {
 	stubProbe(t, 4, nil)
 	bf := &config.BoardsFile{}
@@ -70,6 +71,27 @@ func TestPromote_nameConflictFails(t *testing.T) {
 	}
 	if got := bf.Find("acme-corp"); got == nil || got.URL != "https://boards.greenhouse.io/different" {
 		t.Errorf("existing entry mutated: %+v", got)
+	}
+}
+
+// TestPromote_sameBoardDifferentSpellingSkips: a candidate whose board
+// URL is a different spelling of an already-watched board (raw URL
+// differs, provider API pin matches) is AlreadyWatched — no error, no
+// duplicate entry, and the spelling the entry carries is preserved.
+func TestPromote_sameBoardDifferentSpellingSkips(t *testing.T) {
+	stubProbe(t, 4, nil)
+	bf := &config.BoardsFile{}
+	bf.Upsert(config.BoardEntry{Name: "vercel", Company: "Vercel", URL: "https://boards.greenhouse.io/vercel", Enabled: true})
+
+	out, err := Promote(context.Background(), "Vercel", []BoardLink{ghLink("https://job-boards.greenhouse.io/vercel/")}, bf)
+	if err != nil {
+		t.Fatalf("Promote: %v — a URL-spelling variant must not surface to the user", err)
+	}
+	if out.AlreadyWatched != 1 || out.Added != 0 {
+		t.Errorf("outcome = %+v, want AlreadyWatched=1 Added=0", out)
+	}
+	if got := bf.Find("vercel"); got == nil || got.URL != "https://boards.greenhouse.io/vercel" {
+		t.Errorf("existing entry rewritten: %+v", got)
 	}
 }
 
