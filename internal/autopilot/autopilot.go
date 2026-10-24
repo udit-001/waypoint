@@ -34,6 +34,7 @@ const UnscoredCapPerCycle = 25
 
 // sleep is the test seam for backoff pauses.
 var sleep = time.Sleep
+var after = time.After
 
 // CycleConfig holds the configuration for one autopilot cycle.
 type CycleConfig struct {
@@ -61,6 +62,33 @@ type CycleConfig struct {
 	// the cycle falls back to a real scraper.HTTPFetcher. Tests inject a
 	// fake so the cycle never touches the network.
 	Direct detail.Fetcher
+	// Progress receives the cycle's live stage facts as they happen:
+	// stage is one of the fixed stage ids (discover/select/sweep/read/
+	// curate), of is a "k/n" counter, label the per-item fact (source
+	// display name, posting company). The stages report facts and never
+	// know where they land; RunLogged adapts the callback to the run row
+	// (store.SetRunProgress), so the web's progress line and the cycle
+	// stay decoupled. Nil is legal — stages no-op — so a run without a
+	// row (RunLogged's fallback) still works.
+	Progress func(stage, of, label string)
+}
+
+// progress reports a stage fact when the cycle has a progress seam. The
+// nil check lives here once — stages state what they are doing, not
+// whether anyone is listening.
+func (cfg CycleConfig) progress(stage, of, label string) {
+	if cfg.Progress != nil {
+		cfg.Progress(stage, of, label)
+	}
+}
+
+// itemLabel is a posting's per-item progress fact: the company when the
+// ledger knows it, else the title — the skimmable name, not the URL.
+func itemLabel(p scraper.Result) string {
+	if p.Company != "" {
+		return p.Company
+	}
+	return p.Title
 }
 
 // runRecord accumulates a cycle's evidence as the stages execute: the
@@ -250,6 +278,7 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	// fires (first-run / brief change / interval). Never blocks scoring:
 	// a failure is recorded as a stage error and the cycle proceeds.
 	// Landed boards ride the runlog as evidence, never a verdict input.
+	cfg.progress("discover", "", "")
 	_, landed, derr := stageDiscovery(ctx, cfg)
 	if derr != nil {
 		rec.stageError("%v", derr)
@@ -259,6 +288,7 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	// Stage 1: Source selection — zen picks which sources are worth
 	// sweeping for this brief (cached; aggregators-only fallback). The
 	// runlog's skipped rows carry the decision to the user.
+	cfg.progress("select", "", "")
 	sel := stageSelectSource(ctx, cfg, rec)
 
 	// Stage 2: Sweep — scrape the selected sources for new postings.
@@ -319,6 +349,14 @@ func stageSweep(ctx context.Context, cfg CycleConfig, rec *runRecord, sel *Sourc
 	var allNew []scraper.Result
 
 	disabled := disabledSet(cfg)
+	// Plan first: the skipped rows are recorded for every scraper (they
+	// carry the selection's decision to the user), while the progress
+	// counter "k/n" counts only the sources this cycle actually sweeps.
+	type sweepSource struct {
+		s    scraper.Scraper
+		name string
+	}
+	var plan []sweepSource
 	for _, s := range cfg.Scrapers {
 		name := s.Name()
 		if reason, skip := skipReason(name, sel, disabled); skip {
@@ -327,30 +365,35 @@ func stageSweep(ctx context.Context, cfg CycleConfig, rec *runRecord, sel *Sourc
 			row.Reason = reason
 			continue
 		}
-		row := rec.outcome(name)
+		plan = append(plan, sweepSource{s: s, name: name})
+	}
+	for k, item := range plan {
+		cfg.progress("sweep", fmt.Sprintf("%d/%d", k+1, len(plan)), item.s.Source())
 
 		// Politeness: jittered delay between sources.
 		jitter := time.Duration(2000+rand.Intn(1000)) * time.Millisecond
 		select {
 		case <-ctx.Done():
 			return allNew
-		case <-time.After(jitter):
+		case <-after(jitter):
 		}
 
 		// 30s timeout per source.
 		srcCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		results, err := s.Search(srcCtx, scraper.SearchOpts{
+		results, err := item.s.Search(srcCtx, scraper.SearchOpts{
 			Limit:  50,
 			JobAge: cfg.Recency,
 		})
 		cancel()
 
 		if err != nil {
-			log.Printf("autopilot: sweep %s failed: %v", name, err)
+			log.Printf("autopilot: sweep %s failed: %v", item.name, err)
+			row := rec.outcome(item.name)
 			row.Errored++
-			rec.stageError("sweep %s: %v", name, err)
+			rec.stageError("sweep %s: %v", item.name, err)
 			continue
 		}
+		row := rec.outcome(item.name)
 		row.Scraped = len(results)
 
 		// Dedup against existing postings and jobs.
@@ -363,7 +406,7 @@ func stageSweep(ctx context.Context, cfg CycleConfig, rec *runRecord, sel *Sourc
 			if tracked {
 				continue
 			}
-			r.Source = name
+			r.Source = item.name
 			allNew = append(allNew, r)
 			row.New++
 		}
@@ -439,6 +482,7 @@ func stageDetail(ctx context.Context, cfg CycleConfig, postings []scraper.Result
 
 	for i := range postings {
 		p := &postings[i]
+		cfg.progress("read", fmt.Sprintf("%d/%d", i+1, len(postings)), itemLabel(*p))
 		select {
 		case <-ctx.Done():
 			return
@@ -530,7 +574,8 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 	// from ordinary per-posting noise — see the stage error after the loop.
 	curateAttempts, curateFailures := 0, 0
 
-	for _, p := range postings {
+	for i, p := range postings {
+		cfg.progress("curate", fmt.Sprintf("%d/%d", i+1, len(postings)), itemLabel(p))
 		select {
 		case <-ctx.Done():
 			return
@@ -626,6 +671,13 @@ func RunLogged(ctx context.Context, cfg CycleConfig) db.RunLog {
 	// Live-sync (WP-144): the unfinished row is the "running now" signal;
 	// a "runs" event flips the chip immediately.
 	_ = cfg.Store.AddChangeEvent("runs")
+	// Live progress (migration 00021): the cycle reports what it is doing
+	// right now and the run row carries it to /api/autopilot, which already
+	// returns the full RunLog. Best effort — a failed progress write costs
+	// the page one stale line, never a result.
+	cfg.Progress = func(stage, of, label string) {
+		_ = cfg.Store.SetRunProgress(id, stage, of, label)
+	}
 	entry = Run(ctx, cfg)
 	if err := cfg.Store.UpdateRunLog(id, entry); err != nil {
 		log.Printf("autopilot: failed to close run log: %v", err)

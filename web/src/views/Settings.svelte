@@ -6,7 +6,7 @@ import { setPage } from '../stores/page.svelte.js';
   import ZenModelPicker from '../components/ZenModelPicker.svelte';
   import Card from '../components/Card.svelte';
   import * as api from '../stores/api.svelte.js';
-  import { chipState, verdictMeta, dotColor, shortWhen, scheduleStatus, clockTime, CHIP_TONE, DOT_TONE } from '../lib/autopilotCard.js';
+  import { chipState, verdictMeta, dotColor, shortWhen, scheduleStatus, clockTime, progressLine, CHIP_TONE, DOT_TONE } from '../lib/autopilotCard.js';
 
   // WP-183: one tabbed autopilot card (locked Harbor variation 4).
   // Always visible: state chip + enable toggle. Tabs carry the rest.
@@ -77,6 +77,7 @@ import { setPage } from '../stores/page.svelte.js';
   const lastRun = $derived(autopilot?.lastRun ?? null);
   const chip = $derived(autopilot ? chipState(!!autopilot.enabled, lastRun?.verdict ?? '', pendingShortlists) : null);
   const schedule = $derived(scheduleStatus(autopilot));
+  const progress = $derived(progressLine(autopilot));
   const discoveryOn = $derived(settingsData ? settingsData.discoveryEnabled !== false : true);
   const discoveryInterval = $derived(settingsData?.discoveryIntervalDays || 30);
   const cadence = $derived(autopilot?.cadence || 6);
@@ -247,7 +248,7 @@ import { setPage } from '../stores/page.svelte.js';
            runs tab can't show yet (no finished run to list) -->
       <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
         {schedule.kind === 'run-in-progress'
-          ? 'Run in progress — the Runs list updates when it finishes.'
+          ? (progress || 'Run in progress — the Runs list updates when it finishes.')
           : 'First run underway — your first matches land within a minute or two.'}
       </p>
     {/if}

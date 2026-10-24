@@ -21,7 +21,7 @@
   import { formatDateShort, relTime } from '../lib/format.js';
   import { candidateBoardLabel, pendingCandidates } from '../lib/discovery.js';
   import { renderMarkdown } from '../lib/markdown.js';
-  import { verdictSentence, scheduleStatus } from '../lib/autopilotCard.js';
+  import { verdictSentence, scheduleStatus, progressLine } from '../lib/autopilotCard.js';
   import { subscribeLive } from '../lib/live.js';
   import Skeleton from '../components/Skeleton.svelte';
   import * as api from '../stores/api.svelte.js';
@@ -196,6 +196,9 @@
   // dot color = state. No run yet keeps the original never-run lines.
   let emptyVerdict = $derived(verdictSentence(autopilotData?.lastRun));
   const schedule = $derived(scheduleStatus(autopilotData));
+  // The cycle's live narration — the stage it is in and what it is
+  // working on right now — or null when the row carries no facts yet.
+  const progress = $derived(progressLine(autopilotData));
 
   let status = $derived.by(() => {
     if (!autopilotData) return null;
@@ -453,7 +456,7 @@
       <p class="text-xs mt-3 flex items-center justify-center gap-1.5">
         <span class="size-2 rounded-full shrink-0 animate-pulse {schedule.kind === 'run-in-progress' ? 'bg-emerald-400' : 'bg-slate-400 dark:bg-slate-500'}"></span>
         {schedule.kind === 'run-in-progress'
-          ? 'Run in progress — this page updates when it finishes.'
+          ? (progress || 'Run in progress — this page updates when it finishes.')
           : 'First run underway — the first picks land here within a minute or two.'}
       </p>
     {/if}

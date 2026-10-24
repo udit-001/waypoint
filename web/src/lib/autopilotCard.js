@@ -65,6 +65,34 @@ export function clockTime(d) {
   }
 }
 
+// progressLine derives the live narration from the running row's stage
+// facts (migration 00021): a fixed stage id mapped to its fragment,
+// counters verbatim, the per-item name quoted. Facts only — no
+// percentages, no ETAs (a guessed duration lies); every fragment stays
+// true while it shows, so polling lag can't make it lie either. Null
+// when not running, or the row carries no stage yet (the gap between the
+// row opening and the first progress write).
+export function progressLine(payload) {
+  if (!payload || !payload.running) return null;
+  const last = payload.lastRun || {};
+  if (!last.stage) return null;
+  const [k, n] = String(last.stageOf || '').split('/');
+  switch (last.stage) {
+    case 'sweep':
+      return `fetching jobs from ${last.stageLabel} — board ${k} of ${n}`;
+    case 'read':
+      return `reading postings — ${k} of ${n}`;
+    case 'curate':
+      return `scoring ${k} of ${n} against your profile`;
+    case 'discover':
+      return 'scanning companies from your brief';
+    case 'select':
+      return 'picking sources worth sweeping';
+    default:
+      return null;
+  }
+}
+
 // verdictMeta renders one run as the artifact's verdict line:
 // [chip] [one fragment naming the outcome].
 export function verdictMeta(run) {

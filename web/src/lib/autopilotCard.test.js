@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chipState, verdictMeta, verdictSentence, dotColor, shortWhen, scheduleStatus, clockTime, CHIP_TONE, DOT_TONE } from './autopilotCard.js';
+import { chipState, verdictMeta, verdictSentence, dotColor, shortWhen, scheduleStatus, clockTime, progressLine, CHIP_TONE, DOT_TONE } from './autopilotCard.js';
 
 // scheduleStatus: the autopilot progress line's three states + null.
 test('scheduleStatus: the three progress states derive from the payload', () => {
@@ -181,4 +181,33 @@ test('shortWhen: yesterday shows the word', () => {
 
 test('shortWhen: older shows the weekday', () => {
   assert.equal(shortWhen('2026-10-12T09:00:00', NOW), 'Mon');
+});
+
+// progressLine: the live narration from a running row's stage facts.
+test('progressLine: per-stage fragments carry the real facts', () => {
+  const running = (run) => ({ running: true, lastRun: run });
+  assert.equal(progressLine(running({ stage: 'sweep', stageOf: '3/21', stageLabel: 'Instem' })),
+    'fetching jobs from Instem — board 3 of 21');
+  assert.equal(progressLine(running({ stage: 'read', stageOf: '5/12' })),
+    'reading postings — 5 of 12');
+  assert.equal(progressLine(running({ stage: 'curate', stageOf: '5/12' })),
+    'scoring 5 of 12 against your profile');
+  assert.equal(progressLine(running({ stage: 'discover' })),
+    'scanning companies from your brief');
+  assert.equal(progressLine(running({ stage: 'select' })),
+    'picking sources worth sweeping');
+});
+
+test('progressLine: no stage facts yet is null, never an invented line', () => {
+  assert.equal(progressLine({ running: true, lastRun: {} }), null);
+  assert.equal(progressLine({ running: true }), null);
+  assert.equal(progressLine(null), null);
+});
+
+test('progressLine: not running is null even with facts left over', () => {
+  assert.equal(progressLine({ running: false, lastRun: { stage: 'sweep', stageOf: '1/2', stageLabel: 'X' } }), null);
+});
+
+test('progressLine: unknown stage id is null — the store carries facts, not sentences', () => {
+  assert.equal(progressLine({ running: true, lastRun: { stage: 'future-stage', stageOf: '1/2' } }), null);
 });
