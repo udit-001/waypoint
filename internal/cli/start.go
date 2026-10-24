@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -126,16 +127,20 @@ Examples:
 		// Autopilot scheduler (daemon mode only). Always started: it
 		// self-gates via CycleDue (enabled flag, run-request marker,
 		// cadence), so enabling mid-flight takes effect on the next poll
-		// instead of requiring a restart.
+		// instead of requiring a restart. cycles carries the in-flight
+		// cycle's cancel to the server: flipping autopilot off stops the
+		// running cycle instead of waiting it out.
+		var cycles cycleCancel
 		if startFlags.daemon {
-			go startAutopilotTicker(store, startFlags.port)
+			go startAutopilotTicker(store, startFlags.port, &cycles)
 		}
 
 		return server.Start(server.Config{
-			Port:   startFlags.port,
-			DB:     store,
-			NoOpen: startFlags.noOpen,
-			Silent: startFlags.daemon,
+			Port:            startFlags.port,
+			DB:              store,
+			NoOpen:          startFlags.noOpen,
+			Silent:          startFlags.daemon,
+			CancelAutopilot: cycles.fire,
 			// One process-wide catalog: the picker's /api/zen/models and the
 			// connector's WithSharedCatalog read the same last-known-good
 			// list (WP-185).
@@ -267,6 +272,30 @@ func recoverInterruptedRuns(store db.Store) {
 	}
 }
 
+// cycleCancel tracks the in-flight cycle's cancel func. The ticker swaps
+// it per cycle; the server's disable hook fires it. Nil-safe throughout:
+// fire with nothing running is a no-op, so foreground mode (no ticker)
+// can wire the same hook without care.
+type cycleCancel struct {
+	mu     sync.Mutex
+	cancel context.CancelFunc
+}
+
+func (c *cycleCancel) set(f context.CancelFunc) {
+	c.mu.Lock()
+	c.cancel = f
+	c.mu.Unlock()
+}
+
+func (c *cycleCancel) fire() {
+	c.mu.Lock()
+	f := c.cancel
+	c.mu.Unlock()
+	if f != nil {
+		f()
+	}
+}
+
 // startAutopilotTicker runs the autopilot scheduler inside the daemon.
 // It polls every PollInterval and fires a cycle when CycleDue says so —
 // which makes three behaviors fall out of one policy:
@@ -279,7 +308,7 @@ func recoverInterruptedRuns(store db.Store) {
 //
 // Blocks until the process exits. port is the server's own port — the
 // notification click target.
-func startAutopilotTicker(store db.Store, port int) {
+func startAutopilotTicker(store db.Store, port int, cycles *cycleCancel) {
 	log.Printf("autopilot: scheduler started (poll every %s)", autopilot.PollInterval)
 
 	// Shared anonymous Exa client (one budget + cache for the daemon
@@ -297,7 +326,7 @@ func startAutopilotTicker(store db.Store, port int) {
 			}
 		}()
 		if due, reason := autopilotDue(store); due {
-			runAutopilotCycle(store, exaClient, openURL, reason)
+			runAutopilotCycle(store, exaClient, openURL, reason, cycles)
 		}
 	}
 	safeRun()
@@ -335,8 +364,19 @@ func autopilotDue(store db.Store) (bool, string) {
 
 // runAutopilotCycle executes one cycle and logs the outcome. Failures
 // inside are recorded by the cycle itself; this wrapper only reports.
-func runAutopilotCycle(store db.Store, exaClient *exa.Client, openURL, reason string) {
+// The cycle runs on a context the cycles holder tracks: flipping
+// autopilot off mid-flight cancels it, the stages exit at their next
+// boundary, and the interrupted run closes as degraded — the same
+// recovery semantics as a crash, without the crash.
+func runAutopilotCycle(store db.Store, exaClient *exa.Client, openURL, reason string, cycles *cycleCancel) {
 	log.Printf("autopilot: starting cycle (%s)", reason)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if cycles != nil {
+		cycles.set(cancel)
+		defer cycles.set(nil)
+	}
 
 	settings, _ := store.GetSettings()
 
@@ -351,7 +391,7 @@ func runAutopilotCycle(store db.Store, exaClient *exa.Client, openURL, reason st
 		zc.SetCompanySearcher(exaClient)
 	}
 
-	entry := autopilot.RunLogged(context.Background(), autopilot.CycleConfig{
+	entry := autopilot.RunLogged(ctx, autopilot.CycleConfig{
 		Store:     store,
 		ZenClient: zc,
 		Scrapers:  scraper.All(),

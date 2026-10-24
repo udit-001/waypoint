@@ -2,11 +2,13 @@ package server
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/udit-001/waypoint/internal/db"
+	"github.com/udit-001/waypoint/internal/zen"
 )
 
 // seedCompleteBrief fills the four preferences the gate requires:
@@ -256,4 +258,44 @@ func TestGetAutopilotFeedbackState(t *testing.T) {
 	if got, _ := out["nextRunAt"].(string); got != "" {
 		t.Errorf("nextRunAt = %q, want empty before the first run", got)
 	}
+}
+
+// TestDisableAutopilotCancelsCycle: flipping autopilot off fires the
+// cancel hook — disable takes effect at the next stage boundary, not
+// after the full sweep. Enable and unrelated fields never fire it; a nil
+// hook (foreground mode) is a no-op, not a panic.
+func TestDisableAutopilotCancelsCycle(t *testing.T) {
+	newMux := func(canceled *int) http.Handler {
+		f := db.NewFakeStore()
+		var hook func()
+		if canceled != nil {
+			hook = func() { *canceled++ }
+		}
+		return newMuxWithZenCatalog(f, nil, nil, nil, nil, zen.NewCatalog(zen.CatalogConfig{URL: zenCatalogURL}), hook)
+	}
+
+	fired := 0
+	mux := newMux(&fired)
+	req := httptest.NewRequest("PATCH", "/api/settings", strings.NewReader(`{"autopilot_enabled": 0}`))
+	mux.ServeHTTP(httptest.NewRecorder(), req)
+	if fired != 1 {
+		t.Fatalf("disable fired the cancel hook %d times, want 1", fired)
+	}
+
+	req = httptest.NewRequest("PATCH", "/api/settings", strings.NewReader(`{"autopilot_enabled": 1}`))
+	mux.ServeHTTP(httptest.NewRecorder(), req)
+	if fired != 1 {
+		t.Fatalf("enable fired the cancel hook: %d", fired)
+	}
+
+	req = httptest.NewRequest("PATCH", "/api/settings", strings.NewReader(`{"theme": "dark"}`))
+	mux.ServeHTTP(httptest.NewRecorder(), req)
+	if fired != 1 {
+		t.Fatalf("unrelated field fired the cancel hook: %d", fired)
+	}
+
+	// Nil hook: foreground mode — disable must not panic.
+	nilMux := newMux(nil)
+	req = httptest.NewRequest("PATCH", "/api/settings", strings.NewReader(`{"autopilot_enabled": 0}`))
+	nilMux.ServeHTTP(httptest.NewRecorder(), req)
 }

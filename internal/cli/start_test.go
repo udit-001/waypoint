@@ -114,3 +114,33 @@ func TestRecoverInterruptedRuns_cleanLedger(t *testing.T) {
 		t.Fatalf("finished row's end time changed: %q", last.FinishedAt)
 	}
 }
+
+// TestCycleCancel: the holder swaps cancel funcs per cycle and fire() is
+// nil-safe — the server's disable hook can call it with nothing running
+// (foreground mode) or between cycles without care.
+func TestCycleCancel(t *testing.T) {
+	var c cycleCancel
+
+	c.fire() // nothing set — must not panic
+
+	fired := 0
+	c.set(func() { fired++ })
+	c.fire()
+	if fired != 1 {
+		t.Fatalf("fire after set: %d, want 1", fired)
+	}
+
+	// Swap: only the latest cancel fires.
+	c.set(func() { fired += 10 })
+	c.fire()
+	if fired != 11 {
+		t.Fatalf("fire after swap: %d, want 11", fired)
+	}
+
+	// Clear: a finished cycle unregisters; fire is a no-op again.
+	c.set(nil)
+	c.fire()
+	if fired != 11 {
+		t.Fatalf("fire after clear: %d, want 11", fired)
+	}
+}

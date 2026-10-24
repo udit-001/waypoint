@@ -49,6 +49,13 @@ type Config struct {
 	// Nil defaults to a per-server catalog over the zenCatalogURL seam
 	// (Start applies the default; tests inject their own).
 	ZenCatalog *zen.Catalog
+
+	// CancelAutopilot stops the daemon's in-flight autopilot cycle. The
+	// daemon owns the running cycle's context; the settings handler calls
+	// this when autopilot flips off, so disable takes effect at the next
+	// stage boundary instead of after the full sweep. Nil-safe: the
+	// handler no-ops when nil (foreground mode has no scheduler).
+	CancelAutopilot func()
 }
 
 // newMux creates the HTTP mux with API routes, PWA routes, and static file
@@ -86,12 +93,12 @@ func newMuxWithLinkedIn(store db.Store, staticFS fs.FS, li *linkedin.Fetcher) ht
 // The zen models endpoint serves from a per-mux catalog over the
 // zenCatalogURL seam (tests); Run passes the shared instance instead.
 func newMuxWithBoards(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, loadBoards func() ([]config.BoardEntry, error), withBoards func(func(*config.BoardsFile) error) error) http.Handler {
-	return newMuxWithZenCatalog(store, staticFS, li, loadBoards, withBoards, zen.NewCatalog(zen.CatalogConfig{URL: zenCatalogURL}))
+	return newMuxWithZenCatalog(store, staticFS, li, loadBoards, withBoards, zen.NewCatalog(zen.CatalogConfig{URL: zenCatalogURL}), nil)
 }
 
 // newMuxWithZenCatalog is the full constructor: same mux as
 // newMuxWithBoards, but GET /api/zen/models serves from the given catalog.
-func newMuxWithZenCatalog(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, loadBoards func() ([]config.BoardEntry, error), withBoards func(func(*config.BoardsFile) error) error, zenCatalog *zen.Catalog) http.Handler {
+func newMuxWithZenCatalog(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, loadBoards func() ([]config.BoardEntry, error), withBoards func(func(*config.BoardsFile) error) error, zenCatalog *zen.Catalog, cancelAutopilot func()) http.Handler {
 	mux := http.NewServeMux()
 
 	// Read-only API
@@ -111,7 +118,7 @@ func newMuxWithZenCatalog(store db.Store, staticFS fs.FS, li *linkedin.Fetcher, 
 	mux.HandleFunc("PATCH /api/profile", handleUpdateProfile(store))
 	mux.HandleFunc("POST /api/profile/import-linkedin", handleImportLinkedIn(store, li))
 	mux.HandleFunc("GET /api/settings", handleGetSettings(store))
-	mux.HandleFunc("PATCH /api/settings", handleUpdateSettings(store))
+	mux.HandleFunc("PATCH /api/settings", handleUpdateSettings(store, cancelAutopilot))
 	mux.HandleFunc("GET /api/zen/models", handleZenModels(zenCatalog))
 
 	mux.HandleFunc("GET /api/candidates", handleListCandidates(store))
@@ -172,7 +179,7 @@ func Start(cfg Config) error {
 		// a per-server catalog over the zenCatalogURL seam.
 		zenCatalog = zen.NewCatalog(zen.CatalogConfig{URL: zenCatalogURL})
 	}
-	mux := newMuxWithZenCatalog(cfg.DB, staticFS, linkedinFetcherFor(cfg.DB), cfg.LoadBoards, cfg.WithBoards, zenCatalog)
+	mux := newMuxWithZenCatalog(cfg.DB, staticFS, linkedinFetcherFor(cfg.DB), cfg.LoadBoards, cfg.WithBoards, zenCatalog, cfg.CancelAutopilot)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", cfg.Port)
 	server := &http.Server{

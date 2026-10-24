@@ -14,7 +14,10 @@ import (
 // handleUpdateSettings accepts partial settings updates. Only provided
 // fields are changed — missing keys are left untouched. The autopilot
 // toggle is gated: enabling requires the brief to be Complete.
-func handleUpdateSettings(store db.Store) http.HandlerFunc {
+// cancelAutopilot (nil-safe) stops the daemon's in-flight cycle when
+// autopilot flips off — disable takes effect within a stage boundary,
+// not after the full sweep.
+func handleUpdateSettings(store db.Store, cancelAutopilot func()) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
 		dec := json.NewDecoder(r.Body)
@@ -106,6 +109,11 @@ func handleUpdateSettings(store db.Store) http.HandlerFunc {
 			if err := store.RequestAutopilotRun(); err != nil {
 				log.Printf("settings: request autopilot run: %v", err)
 			}
+		} else if _, disabling := updates["autopilot_enabled"]; disabling && cancelAutopilot != nil {
+			// Disabling stops the cycle mid-flight: the stages check the
+			// context at every boundary, and the interrupted run closes as
+			// degraded — recovery semantics for an off-switch, not a crash.
+			cancelAutopilot()
 		}
 
 		// Return updated settings.

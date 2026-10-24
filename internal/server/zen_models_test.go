@@ -83,7 +83,7 @@ func TestZenModels_injectedCatalog(t *testing.T) {
 
 	cat := zen.NewCatalog(zen.CatalogConfig{URL: injected.URL})
 	f := db.NewFakeStore()
-	mux := newMuxWithZenCatalog(f, nil, nil, nil, nil, cat)
+	mux := newMuxWithZenCatalog(f, nil, nil, nil, nil, cat, nil)
 
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/zen/models", nil))
