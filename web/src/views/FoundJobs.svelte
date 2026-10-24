@@ -21,7 +21,7 @@
   import { formatDateShort, relTime } from '../lib/format.js';
   import { candidateBoardLabel, pendingCandidates } from '../lib/discovery.js';
   import { renderMarkdown } from '../lib/markdown.js';
-  import { verdictSentence } from '../lib/autopilotCard.js';
+  import { verdictSentence, scheduleStatus } from '../lib/autopilotCard.js';
   import { subscribeLive } from '../lib/live.js';
   import Skeleton from '../components/Skeleton.svelte';
   import * as api from '../stores/api.svelte.js';
@@ -195,6 +195,7 @@
   // last run's verdict in one sentence — copy from autopilotCard.js,
   // dot color = state. No run yet keeps the original never-run lines.
   let emptyVerdict = $derived(verdictSentence(autopilotData?.lastRun));
+  const schedule = $derived(scheduleStatus(autopilotData));
 
   let status = $derived.by(() => {
     if (!autopilotData) return null;
@@ -409,12 +410,12 @@
         <span class="ml-auto shrink-0 text-[11px] text-slate-500 dark:text-slate-400" title={`suggested by the "${c.facet}" facet`}>via {c.facet}</span>
         <div class="flex items-center gap-1.5 shrink-0">
           <button
-            class="px-2.5 py-1 text-[11px] font-medium rounded-md bg-emerald-100 text-emerald-700 hover:bg-emerald-200 cursor-pointer disabled:opacity-50 transition-colors"
+            class="px-2.5 py-1 text-[11px] font-medium rounded-md bg-emerald-100 text-emerald-700 hover:bg-emerald-200 hover:text-emerald-900 dark:hover:bg-emerald-600 dark:hover:text-emerald-100 cursor-pointer disabled:opacity-50 transition-colors"
             disabled={candActing.has(c.id)}
             onclick={() => addCompany(c)}
           >Add company</button>
           <button
-            class="px-2.5 py-1 text-[11px] font-medium rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer disabled:opacity-50 transition-colors"
+            class="px-2.5 py-1 text-[11px] font-medium rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 cursor-pointer disabled:opacity-50 transition-colors"
             disabled={candActing.has(c.id)}
             onclick={() => dismissCompany(c)}
           >Dismiss</button>
@@ -445,6 +446,17 @@
   <div class="text-center py-20 text-slate-400 dark:text-slate-500">
     <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('target', 48)}</div>
     <p class="text-sm">No matches yet — autopilot puts new matches here for review.</p>
+    {#if schedule?.kind === 'run-in-progress' || schedule?.kind === 'first-run'}
+      <!-- Nothing to show yet AND a cycle is mid-flight: the queue is not
+           simply empty, it is being filled — say so, or the page sits
+           apparently dead. -->
+      <p class="text-xs mt-3 flex items-center justify-center gap-1.5">
+        <span class="size-2 rounded-full shrink-0 animate-pulse {schedule.kind === 'run-in-progress' ? 'bg-emerald-400' : 'bg-slate-400 dark:bg-slate-500'}"></span>
+        {schedule.kind === 'run-in-progress'
+          ? 'Run in progress — this page updates when it finishes.'
+          : 'First run underway — the first picks land here within a minute or two.'}
+      </p>
+    {/if}
     {#if emptyVerdict}
       <!-- Last run's verdict in one sentence: dot = state hue, copy
            from the shared vocabulary. A pointer link only where the

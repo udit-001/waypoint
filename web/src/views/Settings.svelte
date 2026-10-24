@@ -6,7 +6,7 @@ import { setPage } from '../stores/page.svelte.js';
   import ZenModelPicker from '../components/ZenModelPicker.svelte';
   import Card from '../components/Card.svelte';
   import * as api from '../stores/api.svelte.js';
-  import { chipState, verdictMeta, dotColor, shortWhen, CHIP_TONE, DOT_TONE } from '../lib/autopilotCard.js';
+  import { chipState, verdictMeta, dotColor, shortWhen, scheduleStatus, clockTime, CHIP_TONE, DOT_TONE } from '../lib/autopilotCard.js';
 
   // WP-183: one tabbed autopilot card (locked Harbor variation 4).
   // Always visible: state chip + enable toggle. Tabs carry the rest.
@@ -75,7 +75,8 @@ import { setPage } from '../stores/page.svelte.js';
 
   const pendingShortlists = $derived(autopilot?.pendingShortlists ?? 0);
   const lastRun = $derived(autopilot?.lastRun ?? null);
-  const chip = $derived(autopilot ? chipState(lastRun?.verdict ?? '', pendingShortlists) : null);
+  const chip = $derived(autopilot ? chipState(!!autopilot.enabled, lastRun?.verdict ?? '', pendingShortlists) : null);
+  const schedule = $derived(scheduleStatus(autopilot));
   const discoveryOn = $derived(settingsData ? settingsData.discoveryEnabled !== false : true);
   const discoveryInterval = $derived(settingsData?.discoveryIntervalDays || 30);
   const cadence = $derived(autopilot?.cadence || 6);
@@ -99,7 +100,9 @@ import { setPage } from '../stores/page.svelte.js';
     const newState = !autopilot.enabled;
     try {
       await api.saveSetting('autopilot_enabled', newState ? 1 : 0);
-      autopilot = { ...autopilot, enabled: newState };
+      // The daemon polls every 30s: a fresh enable means the first (or an
+      // immediate requested) run — reflect it without a refetch.
+      autopilot = { ...autopilot, enabled: newState, firstRun: newState, running: false };
     } catch (e) {
       autopilotError = e.message;
     } finally {
@@ -238,6 +241,15 @@ import { setPage } from '../stores/page.svelte.js';
     </div>
     {#if autopilotError}
       <p class="text-xs text-red-600 mt-2">{autopilotError}</p>
+    {/if}
+    {#if schedule?.kind !== 'cadence-wait' && schedule}
+      <!-- Progress line: a mid-flight or first cycle is the one state the
+           runs tab can't show yet (no finished run to list) -->
+      <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
+        {schedule.kind === 'run-in-progress'
+          ? 'Run in progress — the Runs list updates when it finishes.'
+          : 'First run underway — your first matches land within a minute or two.'}
+      </p>
     {/if}
 
     <!-- Tabs: Runs / Review / Sources / Setup (variation 4) -->

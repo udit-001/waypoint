@@ -1,6 +1,8 @@
 package db
 
 import (
+	"time"
+
 	"github.com/udit-001/waypoint/internal/scraper"
 )
 
@@ -84,6 +86,8 @@ type Store interface {
 	// per-source and per-stage evidence stored under it.
 	AddRunLog(entry RunLog) (int64, error)
 	UpdateRunLog(id int64, entry RunLog) error
+	SetRunProgress(id int64, stage, of, label string) error
+	CloseInterruptedRuns(now time.Time) (int, error)
 	GetLastRun() (RunLog, bool, error)
 	ListRunLogs(limit int) ([]RunLog, error)
 

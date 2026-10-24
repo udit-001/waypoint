@@ -1,24 +1,61 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chipState, verdictMeta, verdictSentence, dotColor, shortWhen, CHIP_TONE, DOT_TONE } from './autopilotCard.js';
+import { chipState, verdictMeta, verdictSentence, dotColor, shortWhen, scheduleStatus, clockTime, CHIP_TONE, DOT_TONE } from './autopilotCard.js';
+
+// scheduleStatus: the autopilot progress line's three states + null.
+test('scheduleStatus: the three progress states derive from the payload', () => {
+  assert.deepEqual(scheduleStatus({ enabled: true, running: true }), { kind: 'run-in-progress' });
+  assert.deepEqual(scheduleStatus({ enabled: true, firstRun: true }), { kind: 'first-run' });
+  const scheduled = scheduleStatus({ enabled: true, nextRunAt: '2099-01-01T10:30:00Z' }, new Date('2099-01-01T09:00:00Z'));
+  assert.equal(scheduled.kind, 'cadence-wait');
+  assert.equal(scheduled.at.toISOString(), '2099-01-01T10:30:00.000Z');
+});
+
+test('scheduleStatus: disabled-suffixed states are null — off says nothing', () => {
+  assert.equal(scheduleStatus(null), null);
+  assert.equal(scheduleStatus({ enabled: false, firstRun: true }), null);
+  assert.equal(scheduleStatus({ enabled: true }), null); // nothing known
+});
+
+test('scheduleStatus: a past nextRunAt is due — first-run urgency, not a stale clock', () => {
+  assert.deepEqual(
+    scheduleStatus({ enabled: true, nextRunAt: '2099-01-01T10:30:00Z' }, new Date('2099-01-01T11:00:00Z')).kind,
+    'first-run',
+  );
+});
+
+test('clockTime: brief clock form, null-safe', () => {
+  assert.ok(/^\d{2}:\d{2}$/.test(clockTime(new Date('2099-01-01T10:30:00Z'))));
+  assert.equal(clockTime(null), '');
+});
 
 // WP-183: the state chip answers "does anything need me?" in one chip.
 // waiting-on-you wins (people over broken machines), then degraded.
+// Every enabled-state test passes true: only the green idle tone is
+// state-gated (the chip's own decision — see lib).
 test('chipState: waiting-on-you is amber with the pending count', () => {
-  assert.deepEqual(chipState('waiting-on-you', 3), { tone: 'amber', copy: '3 postings waiting' });
+  assert.deepEqual(chipState(true, 'waiting-on-you', 3), { tone: 'amber', copy: '3 postings waiting' });
 });
 
 test('chipState: degraded is red with an empty queue', () => {
-  assert.deepEqual(chipState('degraded', 0), { tone: 'red', copy: 'degraded' });
+  assert.deepEqual(chipState(true, 'degraded', 0), { tone: 'red', copy: 'degraded' });
+});
+
+test('chipState: degraded shows even when disabled — a broken run stays broken until someone looks', () => {
+  assert.deepEqual(chipState(false, 'degraded', 0), { tone: 'red', copy: 'degraded' });
 });
 
 test('chipState: waiting beats degraded — people over machines', () => {
-  assert.deepEqual(chipState('degraded', 2), { tone: 'amber', copy: '2 postings waiting' });
+  assert.deepEqual(chipState(true, 'degraded', 2), { tone: 'amber', copy: '2 postings waiting' });
+});
+
+test('chipState: waiting shows even when disabled — shortlists land while autopilot is off', () => {
+  assert.deepEqual(chipState(false, 'waiting-on-you', 2), { tone: 'amber', copy: '2 postings waiting' });
 });
 
 test('chipState: pending queue reads amber even after a quiet run', () => {
-  assert.deepEqual(chipState('quiet', 3), { tone: 'amber', copy: '3 postings waiting' });
-  assert.deepEqual(chipState('nothing-survived', 1), { tone: 'amber', copy: '1 posting waiting' });
+  assert.deepEqual(chipState(true, 'quiet', 3), { tone: 'amber', copy: '3 postings waiting' });
+  assert.deepEqual(chipState(true, 'nothing-survived', 1), { tone: 'amber', copy: '1 posting waiting' });
 });
 
 // Tone→class maps live here, next to the code that mints the tones —
@@ -32,12 +69,18 @@ test('CHIP_TONE/DOT_TONE cover every tone the lib mints', () => {
 
 test('chipState: quiet and nothing-survived are green', () => {
   for (const v of ['quiet', 'nothing-survived']) {
-    assert.deepEqual(chipState(v, 0), { tone: 'green', copy: 'nothing needs you' });
+    assert.deepEqual(chipState(true, v, 0), { tone: 'green', copy: 'nothing needs you' });
   }
 });
 
-test('chipState: no run yet is green', () => {
-  assert.deepEqual(chipState('', 0), { tone: 'green', copy: 'nothing needs you' });
+test('chipState: enabled with no run yet is green (first run still warming up)', () => {
+  assert.deepEqual(chipState(true, '', 0), { tone: 'green', copy: 'nothing needs you' });
+});
+
+test('chipState: disabled with nothing waiting renders no chip — the toggle already says "off"', () => {
+  for (const v of ['quiet', 'nothing-survived', '']) {
+    assert.equal(chipState(false, v, 0), null);
+  }
 });
 
 // Verdict line copy — the artifact's fragment shapes.

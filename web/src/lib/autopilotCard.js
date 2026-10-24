@@ -7,7 +7,15 @@
 // (amber) outranks a broken run (red); otherwise nothing needs you.
 // The waiting test is the live queue depth, not the last verdict: a
 // quiet run after shortlists landed still leaves people waiting.
-export function chipState(verdict, pendingShortlists) {
+//
+// The green idle tone carries meaning only while autopilot is running:
+// next to an off toggle it restates what the toggle already says
+// ("Currently off"), so disabled with nothing waiting renders no chip —
+// the caller distinguishes "no signal" (null) from a real state. A
+// waiting or degraded state still shows when disabled: shortlists land
+// while autopilot is off, and a broken run stays broken until someone
+// looks.
+export function chipState(enabled, verdict, pendingShortlists) {
   if (pendingShortlists > 0) {
     const noun = pendingShortlists === 1 ? 'posting' : 'postings';
     return { tone: 'amber', copy: `${pendingShortlists} ${noun} waiting` };
@@ -15,7 +23,46 @@ export function chipState(verdict, pendingShortlists) {
   if (verdict === 'degraded') {
     return { tone: 'red', copy: 'degraded' };
   }
+  if (!enabled) {
+    return null;
+  }
   return { tone: 'green', copy: 'nothing needs you' };
+}
+
+// scheduleStatus derives the autopilot progress state from the payload
+// GET /api/autopilot returns (the payload itself is computed from the same
+// scheduling seam the daemon polls — the web reports, never guesses).
+// Returns { kind, at } or null when there is nothing to say (disabled or
+// unknown state). Kinds:
+//   'run-in-progress' — a cycle is mid-flight right now
+//   'first-run'       — enabled, no finished cycle yet; the first cycle
+//                       starts within PollInterval (30s) of enabling
+//   'cadence-wait'    — steady state; at = the next cycle's Date
+export function scheduleStatus(payload, now = new Date()) {
+  if (!payload || !payload.enabled) return null;
+  if (payload.running) return { kind: 'run-in-progress' };
+  if (payload.firstRun) return { kind: 'first-run' };
+  if (payload.nextRunAt) {
+    const t = new Date(payload.nextRunAt);
+    if (!Number.isNaN(t.getTime())) {
+      // A past-or-now nextRunAt means the scheduler is already due —
+      // that's first-run urgency, never a stale clock.
+      if (t <= now) return { kind: 'first-run' };
+      return { kind: 'cadence-wait', at: t };
+    }
+  }
+  return null;
+}
+
+// clockTime renders a schedule Date as the brief "around HH:MM" form the
+// surfaces quote. Empty/null-safe.
+export function clockTime(d) {
+  if (!d) return '';
+  try {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch {
+    return '';
+  }
 }
 
 // verdictMeta renders one run as the artifact's verdict line:

@@ -49,12 +49,14 @@
   // a step elsewhere (CLI, assistant) checks off here on the next visit.
   import { setup } from '../lib/onboarding.svelte.js';
   import { briefStatus } from '../lib/brief.js';
+  import { scheduleStatus, clockTime } from '../lib/autopilotCard.js';
 
   let profileName = $state('');
   let briefComplete = $state(false);
   let zenKeySet = $state(false);
   let exaKeySet = $state(false);
   let autopilotEnabled = $state(false);
+  let autopilotData = $state(null); // schedule status feeds the empty state
 
   const setupSteps = $derived([
     profileName !== '',
@@ -65,6 +67,7 @@
   ]);
   const setupDoneCount = $derived(setupSteps.filter(Boolean).length);
   const setupComplete = $derived(setupDoneCount === 5);
+  const schedule = $derived(scheduleStatus(autopilotData));
 
   // First-run onboarding (WP-119): the assistant drives the pipeline, so the
 
@@ -126,6 +129,7 @@
         api.profile.ensure().then(() => { profileName = api.profile.value?.name || ''; }),
         api.brief.ensure().then(() => { briefComplete = briefStatus(api.brief.value).complete; }),
         api.autopilot.ensure().then(() => {
+          autopilotData = api.autopilot.value;
           zenKeySet = !!api.autopilot.value?.zenKeySet;
           exaKeySet = !!api.autopilot.value?.exaKeySet;
           autopilotEnabled = !!api.autopilot.value?.enabled;
@@ -227,10 +231,28 @@
       >{@html iconSvg('sparkles', 14)} Continue setup</a>
     </div>
   {:else}
-    <!-- Dismissed or complete (WP-119): quiet line, no card, no CLI. -->
+    <!-- Dismissed or complete (WP-119): what-here + the app's own next
+         step, routed by live autopilot state — no dead-end, no ceremony.
+         Matches (found) is where the queue lands, so that's the pointer. -->
     <div class="text-center py-20 text-slate-400 dark:text-slate-500">
       <div class="text-4xl mb-3 opacity-50 flex items-center justify-center">{@html iconSvg('list', 48)}</div>
-      <p class="text-sm">No applications yet — ask your assistant to find jobs for you.</p>
+      <p class="text-sm text-slate-600 dark:text-slate-300 font-medium mb-1">Your pipeline starts here</p>
+      <p class="text-xs mb-5">Every posting you track and its stage, newest first.</p>
+        {#if autopilotEnabled}
+          <a
+            href="/found"
+            class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 rounded-lg hover:opacity-90 transition-colors"
+          >{@html iconSvg('sparkles', 14)} Check Matches for new postings</a>
+          <p class="text-xs mt-3">
+            {#if schedule?.kind === 'first-run'}First run underway — the first shortlists land on the Matches page within minutes.{:else if schedule?.kind === 'run-in-progress'}Autopilot is mid-run — shortlists arrive on Matches when it finishes.{:else if schedule?.kind === 'cadence-wait'}Next autopilot run around {clockTime(schedule.at)} — shortlists wait on the Matches page first.{:else}Autopilot reviews every 6 hours — shortlists wait on the Matches page first.{/if}
+          </p>
+        {:else}
+        <a
+          href="/settings"
+          class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 rounded-lg hover:opacity-90 transition-colors"
+        >{@html iconSvg('sparkles', 14)} Turn on autopilot</a>
+        <p class="text-xs mt-3">Or track a posting yourself through your assistant (waypoint jobs add) — it shows up here.</p>
+      {/if}
     </div>
   {/if}
 {:else if filteredJobs.length === 0 && filter.any}

@@ -108,6 +108,11 @@ func TestMigration00008_existingDB(t *testing.T) {
 		// V20 added settings.discovery_enabled; same ADD COLUMN rule.
 		`ALTER TABLE settings DROP COLUMN discovery_enabled`,
 		`DELETE FROM goose_db_version WHERE version_id = 20`,
+		// V21 added autopilot_runs live stage facts; same ADD COLUMN rule.
+		`ALTER TABLE autopilot_runs DROP COLUMN stage`,
+		`ALTER TABLE autopilot_runs DROP COLUMN stage_of`,
+		`ALTER TABLE autopilot_runs DROP COLUMN stage_label`,
+		`DELETE FROM goose_db_version WHERE version_id = 21`,
 	} {
 		if _, err := raw.Exec(stmt); err != nil {
 			t.Fatalf("revert to V7 (%q): %v", stmt, err)

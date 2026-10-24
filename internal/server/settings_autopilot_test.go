@@ -222,3 +222,38 @@ func TestUpdateSettingsDiscoveryEnabledRoundTrip(t *testing.T) {
 		t.Errorf("DiscoveryEnabled = %d, want 0 — key silently dropped?", st.DiscoveryEnabled)
 	}
 }
+
+// TestGetAutopilotFeedbackState: the payload carries the surfaces' progress
+// signals so the web never sits dead silent between cycles — firstRun while
+// no cycle has finished, nextRunAt once one has, running mid-cycle.
+func TestGetAutopilotFeedbackState(t *testing.T) {
+	f := db.NewFakeStore()
+	f.Settings.AutopilotEnabled = 1
+	f.Settings.AutopilotCadence = 6
+	mux := newMuxWithLinkedIn(f, nil, nil)
+
+	get := func() map[string]any {
+		req := httptest.NewRequest("GET", "/api/autopilot", nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if w.Code != 200 {
+			t.Fatalf("status = %d, want 200", w.Code)
+		}
+		var out map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return out
+	}
+
+	// Never ran: first run pending, no schedule yet.
+	out := get()
+	for key, want := range map[string]bool{"firstRun": true, "running": false} {
+		if val := out[key]; val != want {
+			t.Errorf("%s = %v, want %v", key, val, want)
+		}
+	}
+	if got, _ := out["nextRunAt"].(string); got != "" {
+		t.Errorf("nextRunAt = %q, want empty before the first run", got)
+	}
+}

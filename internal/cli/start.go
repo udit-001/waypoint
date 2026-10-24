@@ -100,6 +100,10 @@ Examples:
 			return fmt.Errorf("database migration failed: %w", err)
 		}
 
+		// Boot recovery: any unfinished run row is a dead process's cycle.
+		// Best effort; see recoverInterruptedRuns.
+		recoverInterruptedRuns(store)
+
 		// Daemon mode: capture this process's stdout/stderr into
 		// $DATA_DIR/autopilot.log (WP-176) — the raw layer beneath the
 		// runlog, so a cycle's stage lines and errors outlive the terminal
@@ -241,6 +245,26 @@ func init() {
 	startCmd.Flags().BoolVarP(&startFlags.background, "background", "b", true, "Run server in background")
 	startCmd.Flags().BoolVar(&startFlags.daemon, "daemon", false, "")
 	startCmd.Flags().MarkHidden("daemon")
+}
+
+// recoverInterruptedRuns closes run rows a dead process left open, at
+// boot, before the scheduler's first poll: this boot is the first witness
+// that nothing is running, so the invariant CycleDue assumes ("an
+// unfinished row is the cycle running now") holds again. Without it, a
+// crash mid-cycle leaves the newest row unfinished forever — the web chip
+// reads "running", and the scheduler falls back to "first run",
+// re-running the whole sweep on every restart. Best effort: a failure
+// logs and boot proceeds. Split from RunE because RunE blocks on the
+// server loop; the test crosses this seam instead of starting a server.
+func recoverInterruptedRuns(store db.Store) {
+	n, err := store.CloseInterruptedRuns(time.Now())
+	if err != nil {
+		log.Printf("autopilot: boot recovery failed: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("autopilot: boot recovery closed %d interrupted run(s)", n)
+	}
 }
 
 // startAutopilotTicker runs the autopilot scheduler inside the daemon.

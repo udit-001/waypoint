@@ -11,6 +11,7 @@
   import { createLinkedInImport } from '../lib/linkedinImport.svelte.js';
   import ZenModelPicker from '../components/ZenModelPicker.svelte';
   import { briefStatus } from '../lib/brief.js';
+  import { scheduleStatus, clockTime } from '../lib/autopilotCard.js';
   import Spinner from '../components/Spinner.svelte';
   import EntryEditor from '../components/EntryEditor.svelte';
   import ChipInput from '../components/ChipInput.svelte';
@@ -68,6 +69,7 @@
 
   let autopilotEnabled = $state(false);
   let autopilotToggling = $state(false);
+  let autopilotData = $state(null); // schedule status feeds the toggle line
 
   const TOTAL_STEPS = 5;
 
@@ -106,6 +108,7 @@
 
     try {
       const data = await api.autopilot.ensure().then(() => api.autopilot.value);
+      autopilotData = data;
       zenKeySet = !!data?.zenKeySet;
       exaKeySet = !!data?.exaKeySet;
       autopilotEnabled = !!data?.enabled;
@@ -233,6 +236,9 @@
     try {
       await api.saveSetting('autopilot_enabled', autopilotEnabled ? 0 : 1);
       autopilotEnabled = !autopilotEnabled;
+      // The daemon polls every 30s: a fresh enable means the first (or an
+      // immediate requested) run — reflect it without a refetch.
+      autopilotData = { enabled: autopilotEnabled, firstRun: autopilotEnabled, running: false };
     } catch {}
     autopilotToggling = false;
   }
@@ -400,7 +406,15 @@
       <!-- ═══ Step 2: Job preferences ═══ -->
       <div>
         <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-1">Job preferences</h3>
-        <p class="text-sm text-slate-500 dark:text-slate-300 mb-5">What kind of job are you looking for? These drive the search — every posting is judged against them.</p>
+        <p class="text-sm text-slate-500 dark:text-slate-300 mb-1">What kind of job are you looking for? These drive the search — every posting is judged against them.</p>
+        {#if prefsStatus.complete === false}
+          <p class="text-xs text-amber-600 dark:text-amber-400 mb-4" role="status">
+            {prefsStatus.label} Required fields are marked
+            <span class="text-red-500" aria-hidden="true">*</span>
+          </p>
+        {:else}
+          <div class="mb-4 h-4"></div>
+        {/if}
 
         {#if briefData}
           <div class="space-y-5">
@@ -418,14 +432,14 @@
                 onchange={setVisa}
               />
             </div>
-            <Field label="Location Preference">
+            <Field label="Location Preference" required>
               <ChipInput
                 value={briefData.preferences.location_preference}
                 placeholder="e.g. Bengaluru, Remote"
                 onchange={(v) => setList('locationPreference', v)}
               />
             </Field>
-            <Field label="Companies">
+            <Field label="Companies" required>
               <ChipInput
                 value={briefData.preferences.companies}
                 placeholder="e.g. Acme, Globex"
@@ -439,7 +453,7 @@
                 onchange={(v) => setList('avoidCompanies', v)}
               />
             </Field>
-            <Field label="Keywords">
+            <Field label="Keywords" required>
               <ChipInput
                 value={briefData.preferences.keywords}
                 placeholder="e.g. Go, Distributed systems"
@@ -597,7 +611,12 @@
           <div class="flex items-start gap-2 p-3 bg-tint-amber border border-warning rounded-lg mb-4">
             <span class="text-warning-strong mt-0.5">{@html iconSvg('alert-circle', 14)}</span>
             <div class="text-xs text-warning leading-relaxed">
-              <span class="font-medium text-warning-strong">Curation brief incomplete</span> — still need: {briefData?.open?.join(', ') || 'preferences'}. Go back to step 2 to finish.
+              <span class="font-medium text-warning-strong">Curation brief incomplete</span> — still need: {briefData?.open?.join(', ') || 'preferences'}.
+              <button
+                type="button"
+                class="underline text-warning-strong font-medium hover:text-amber-700 dark:hover:text-amber-300 transition-colors cursor-pointer bg-transparent border-none p-0"
+                onclick={() => { currentStep = 1; }}
+              >Go to step 2 to finish</button>.
             </div>
           </div>
         {/if}
@@ -606,7 +625,11 @@
           <div>
             <p class="text-sm font-medium text-slate-800 dark:text-slate-100">Autopilot</p>
             <p class="text-xs text-slate-400 dark:text-slate-300 mt-0.5">
-              {autopilotEnabled ? 'Running every 6 hours' : 'Currently off'}
+              {#if autopilotEnabled}
+                {#if schedule?.kind === 'first-run'}First run underway — your first matches in a minute or two{:else if schedule?.kind === 'run-in-progress'}Run in progress{:else if schedule?.kind === 'cadence-wait'}Running every 6 hours · next run around {clockTime(schedule.at)}{:else}Running every 6 hours{/if}
+              {:else}
+                Currently off
+              {/if}
             </p>
           </div>
           <button

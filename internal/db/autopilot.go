@@ -82,6 +82,15 @@ type RunLog struct {
 	DiscoveredBoards int             `json:"discoveredBoards" db:"discovered_boards"`
 	PerSource        []SourceOutcome `json:"perSource" db:"-"`
 	StageErrors      []string        `json:"stageErrors" db:"-"`
+	// Live stage facts (migration 00021): what the in-flight cycle is
+	// doing right now, written by SetRunProgress and cleared on close.
+	// Stage is a fixed stage id (discover/select/sweep/read/curate);
+	// StageOf is a "k/n" counter; StageLabel the per-item fact (the
+	// source display name). Copy lives in the web layer, which maps ids
+	// to sentences — the store carries facts, never sentences.
+	Stage      string `json:"stage,omitempty" db:"stage"`
+	StageOf    string `json:"stageOf,omitempty" db:"stage_of"`
+	StageLabel string `json:"stageLabel,omitempty" db:"stage_label"`
 }
 
 // runLogColumns selects a full record, coalescing the nullable and
@@ -90,7 +99,8 @@ const runLogColumns = `id, COALESCE(verdict, ''), started_at, COALESCE(finished_
 	COALESCE(duration_ms, 0), postings_new, postings_shortlisted,
 	postings_dismissed, postings_errored, COALESCE(discovered_boards, 0),
 	COALESCE(per_source, '[]'),
-	COALESCE(stage_errors, '[]')`
+	COALESCE(stage_errors, '[]'),
+	COALESCE(stage, ''), COALESCE(stage_of, ''), COALESCE(stage_label, '')`
 
 // scanRunLog reads one runlog row, decoding the JSON columns.
 func scanRunLog(row interface{ Scan(...any) error }) (RunLog, error) {
@@ -103,6 +113,7 @@ func scanRunLog(row interface{ Scan(...any) error }) (RunLog, error) {
 		&entry.ID, &verdict, &entry.StartedAt, &entry.FinishedAt, &entry.DurationMs,
 		&entry.PostingsNew, &entry.PostingsShortlisted, &entry.PostingsDismissed,
 		&entry.PostingsErrored, &entry.DiscoveredBoards, &perSourceRaw, &stageErrRaw,
+		&entry.Stage, &entry.StageOf, &entry.StageLabel,
 	); err != nil {
 		return RunLog{}, err
 	}
@@ -138,6 +149,8 @@ func (s *SQLiteStore) AddRunLog(entry RunLog) (int64, error) {
 		entry.PostingsNew, entry.PostingsShortlisted, entry.PostingsDismissed,
 		entry.PostingsErrored, entry.DiscoveredBoards, perSource, stageErrors,
 	)
+	// Stage facts start empty: a just-opened run has no stage to report
+	// (migration 00021 defaults carry that; nothing to write here).
 	if err != nil {
 		return 0, fmt.Errorf("insert run log: %w", err)
 	}
@@ -159,12 +172,18 @@ func (s *SQLiteStore) UpdateRunLog(id int64, entry RunLog) error {
 			verdict = ?, finished_at = ?, duration_ms = ?,
 			postings_new = ?, postings_shortlisted = ?,
 			postings_dismissed = ?, postings_errored = ?,
-			discovered_boards = ?, per_source = ?, stage_errors = ?
+			discovered_boards = ?, per_source = ?, stage_errors = ?,
+			stage = ?, stage_of = ?, stage_label = ?
 		 WHERE id = ?`,
 		string(entry.Verdict), entry.FinishedAt, entry.DurationMs,
 		entry.PostingsNew, entry.PostingsShortlisted,
 		entry.PostingsDismissed, entry.PostingsErrored,
-		entry.DiscoveredBoards, perSource, stageErrors, id,
+		entry.DiscoveredBoards, perSource, stageErrors,
+		// Closing a run clears its live stage facts: a finished row is
+		// the run record, never a progress display (RunLogged's entries
+		// carry no stage, so an empty write is the rule, not an
+		// exception).
+		entry.Stage, entry.StageOf, entry.StageLabel, id,
 	)
 	if err != nil {
 		return fmt.Errorf("update run log: %w", err)
@@ -172,7 +191,66 @@ func (s *SQLiteStore) UpdateRunLog(id int64, entry RunLog) error {
 	return nil
 }
 
-// GetLastRun returns the most recent run log entry.
+// SetRunProgress writes the live stage facts onto an in-flight run row
+// (migration 00021). The row stays open — this never touches finished_at —
+// so the unfinished row remains the single "running now" signal and its
+// stage columns the single "doing what now" signal. Called per stage
+// transition and per counter step by the cycle's Progress reporter.
+func (s *SQLiteStore) SetRunProgress(id int64, stage, of, label string) error {
+	_, err := s.Exec(
+		`UPDATE autopilot_runs SET stage = ?, stage_of = ?, stage_label = ? WHERE id = ?`,
+		stage, of, label, id,
+	)
+	if err != nil {
+		return fmt.Errorf("set run progress: %w", err)
+	}
+	return nil
+}
+
+// closeInterruptedEntry closes one dead process's run row in place: a
+// degraded verdict (partial coverage must not read as dry, §7), an
+// interrupted stage error, an end time with measured duration, and the
+// live stage facts cleared — a closed row is the run record, never a
+// progress display. Both Store adapters share this one body: SQLite and
+// FakeStore must recover rows identically, and the facts differ only in
+// how the row is found and written back.
+func closeInterruptedEntry(entry *RunLog, now time.Time) {
+	if started, err := time.Parse(time.RFC3339, entry.StartedAt); err == nil {
+		entry.DurationMs = now.Sub(started).Milliseconds()
+	}
+	entry.FinishedAt = now.UTC().Format(time.RFC3339)
+	entry.Verdict = VerdictDegraded
+	entry.Stage, entry.StageOf, entry.StageLabel = "", "", ""
+	entry.StageErrors = append(entry.StageErrors, "cycle interrupted: process exit")
+}
+
+// CloseInterruptedRuns finishes run rows left open by a process that died
+// mid-cycle. Without this, a crash leaves the newest row unfinished
+// forever: GET /api/autopilot reports running=true (and any progress line
+// with it) until another cycle happens to close the row. Called at boot,
+// before the scheduler's first poll — a fresh boot is the one witness
+// that the old cycle is not running.
+func (s *SQLiteStore) CloseInterruptedRuns(now time.Time) (int, error) {
+	rows, err := s.Query(`SELECT ` + runLogColumns + ` FROM autopilot_runs WHERE COALESCE(finished_at, '') = ''`)
+	if err != nil {
+		return 0, fmt.Errorf("close interrupted runs: %w", err)
+	}
+	defer rows.Close()
+
+	closed := 0
+	for rows.Next() {
+		entry, err := scanRunLog(rows)
+		if err != nil {
+			return closed, fmt.Errorf("close interrupted runs: %w", err)
+		}
+		closeInterruptedEntry(&entry, now)
+		if err := s.UpdateRunLog(entry.ID, entry); err != nil {
+			return closed, err
+		}
+		closed++
+	}
+	return closed, rows.Err()
+}
 func (s *SQLiteStore) GetLastRun() (RunLog, bool, error) {
 	row := s.QueryRow(`SELECT ` + runLogColumns + ` FROM autopilot_runs ORDER BY id DESC LIMIT 1`)
 	entry, err := scanRunLog(row)
@@ -244,6 +322,34 @@ func (f *FakeStore) UpdateRunLog(id int64, entry RunLog) error {
 		}
 	}
 	return fmt.Errorf("run log %d not found", id)
+}
+
+// SetRunProgress writes the live stage facts onto a fake run row.
+func (f *FakeStore) SetRunProgress(id int64, stage, of, label string) error {
+	for i, r := range f.RunLogs {
+		if r.ID == id {
+			f.RunLogs[i].Stage = stage
+			f.RunLogs[i].StageOf = of
+			f.RunLogs[i].StageLabel = label
+			return nil
+		}
+	}
+	return fmt.Errorf("run log %d not found", id)
+}
+
+// CloseInterruptedRuns finishes every fake run row with an empty
+// finished_at through the same recovery body the SQLite store uses —
+// the two adapters must recover identically.
+func (f *FakeStore) CloseInterruptedRuns(now time.Time) (int, error) {
+	closed := 0
+	for i := range f.RunLogs {
+		if f.RunLogs[i].FinishedAt != "" {
+			continue
+		}
+		closeInterruptedEntry(&f.RunLogs[i], now)
+		closed++
+	}
+	return closed, nil
 }
 
 // GetLastRun returns the most recent run log entry from the fake store.

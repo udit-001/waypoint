@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/udit-001/waypoint/internal/autopilot"
 	"github.com/udit-001/waypoint/internal/config"
 	"github.com/udit-001/waypoint/internal/db"
 	"github.com/udit-001/waypoint/internal/linkedin"
@@ -579,6 +580,32 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 			cadence = 6
 		}
 
+		// Feedback state for the surfaces ("dead silence"): a run in
+		// progress, whether the first cycle is still pending, and when the
+		// next cycle fires. Derived from the same scheduling seam the daemon
+		// polls (autopilot.CycleDue), so the web never guesses the policy —
+		// it reports it. The explicit "requested" arm is unknown here by
+		// design: reading the request marker would consume it.
+		running := hasRun && lastRun.StartedAt != "" && lastRun.FinishedAt == ""
+		firstRun := false
+		nextRunAt := ""
+		if settings.AutopilotEnabled == 1 && !running {
+			var lastFinished string
+			if hasRun {
+				lastFinished = lastRun.FinishedAt
+			}
+			due, reason := autopilot.CycleDue(true, time.Duration(cadence)*time.Hour, lastFinished, false, time.Now())
+			switch {
+			case reason == "first run" || (due && reason == ""):
+				firstRun = true
+			case !due && lastFinished != "":
+				// Not due: nextRunAt = last finished + cadence.
+				if t, err := time.Parse(time.RFC3339, lastFinished); err == nil {
+					nextRunAt = t.Add(time.Duration(cadence) * time.Hour).UTC().Format(time.RFC3339)
+				}
+			}
+		}
+
 		resp := map[string]any{
 			"enabled":           settings.AutopilotEnabled == 1,
 			"cadence":           cadence,
@@ -587,6 +614,9 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 			"lastRun":           nil,
 			"runs":              runs,
 			"pendingShortlists": pending,
+			"running":           running,
+			"firstRun":          firstRun,
+			"nextRunAt":         nextRunAt,
 		}
 		if hasRun {
 			resp["lastRun"] = lastRun
