@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -181,10 +182,12 @@ func (r *runRecord) finish(ctx context.Context, store db.Store, n Notifier) db.R
 	r.sumTotals()
 	r.Verdict = verdictFor(r.RunLog, queueDepth(store, r))
 	// Degraded runs announce themselves (WP-193): one notice per degraded
-	// run, derived from the same verdict the runlog shows. A failure here
-	// is only logged — the entry is returned by value below, so a stage
-	// error recorded now could never reach the closed row anyway.
-	if n != nil && r.Verdict == db.VerdictDegraded {
+	// run, derived from the same verdict the runlog shows. An interruption
+	// alone is the operator's own action (disable flip, shutdown) — not a
+	// failure to announce. A failure here is only logged — the entry is
+	// returned by value below, so a stage error recorded now could never
+	// reach the closed row anyway.
+	if n != nil && r.Verdict == db.VerdictDegraded && !interruptionOnly(r.StageErrors) {
 		if err := n.NotifyDegraded(ctx, DegradedNotice{Errors: r.StageErrors}); err != nil {
 			log.Printf("autopilot: notify degraded: %v", err)
 		}
@@ -238,6 +241,19 @@ func verdictFor(entry db.RunLog, queued int) db.Verdict {
 	default:
 		return db.VerdictQuiet
 	}
+}
+
+// interruptionOnly reports whether every stage error is the marker the
+// finish defer records for a stop the operator caused (disable flip,
+// shutdown, boot cancel). Any real stage error means the run degraded for
+// a reason worth hearing about, even alongside an interruption.
+func interruptionOnly(errs []string) bool {
+	for _, e := range errs {
+		if !strings.HasPrefix(e, "cycle interrupted") {
+			return false
+		}
+	}
+	return true
 }
 
 // queueDepth is the review queue's depth: postings shortlisted and not yet
