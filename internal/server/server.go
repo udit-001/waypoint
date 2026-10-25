@@ -581,10 +581,23 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 		// The state chip's "N postings waiting" (WP-183): the review
 		// queue's depth, read from the same store in the same payload.
 		pending, _ := store.CountPostings(db.StatusShortlisted)
+		// The scheduler's drain signal (WP-196): the ledger's "new" depth,
+		// the same number the daemon polls.
+		backlog, _ := store.CountPostings(db.StatusNew)
 
 		cadence := settings.AutopilotCadence
 		if cadence <= 0 {
 			cadence = 6
+		}
+		workingCadence := time.Duration(settings.AutopilotWorkingCadence) * time.Minute
+		if workingCadence <= 0 {
+			workingCadence = autopilot.DefaultWorkingCadence
+		}
+		schedule := autopilot.Schedule{
+			Work:           autopilot.WorkWindow{Start: settings.AutopilotWorkStart, End: settings.AutopilotWorkEnd},
+			WorkingCadence: workingCadence,
+			DrainInterval:  autopilot.DefaultDrainInterval,
+			Backlog:        backlog,
 		}
 
 		// Feedback state for the surfaces ("dead silence"): a run in
@@ -601,14 +614,22 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 			if hasRun {
 				lastFinished = lastRun.FinishedAt
 			}
-			due, reason := autopilot.CycleDue(true, time.Duration(cadence)*time.Hour, lastFinished, false, time.Now())
+			due, reason := autopilot.CycleDue(true, schedule, lastFinished, false, time.Now())
 			switch {
 			case reason == "first run" || (due && reason == ""):
 				firstRun = true
+			case reason == "outside work window":
+				// The window decides when the next cycle fires; the web
+				// doesn't guess past it, so nextRunAt stays empty.
 			case !due && lastFinished != "":
-				// Not due: nextRunAt = last finished + cadence.
+				// Not due: nextRunAt = last finished + the interval now in
+				// force (drain while backlog remains, else working cadence).
+				interval := workingCadence
+				if backlog > 0 {
+					interval = autopilot.DefaultDrainInterval
+				}
 				if t, err := time.Parse(time.RFC3339, lastFinished); err == nil {
-					nextRunAt = t.Add(time.Duration(cadence) * time.Hour).UTC().Format(time.RFC3339)
+					nextRunAt = t.Add(interval).UTC().Format(time.RFC3339)
 				}
 			}
 		}
@@ -616,6 +637,9 @@ func handleGetAutopilot(store db.Store) http.HandlerFunc {
 		resp := map[string]any{
 			"enabled":           settings.AutopilotEnabled == 1,
 			"cadence":           cadence,
+			"workStart":         settings.AutopilotWorkStart,
+			"workEnd":           settings.AutopilotWorkEnd,
+			"workingCadence":    settings.AutopilotWorkingCadence,
 			"zenKeySet":         settings.ZenAPIKey != "",
 			"exaKeySet":         settings.ExaAPIKey != "",
 			"lastRun":           nil,

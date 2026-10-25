@@ -164,6 +164,12 @@ export async function saveSetting(key, value) {
   return apiMutate('PATCH', '/settings', { [key]: value });
 }
 
+/** Save several settings keys in one PATCH — for paired fields (the
+ * WP-196 work window) where one key alone can't validate. */
+export async function saveSettings(fields) {
+  return apiMutate('PATCH', '/settings', fields);
+}
+
 export const settings = createStore(async () => {
   const s = await api('/settings');
   if (!s) return { theme: 'light', remindersEnabled: true, defaultView: 'dashboard', itemsPerPage: 25 };

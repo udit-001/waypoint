@@ -113,6 +113,11 @@ func TestMigration00008_existingDB(t *testing.T) {
 		`ALTER TABLE autopilot_runs DROP COLUMN stage_of`,
 		`ALTER TABLE autopilot_runs DROP COLUMN stage_label`,
 		`DELETE FROM goose_db_version WHERE version_id = 21`,
+		// V22 added the WP-196 working-hours columns; same ADD COLUMN rule.
+		`ALTER TABLE settings DROP COLUMN autopilot_work_start`,
+		`ALTER TABLE settings DROP COLUMN autopilot_work_end`,
+		`ALTER TABLE settings DROP COLUMN autopilot_working_cadence`,
+		`DELETE FROM goose_db_version WHERE version_id = 22`,
 	} {
 		if _, err := raw.Exec(stmt); err != nil {
 			t.Fatalf("revert to V7 (%q): %v", stmt, err)

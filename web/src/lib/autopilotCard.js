@@ -150,6 +150,24 @@ export function dotColor(verdict) {
   }
 }
 
+// minutesToTime / timeToMinutes convert the work window (WP-196) between
+// the stored minutes-from-midnight and the <input type="time"> value.
+// Out-of-range or malformed input yields '' / null so the editor row can
+// refuse to save instead of storing a surprise.
+export function minutesToTime(m) {
+  if (!Number.isInteger(m) || m < 0 || m > 1439) return '';
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+export function timeToMinutes(v) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(v ?? ''));
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mins = Number(m[2]);
+  if (h > 23 || mins > 59) return null;
+  return h * 60 + mins;
+}
+
 // Tone → class maps. They live here, next to the code that mints the
 // tones — the component only renders what this module names.
 export const CHIP_TONE = {

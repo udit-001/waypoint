@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chipState, verdictMeta, verdictSentence, dotColor, shortWhen, scheduleStatus, clockTime, progressLine, CHIP_TONE, DOT_TONE } from './autopilotCard.js';
+import { chipState, verdictMeta, verdictSentence, dotColor, shortWhen, scheduleStatus, clockTime, progressLine, minutesToTime, timeToMinutes, CHIP_TONE, DOT_TONE } from './autopilotCard.js';
 
 // scheduleStatus: the autopilot progress line's three states + null.
 test('scheduleStatus: the three progress states derive from the payload', () => {
@@ -210,4 +210,34 @@ test('progressLine: not running is null even with facts left over', () => {
 
 test('progressLine: unknown stage id is null — the store carries facts, not sentences', () => {
   assert.equal(progressLine({ running: true, lastRun: { stage: 'future-stage', stageOf: '1/2' } }), null);
+});
+
+// WP-196: the work window editor converts between stored minutes and
+// <input type="time"> values; bad input is refused, not stored.
+test('minutesToTime: minutes-from-midnight renders HH:MM, out-of-range is empty', () => {
+  assert.equal(minutesToTime(540), '09:00');
+  assert.equal(minutesToTime(1080), '18:00');
+  assert.equal(minutesToTime(0), '00:00');
+  assert.equal(minutesToTime(1439), '23:59');
+  assert.equal(minutesToTime(1440), '');
+  assert.equal(minutesToTime(-1), '');
+  assert.equal(minutesToTime(null), '');
+  assert.equal(minutesToTime(30.5), '');
+});
+
+test('timeToMinutes: HH:MM parses to minutes, malformed is null', () => {
+  assert.equal(timeToMinutes('09:00'), 540);
+  assert.equal(timeToMinutes('9:05'), 545);
+  assert.equal(timeToMinutes('18:00'), 1080);
+  assert.equal(timeToMinutes('24:00'), null);
+  assert.equal(timeToMinutes('09:60'), null);
+  assert.equal(timeToMinutes('900'), null);
+  assert.equal(timeToMinutes(''), null);
+  assert.equal(timeToMinutes(null), null);
+});
+
+test('work window: the two conversions round-trip', () => {
+  for (const m of [0, 540, 1080, 1439]) {
+    assert.equal(timeToMinutes(minutesToTime(m)), m);
+  }
 });

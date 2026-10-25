@@ -340,7 +340,9 @@ func startAutopilotTicker(store db.Store, port int, cycles *cycleCancel) {
 
 // autopilotDue applies the scheduling policy against persisted state.
 // Any read failure reports not-due and logs — a broken store must not
-// spin the scheduler into tight refiring.
+// spin the scheduler into tight refiring. The Schedule is rebuilt each
+// poll: the window and working cadence from settings, the drain
+// interval fixed, and the backlog re-read from the ledger (WP-196).
 func autopilotDue(store db.Store) (bool, string) {
 	settings, err := store.GetSettings()
 	if err != nil {
@@ -357,9 +359,20 @@ func autopilotDue(store db.Store) (bool, string) {
 	} else if ok {
 		finished = last.FinishedAt
 	}
-	return autopilot.CycleDue(settings.AutopilotEnabled == 1,
-		time.Duration(settings.AutopilotCadence)*time.Hour,
-		finished, requested, time.Now())
+	backlog := 0
+	if n, err := store.CountPostings(db.StatusNew); err != nil {
+		// Poll as drained — the working cadence, never a stalled loop.
+		log.Printf("autopilot: count new postings: %v", err)
+	} else {
+		backlog = n
+	}
+	schedule := autopilot.Schedule{
+		Work:           autopilot.WorkWindow{Start: settings.AutopilotWorkStart, End: settings.AutopilotWorkEnd},
+		WorkingCadence: time.Duration(settings.AutopilotWorkingCadence) * time.Minute,
+		DrainInterval:  autopilot.DefaultDrainInterval,
+		Backlog:        backlog,
+	}
+	return autopilot.CycleDue(settings.AutopilotEnabled == 1, schedule, finished, requested, time.Now())
 }
 
 // runAutopilotCycle executes one cycle and logs the outcome. Failures

@@ -49,6 +49,7 @@ func handleUpdateSettings(store db.Store, cancelAutopilot func()) http.HandlerFu
 
 		updates := make(map[string]any)
 		enabledNow := false
+		windowPatched := false
 		for k, v := range body {
 			switch k {
 			case "theme", "default_view", "autopilot_provider", "zen_api_key", "zen_model", "exa_api_key":
@@ -79,6 +80,20 @@ func handleUpdateSettings(store db.Store, cancelAutopilot func()) http.HandlerFu
 				} else if i, ok := v.(int); ok {
 					updates[k] = i
 				}
+			case "autopilot_work_start", "autopilot_work_end", "autopilot_working_cadence":
+				// Minutes from midnight (window) or minutes (cadence).
+				n, ok := 0, false
+				if f, isF := v.(float64); isF {
+					n, ok = int(f), true
+				} else if i, isI := v.(int); isI {
+					n, ok = i, true
+				}
+				if !ok || n < 0 || n > 1439 {
+					jsonError(w, k+" must be an integer between 0 and 1439", http.StatusBadRequest)
+					return
+				}
+				updates[k] = n
+				windowPatched = true
 			case "autopilot_enabled":
 				if f, ok := v.(float64); ok {
 					updates[k] = int(f)
@@ -94,6 +109,33 @@ func handleUpdateSettings(store db.Store, cancelAutopilot func()) http.HandlerFu
 		if len(updates) == 0 {
 			jsonError(w, "no valid fields provided", http.StatusBadRequest)
 			return
+		}
+
+		// The work window is a pair: end must be after start, except both
+		// zero which means "reset to the default window". One patch may
+		// touch only one side, so validate against the stored other side.
+		if windowPatched {
+			settings, err := store.GetSettings()
+			if err != nil {
+				jsonError(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			start, hasStart := updates["autopilot_work_start"].(int)
+			if !hasStart {
+				start = settings.AutopilotWorkStart
+			}
+			end, hasEnd := updates["autopilot_work_end"].(int)
+			if !hasEnd {
+				end = settings.AutopilotWorkEnd
+			}
+			if !(end > start || (start == 0 && end == 0)) {
+				jsonError(w, "work window: end must be after start (or both 0 for the default)", http.StatusBadRequest)
+				return
+			}
+			if start == 0 && end == 0 {
+				updates["autopilot_work_start"] = autopilot.DefaultWorkWindow.Start
+				updates["autopilot_work_end"] = autopilot.DefaultWorkWindow.End
+			}
 		}
 
 		if err := store.UpsertSettings(updates); err != nil {

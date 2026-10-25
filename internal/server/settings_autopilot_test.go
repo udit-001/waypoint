@@ -232,6 +232,10 @@ func TestGetAutopilotFeedbackState(t *testing.T) {
 	f := db.NewFakeStore()
 	f.Settings.AutopilotEnabled = 1
 	f.Settings.AutopilotCadence = 6
+	// Full-day window: the scheduler's work-window gate (WP-196) must
+	// not make this test depend on the wall clock.
+	f.Settings.AutopilotWorkStart = 0
+	f.Settings.AutopilotWorkEnd = 1440
 	mux := newMuxWithLinkedIn(f, nil, nil)
 
 	get := func() map[string]any {

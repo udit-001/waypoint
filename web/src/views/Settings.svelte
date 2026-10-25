@@ -6,7 +6,7 @@ import { setPage } from '../stores/page.svelte.js';
   import ZenModelPicker from '../components/ZenModelPicker.svelte';
   import Card from '../components/Card.svelte';
   import * as api from '../stores/api.svelte.js';
-  import { chipState, verdictMeta, dotColor, shortWhen, scheduleStatus, clockTime, progressLine, CHIP_TONE, DOT_TONE } from '../lib/autopilotCard.js';
+  import { chipState, verdictMeta, dotColor, shortWhen, scheduleStatus, clockTime, progressLine, minutesToTime, timeToMinutes, CHIP_TONE, DOT_TONE } from '../lib/autopilotCard.js';
 
   // WP-183: one tabbed autopilot card (locked Harbor variation 4).
   // Always visible: state chip + enable toggle. Tabs carry the rest.
@@ -21,6 +21,12 @@ import { setPage } from '../stores/page.svelte.js';
 
   let togglingDiscovery = $state(false);
   let cadenceSaving = $state(false);
+
+  // Work hours + working cadence (WP-196): the in-window firing knobs.
+  let workStartVal = $state('');
+  let workEndVal = $state('');
+  let workHoursSaving = $state(false);
+  let workCadenceSaving = $state(false);
 
   let discoveredCount = $state(null);
 
@@ -55,7 +61,7 @@ import { setPage } from '../stores/page.svelte.js';
 
     // The card reads four stores; each refreshes independently so one
     // slow endpoint can't blank the others.
-    try { await api.autopilot.ensure(); autopilot = api.autopilot.value; zenKeySet = !!autopilot?.zenKeySet; exaKeySet = !!autopilot?.exaKeySet; } catch { autopilot = null; }
+    try { await api.autopilot.ensure(); autopilot = api.autopilot.value; zenKeySet = !!autopilot?.zenKeySet; exaKeySet = !!autopilot?.exaKeySet; workStartVal = minutesToTime(autopilot?.workStart ?? 540) || '09:00'; workEndVal = minutesToTime(autopilot?.workEnd ?? 1080) || '18:00'; } catch { autopilot = null; }
 
     // Preserve the enable gate the old card carried: autopilot cannot
     // turn on until the curation brief is complete (server enforces it
@@ -81,6 +87,7 @@ import { setPage } from '../stores/page.svelte.js';
   const discoveryOn = $derived(settingsData ? settingsData.discoveryEnabled !== false : true);
   const discoveryInterval = $derived(settingsData?.discoveryIntervalDays || 30);
   const cadence = $derived(autopilot?.cadence || 6);
+  const workCadence = $derived(autopilot?.workingCadence || 45);
   const enableBlocked = $derived(briefComplete === false && !autopilot?.enabled);
 
   // The verdict line is the hero run; the rows beneath are the NEXT 4
@@ -154,6 +161,44 @@ import { setPage } from '../stores/page.svelte.js';
       autopilotError = e.message;
     } finally {
       cadenceSaving = false;
+    }
+  }
+
+  // The work window is one pair — a lone side can't validate — so both
+  // sides patch together and the server checks end > start.
+  async function saveWorkHours() {
+    if (workHoursSaving) return;
+    const s = timeToMinutes(workStartVal);
+    const e = timeToMinutes(workEndVal);
+    if (s === null || e === null || e <= s) {
+      autopilotError = 'Work hours: end must be after start.';
+      return;
+    }
+    workHoursSaving = true;
+    autopilotError = null;
+    try {
+      await api.saveSettings({ autopilot_work_start: s, autopilot_work_end: e });
+      autopilot = { ...autopilot, workStart: s, workEnd: e };
+    } catch (err) {
+      autopilotError = err.message;
+    } finally {
+      workHoursSaving = false;
+    }
+  }
+
+  async function stepWorkCadence(delta) {
+    if (workCadenceSaving) return;
+    const next = Math.min(240, Math.max(15, workCadence + delta));
+    if (next === workCadence) return;
+    workCadenceSaving = true;
+    autopilotError = null;
+    try {
+      await api.saveSetting('autopilot_working_cadence', next);
+      autopilot = { ...autopilot, workingCadence: next };
+    } catch (err) {
+      autopilotError = err.message;
+    } finally {
+      workCadenceSaving = false;
     }
   }
 
@@ -338,9 +383,30 @@ import { setPage } from '../stores/page.svelte.js';
         </button>
       </div>
     {:else if tab === 'setup'}
+      <!-- Work hours + working cadence (WP-196): the schedule fires only
+           inside the window, draining the backlog faster while it lasts -->
+      <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+        <span class="text-[13px] text-slate-700 dark:text-slate-200">Work hours</span>
+        <span class="flex items-center gap-2 shrink-0">
+          <input type="time" bind:value={workStartVal} aria-label="Work hours start"
+            class="px-2 py-1 text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:border-slate-400" />
+          <span class="text-xs text-slate-400">–</span>
+          <input type="time" bind:value={workEndVal} aria-label="Work hours end"
+            class="px-2 py-1 text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:border-slate-400" />
+          <button class="px-2 py-1 text-[11px] font-medium bg-slate-800 text-white rounded-md hover:opacity-90 cursor-pointer disabled:opacity-50" disabled={workHoursSaving} onclick={saveWorkHours}>{workHoursSaving ? 'Saving…' : 'Save'}</button>
+        </span>
+      </div>
+      <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
+        <span class="text-[13px] text-slate-700 dark:text-slate-200">Working cadence</span>
+        <span class="inline-flex items-center border border-slate-200 dark:border-slate-600 rounded-md overflow-hidden shrink-0">
+          <button class="w-7 h-7 bg-slate-50 dark:bg-slate-700 text-slate-500 cursor-pointer" aria-label="Decrease working cadence" onclick={() => stepWorkCadence(-15)}>−</button>
+          <span class="min-w-[74px] text-center text-xs font-medium text-slate-700 dark:text-slate-200">every {workCadence}m</span>
+          <button class="w-7 h-7 bg-slate-50 dark:bg-slate-700 text-slate-500 cursor-pointer" aria-label="Increase working cadence" onclick={() => stepWorkCadence(15)}>+</button>
+        </span>
+      </div>
       <!-- Cadence stepper + keys as state chips -->
       <div class="flex items-center justify-between gap-3 min-h-[36px] py-[5px] border-b border-slate-100 dark:border-slate-600">
-        <span class="text-[13px] text-slate-700 dark:text-slate-200">Cadence</span>
+        <span class="text-[13px] text-slate-700 dark:text-slate-200">Resting cadence</span>
         <span class="inline-flex items-center border border-slate-200 dark:border-slate-600 rounded-md overflow-hidden shrink-0">
           <button class="w-7 h-7 bg-slate-50 dark:bg-slate-700 text-slate-500 cursor-pointer" aria-label="Decrease cadence" onclick={() => stepCadence(-1)}>−</button>
           <span class="min-w-[74px] text-center text-xs font-medium text-slate-700 dark:text-slate-200">every {cadence}h</span>

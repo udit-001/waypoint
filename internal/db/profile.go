@@ -98,13 +98,18 @@ type Settings struct {
 	AutopilotDisabledScrapers string `db:"autopilot_disabled_scrapers" json:"-"`
 
 	// Autopilot settings.
-	AutopilotEnabled      int    `db:"autopilot_enabled" json:"autopilotEnabled"`
-	AutopilotCadence      int    `db:"autopilot_cadence" json:"autopilotCadence"` // hours; 0 = default (6)
-	AutopilotProvider     string `db:"autopilot_provider" json:"autopilotProvider"`
-	ZenAPIKey             string `db:"zen_api_key" json:"zenApiKey"`
-	ZenModel              string `db:"zen_model" json:"zenModel"`
-	ExaAPIKey             string `db:"exa_api_key" json:"exaApiKey"`
-	DiscoveryIntervalDays int    `db:"discovery_interval_days" json:"discoveryIntervalDays"`
+	AutopilotEnabled int `db:"autopilot_enabled" json:"autopilotEnabled"`
+	AutopilotCadence int `db:"autopilot_cadence" json:"autopilotCadence"` // hours; 0 = default (6)
+	// Working-hours cadence (WP-196): the work window in minutes from
+	// midnight (0/0 = default 540/1080) and the in-window firing rate.
+	AutopilotWorkStart      int    `db:"autopilot_work_start" json:"autopilotWorkStart"`
+	AutopilotWorkEnd        int    `db:"autopilot_work_end" json:"autopilotWorkEnd"`
+	AutopilotWorkingCadence int    `db:"autopilot_working_cadence" json:"autopilotWorkingCadence"` // minutes; 0 = default (45)
+	AutopilotProvider       string `db:"autopilot_provider" json:"autopilotProvider"`
+	ZenAPIKey               string `db:"zen_api_key" json:"zenApiKey"`
+	ZenModel                string `db:"zen_model" json:"zenModel"`
+	ExaAPIKey               string `db:"exa_api_key" json:"exaApiKey"`
+	DiscoveryIntervalDays   int    `db:"discovery_interval_days" json:"discoveryIntervalDays"`
 	// Company-discovery toggle (WP-183): 0 = discovery never runs, no
 	// matter which trigger fires. Default 1.
 	DiscoveryEnabled int `db:"discovery_enabled" json:"discoveryEnabled"`
@@ -148,13 +153,16 @@ func DisabledScrapersJSON(names []string) string {
 // defaultSettings holds the Go-level defaults returned when no settings row
 // exists in the database yet.
 var defaultSettings = Settings{
-	Theme:                 "light",
-	RemindersEnabled:      1,
-	DefaultView:           "dashboard",
-	ItemsPerPage:          25,
-	AutopilotCadence:      6, // default 6 hours
-	DiscoveryIntervalDays: 30,
-	DiscoveryEnabled:      1,
+	Theme:                   "light",
+	RemindersEnabled:        1,
+	DefaultView:             "dashboard",
+	ItemsPerPage:            25,
+	AutopilotCadence:        6,    // default 6 hours
+	AutopilotWorkStart:      540,  // 09:00 local
+	AutopilotWorkEnd:        1080, // 18:00 local
+	AutopilotWorkingCadence: 45,   // minutes
+	DiscoveryIntervalDays:   30,
+	DiscoveryEnabled:        1,
 }
 
 // GetProfile returns the user profile. If no profile row exists yet, it
@@ -250,6 +258,9 @@ func ensureAutopilotSettingsColumns(s *SQLiteStore) {
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN discovery_interval_days INTEGER NOT NULL DEFAULT 30`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_disabled_scrapers TEXT NOT NULL DEFAULT ''`)
 	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN discovery_enabled INTEGER NOT NULL DEFAULT 1`)
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_work_start INTEGER NOT NULL DEFAULT 540`)
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_work_end INTEGER NOT NULL DEFAULT 1080`)
+	_, _ = s.Exec(`ALTER TABLE settings ADD COLUMN autopilot_working_cadence INTEGER NOT NULL DEFAULT 45`)
 }
 
 // GetSettings returns the app settings. If no settings row exists yet, it
@@ -258,7 +269,7 @@ func (s *SQLiteStore) GetSettings() (Settings, error) {
 	var st Settings
 	ensureAutopilotSettingsColumns(s)
 
-	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_provider, zen_api_key, zen_model, exa_api_key, discovery_interval_days, discovery_enabled, autopilot_disabled_scrapers FROM settings WHERE id = 1`)
+	err := s.Get(&st, `SELECT theme, reminders_enabled, default_view, items_per_page, autopilot_enabled, autopilot_cadence, autopilot_work_start, autopilot_work_end, autopilot_working_cadence, autopilot_provider, zen_api_key, zen_model, exa_api_key, discovery_interval_days, discovery_enabled, autopilot_disabled_scrapers FROM settings WHERE id = 1`)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return defaultSettings, nil
@@ -278,18 +289,21 @@ func (s *SQLiteStore) UpsertSettings(updates map[string]any) error {
 	ensureAutopilotSettingsColumns(s)
 
 	columnMap := map[string]string{
-		"theme":                   "theme",
-		"reminders_enabled":       "reminders_enabled",
-		"default_view":            "default_view",
-		"items_per_page":          "items_per_page",
-		"autopilot_enabled":       "autopilot_enabled",
-		"autopilot_cadence":       "autopilot_cadence",
-		"autopilot_provider":      "autopilot_provider",
-		"zen_api_key":             "zen_api_key",
-		"zen_model":               "zen_model",
-		"exa_api_key":             "exa_api_key",
-		"discovery_interval_days": "discovery_interval_days",
-		"discovery_enabled":       "discovery_enabled",
+		"theme":                     "theme",
+		"reminders_enabled":         "reminders_enabled",
+		"default_view":              "default_view",
+		"items_per_page":            "items_per_page",
+		"autopilot_enabled":         "autopilot_enabled",
+		"autopilot_cadence":         "autopilot_cadence",
+		"autopilot_work_start":      "autopilot_work_start",
+		"autopilot_work_end":        "autopilot_work_end",
+		"autopilot_working_cadence": "autopilot_working_cadence",
+		"autopilot_provider":        "autopilot_provider",
+		"zen_api_key":               "zen_api_key",
+		"zen_model":                 "zen_model",
+		"exa_api_key":               "exa_api_key",
+		"discovery_interval_days":   "discovery_interval_days",
+		"discovery_enabled":         "discovery_enabled",
 
 		"autopilot_disabled_scrapers": "autopilot_disabled_scrapers",
 	}

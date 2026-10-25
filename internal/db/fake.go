@@ -599,6 +599,21 @@ func (f *FakeStore) UpsertSettings(updates map[string]any) error {
 			f.Settings.AutopilotCadence = n
 		}
 	}
+	if v, ok := updates["autopilot_work_start"]; ok {
+		if n, ok := v.(int); ok {
+			f.Settings.AutopilotWorkStart = n
+		}
+	}
+	if v, ok := updates["autopilot_work_end"]; ok {
+		if n, ok := v.(int); ok {
+			f.Settings.AutopilotWorkEnd = n
+		}
+	}
+	if v, ok := updates["autopilot_working_cadence"]; ok {
+		if n, ok := v.(int); ok {
+			f.Settings.AutopilotWorkingCadence = n
+		}
+	}
 	if v, ok := updates["autopilot_provider"]; ok {
 		f.Settings.AutopilotProvider = fmt.Sprint(v)
 	}
