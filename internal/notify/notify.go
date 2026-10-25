@@ -1,5 +1,6 @@
-// Package notify delivers the daemon's desktop notifications: one nudge
-// per autopilot cycle when shortlists exist. It satisfies the
+// Package notify delivers the daemon's desktop notifications: shortlists
+// announcing themselves as they land during an autopilot cycle (WP-195),
+// coalesced per quiet window by the caller. It satisfies the
 // autopilot.Notifier seam so delivery mechanics stay out of the cycle —
 // Web Push or any future channel slots in behind the same interface.
 //
@@ -37,9 +38,10 @@ func New(openURL string) *Desktop {
 	return &Desktop{OpenURL: openURL}
 }
 
-// NotifyShortlist implements autopilot.Notifier.
-func (d *Desktop) NotifyShortlist(_ context.Context, n autopilot.ShortlistNotice) error {
-	title, body := formatShortlist(n)
+// NotifyShortlists implements autopilot.Notifier: one notification per
+// coalesced batch of shortlists.
+func (d *Desktop) NotifyShortlists(_ context.Context, events []autopilot.ShortlistEvent) error {
+	title, body := formatShortlist(events)
 	return deliver(title, body, d.clickAction())
 }
 
@@ -64,30 +66,37 @@ func openInBrowser(url string) error {
 }
 
 // formatShortlist renders the notification copy: title carries the
-// count, body carries the strongest match. Pure so tests pin it.
-func formatShortlist(n autopilot.ShortlistNotice) (title, body string) {
+// count, body carries the strongest match by score — the first event
+// when all are unscored. Pure so tests pin it.
+func formatShortlist(events []autopilot.ShortlistEvent) (title, body string) {
 	noun := "matches"
-	if n.Count == 1 {
+	if len(events) == 1 {
 		noun = "match"
 	}
-	title = fmt.Sprintf("%s · %d new %s", appName, n.Count, noun)
+	title = fmt.Sprintf("%s · %d new %s", appName, len(events), noun)
 
-	if n.TopTitle == "" {
+	top := autopilot.ShortlistEvent{}
+	for i, e := range events {
+		if i == 0 || e.Score > top.Score {
+			top = e
+		}
+	}
+	if top.Title == "" {
 		return title, "Review them when you have two minutes."
 	}
 
-	top := n.TopTitle
-	if runes := []rune(top); len(runes) > 60 {
-		top = strings.TrimSpace(string(runes[:57])) + "…"
+	topTitle := top.Title
+	if runes := []rune(topTitle); len(runes) > 60 {
+		topTitle = strings.TrimSpace(string(runes[:57])) + "…"
 	}
 	var b strings.Builder
 	b.WriteString("Top pick: ")
-	b.WriteString(top)
-	if n.TopCompany != "" {
-		fmt.Fprintf(&b, " at %s", n.TopCompany)
+	b.WriteString(topTitle)
+	if top.Company != "" {
+		fmt.Fprintf(&b, " at %s", top.Company)
 	}
-	if n.TopScore > 0 {
-		fmt.Fprintf(&b, " (%d)", n.TopScore)
+	if top.Score > 0 {
+		fmt.Fprintf(&b, " (%d)", top.Score)
 	}
 	return title, b.String()
 }

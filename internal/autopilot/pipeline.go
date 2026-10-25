@@ -201,7 +201,7 @@ func (p *pipeline) push(ctx context.Context, batch []scraper.Result) {
 // bounds. It runs on Run's goroutine and owns the shared runRecord until
 // its loop ends. On any stop it keeps receiving until the channel closes,
 // so a producer blocked on push can always land its batch and exit.
-func (p *pipeline) consume(ctx, pctx context.Context, cfg CycleConfig, rec *runRecord, gate func(string) bool) {
+func (p *pipeline) consume(ctx, pctx context.Context, cfg CycleConfig, rec *runRecord, gate func(string) bool, stream *shortlistStream) {
 	draining := false
 	wallRecorded := false
 	expire := func() {
@@ -253,7 +253,7 @@ func (p *pipeline) consume(ctx, pctx context.Context, cfg CycleConfig, rec *runR
 				expire()
 				continue
 			}
-			if !p.processBatch(pctx, cfg, rec, batch) {
+			if !p.processBatch(pctx, cfg, rec, batch, stream) {
 				// Exhausted: a cycle-wide bound is full. Not an error —
 				// the postings dropped stay "new" for the next cycle.
 				p.cancel()
@@ -268,7 +268,7 @@ func (p *pipeline) consume(ctx, pctx context.Context, cfg CycleConfig, rec *runR
 // processBatch applies the cycle-wide escalation bounds to one batch and
 // runs detail + prefilter+curate on what survives. Returns false when the
 // cycle is exhausted — nothing more may escalate.
-func (p *pipeline) processBatch(ctx context.Context, cfg CycleConfig, rec *runRecord, batch []scraper.Result) bool {
+func (p *pipeline) processBatch(ctx context.Context, cfg CycleConfig, rec *runRecord, batch []scraper.Result, stream *shortlistStream) bool {
 	remaining := p.allowance(cfg) - int(p.escalated.Load())
 	if remaining < 0 {
 		remaining = 0
@@ -286,7 +286,7 @@ func (p *pipeline) processBatch(ctx context.Context, cfg CycleConfig, rec *runRe
 	// Stage 3: Detail — enrich postings with full job body.
 	stageDetail(ctx, cfg, batch)
 	// Stages 4+5: Prefilter + Curate — per-posting commit.
-	stagePrefilterCurate(ctx, cfg, batch, rec)
+	stagePrefilterCurate(ctx, cfg, batch, rec, stream)
 
 	p.mu.Lock()
 	for _, r := range batch {
@@ -325,8 +325,9 @@ func (p *pipeline) allowance(cfg CycleConfig) int {
 	return limit
 }
 
-// escalatedSoFar copies the consumer's escalated-URL set: notify reads it
-// at the end, and the producer's backlog build checks it mid-run.
+// escalatedSoFar copies the consumer's escalated-URL set: the producer's
+// backlog build checks it mid-run so already-curated postings are not
+// re-processed.
 func (p *pipeline) escalatedSoFar() map[string]bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()

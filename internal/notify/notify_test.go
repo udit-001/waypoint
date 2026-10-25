@@ -10,45 +10,72 @@ import (
 func TestFormatShortlist(t *testing.T) {
 	tests := []struct {
 		name      string
-		notice    autopilot.ShortlistNotice
+		events    []autopilot.ShortlistEvent
 		wantTitle string
 		wantBody  []string // substrings, all must appear
 	}{
 		{
 			name:      "one match with top pick",
-			notice:    autopilot.ShortlistNotice{Count: 1, TopTitle: "Senior Go Engineer", TopCompany: "Stripe", TopScore: 88},
+			events:    []autopilot.ShortlistEvent{{Title: "Senior Go Engineer", Company: "Stripe", Score: 88}},
 			wantTitle: "Waypoint · 1 new match",
 			wantBody:  []string{"Top pick: Senior Go Engineer at Stripe (88)"},
 		},
 		{
-			name:      "plural count",
-			notice:    autopilot.ShortlistNotice{Count: 4, TopTitle: "Staff Engineer", TopCompany: "Databricks", TopScore: 91},
-			wantTitle: "Waypoint · 4 new matches",
+			name: "plural count, strongest wins",
+			events: []autopilot.ShortlistEvent{
+				{Title: "Staff Engineer", Company: "Databricks", Score: 91},
+				{Title: "Backend Developer", Score: 62},
+			},
+			wantTitle: "Waypoint · 2 new matches",
 			wantBody:  []string{"Top pick: Staff Engineer at Databricks (91)"},
 		},
 		{
-			name:      "no company or score",
-			notice:    autopilot.ShortlistNotice{Count: 2, TopTitle: "Backend Developer"},
+			name: "no company or score",
+			events: []autopilot.ShortlistEvent{
+				{Title: "Backend Developer"},
+				{Title: "Another Role"},
+			},
 			wantTitle: "Waypoint · 2 new matches",
 			wantBody:  []string{"Top pick: Backend Developer"},
 		},
 		{
-			name:      "long title truncated",
-			notice:    autopilot.ShortlistNotice{Count: 2, TopTitle: strings.Repeat("x", 100)},
+			name: "long title truncated",
+			events: []autopilot.ShortlistEvent{
+				{Title: strings.Repeat("x", 100)},
+				{Title: "y"},
+			},
 			wantTitle: "Waypoint · 2 new matches",
 			wantBody:  []string{"Top pick: ", "…"},
 		},
 		{
-			name:      "empty ledger fallback copy",
-			notice:    autopilot.ShortlistNotice{Count: 3},
-			wantTitle: "Waypoint · 3 new matches",
+			name: "all scores zero picks the first event",
+			events: []autopilot.ShortlistEvent{
+				{Title: "First In", Company: "FirstCo"},
+				{Title: "Second In", Company: "SecondCo"},
+			},
+			wantTitle: "Waypoint · 2 new matches",
+			wantBody:  []string{"Top pick: First In at FirstCo"},
+		},
+		{
+			name: "unscored event first still loses to a scored one",
+			events: []autopilot.ShortlistEvent{
+				{Title: "Prefilter Pick", Company: "FirstCo"},
+				{Title: "Scored Pick", Company: "HiCo", Score: 92},
+			},
+			wantTitle: "Waypoint · 2 new matches",
+			wantBody:  []string{"Top pick: Scored Pick at HiCo (92)"},
+		},
+		{
+			name:      "empty batch fallback copy",
+			events:    nil,
+			wantTitle: "Waypoint · 0 new matches",
 			wantBody:  []string{"Review them when you have two minutes."},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			title, body := formatShortlist(tt.notice)
+			title, body := formatShortlist(tt.events)
 			if title != tt.wantTitle {
 				t.Errorf("title = %q, want %q", title, tt.wantTitle)
 			}

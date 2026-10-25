@@ -35,8 +35,9 @@ func TestDesktopNotifyShortlistWiresClickAction(t *testing.T) {
 	t.Cleanup(func() { sendDBus = orig })
 
 	d := New("http://localhost:8080/#/found")
-	err := d.NotifyShortlist(context.Background(), autopilot.ShortlistNotice{
-		Count: 2, TopTitle: "Platform Engineer", TopCompany: "Ramp", TopScore: 84,
+	err := d.NotifyShortlists(context.Background(), []autopilot.ShortlistEvent{
+		{Title: "Platform Engineer", Company: "Ramp", Score: 84},
+		{Title: "Backend Engineer", Company: "Acme", Score: 71},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -59,7 +60,7 @@ func TestDesktopNotifyWithoutURLOmitsClickAction(t *testing.T) {
 	t.Cleanup(func() { sendDBus = orig })
 
 	d := New("")
-	if err := d.NotifyShortlist(context.Background(), autopilot.ShortlistNotice{Count: 1, TopTitle: "A"}); err != nil {
+	if err := d.NotifyShortlists(context.Background(), []autopilot.ShortlistEvent{{Title: "A"}}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if rec.clicks != 0 {
@@ -74,7 +75,7 @@ func TestDesktopNotifyErrorPropagates(t *testing.T) {
 	t.Cleanup(func() { sendDBus = orig })
 
 	d := New("http://localhost:8080/#/found")
-	if err := d.NotifyShortlist(context.Background(), autopilot.ShortlistNotice{Count: 1}); err == nil {
+	if err := d.NotifyShortlists(context.Background(), []autopilot.ShortlistEvent{{Title: "A"}}); err == nil {
 		t.Error("want error propagated to the cycle (which logs it)")
 	}
 }

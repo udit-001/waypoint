@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/udit-001/waypoint/internal/db"
@@ -13,16 +14,25 @@ import (
 
 // --- fixtures ---
 
+// recordingNotifier records each NotifyShortlists delivery. Safe to
+// read while a Run is in flight — the flusher delivers mid-cycle.
 type recordingNotifier struct {
-	calls   int
-	notices []ShortlistNotice
-	err     error
+	mu         sync.Mutex
+	deliveries [][]ShortlistEvent
+	err        error
 }
 
-func (r *recordingNotifier) NotifyShortlist(ctx context.Context, n ShortlistNotice) error {
-	r.calls++
-	r.notices = append(r.notices, n)
+func (r *recordingNotifier) NotifyShortlists(_ context.Context, events []ShortlistEvent) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.deliveries = append(r.deliveries, events)
 	return r.err
+}
+
+func (r *recordingNotifier) batches() [][]ShortlistEvent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.deliveries
 }
 
 // stubDiscovery replaces the discovery pipeline with a no-op so cycle
@@ -38,7 +48,10 @@ func stubDiscovery(t *testing.T) {
 
 // --- tests ---
 
-func TestCycle_NotifierCalledOnceOnShortlist(t *testing.T) {
+// TestCycle_ShortlistsDeliveredAtCycleEnd: with no events after the
+// last quiet window fires, the final flush carries the whole cycle's
+// shortlists as one delivery.
+func TestCycle_ShortlistsDeliveredAtCycleEnd(t *testing.T) {
 	stubDiscovery(t)
 	f := db.NewFakeStore()
 	s := &fixtureScraper{
@@ -58,17 +71,18 @@ func TestCycle_NotifierCalledOnceOnShortlist(t *testing.T) {
 	if entry.PostingsShortlisted != 3 {
 		t.Fatalf("shortlisted = %d, want 3", entry.PostingsShortlisted)
 	}
-	if n.calls != 1 {
-		t.Fatalf("notifier calls = %d, want exactly 1", n.calls)
+	batches := n.batches()
+	if len(batches) != 1 {
+		t.Fatalf("deliveries = %d, want exactly 1", len(batches))
 	}
-	got := n.notices[0]
-	if got.Count != 3 {
-		t.Errorf("notice.Count = %d, want 3", got.Count)
+	if len(batches[0]) != 3 {
+		t.Errorf("delivered %d events, want all 3", len(batches[0]))
 	}
-	if got.TopTitle == "" || got.TopCompany == "" {
-		t.Errorf("notice missing top match: %+v", got)
+	for _, e := range batches[0] {
+		if e.Title == "" || e.Company == "" || e.URL == "" {
+			t.Errorf("event missing fields: %+v", e)
+		}
 	}
-
 }
 
 func TestCycle_NoShortlistNoNotify(t *testing.T) {
@@ -80,8 +94,8 @@ func TestCycle_NoShortlistNoNotify(t *testing.T) {
 	cfg.Notifier = n
 	Run(context.Background(), cfg)
 
-	if n.calls != 0 {
-		t.Errorf("notifier calls = %d, want 0", n.calls)
+	if len(n.batches()) != 0 {
+		t.Errorf("notifier deliveries = %d, want 0", len(n.batches()))
 	}
 }
 
@@ -95,11 +109,14 @@ func TestCycle_NilNotifierIsNoop(t *testing.T) {
 		},
 	}
 
-	// Must not panic with nil notifier.
+	// Must not panic with nil notifier, and must record no errors.
 	entry := Run(context.Background(), newCycle(f, []scraper.Scraper{s}))
 
 	if entry.PostingsShortlisted != 1 {
 		t.Errorf("shortlisted = %d, want 1", entry.PostingsShortlisted)
+	}
+	if len(entry.StageErrors) != 0 {
+		t.Errorf("stage errors = %v, want none with a nil notifier", entry.StageErrors)
 	}
 }
 
@@ -127,32 +144,6 @@ func TestCycle_NotifierFailureNeverBlocksCycle(t *testing.T) {
 	}
 	if entry.Verdict != db.VerdictDegraded {
 		t.Errorf("verdict = %q, want degraded after a stage error", entry.Verdict)
-	}
-}
-
-func TestBuildNotice_TopScoreWins(t *testing.T) {
-	f := db.NewFakeStore()
-	_ = f.AddPostings([]scraper.Result{
-		{URL: "https://example.com/low", Title: "Low", Company: "LoCo"},
-		{URL: "https://example.com/high", Title: "High", Company: "HiCo"},
-	})
-	_ = f.SetPostingStatus("https://example.com/low", db.StatusShortlisted)
-	_ = f.SetPostingStatus("https://example.com/high", db.StatusShortlisted)
-	_ = f.EnrichPosting("https://example.com/low", "", map[string]string{"score": "55"})
-	_ = f.EnrichPosting("https://example.com/high", "", map[string]string{"score": "92"})
-
-	n := buildNotice(context.Background(), f, 2, map[string]bool{
-		"https://example.com/low": true, "https://example.com/high": true,
-	})
-
-	if n.Count != 2 {
-		t.Errorf("Count = %d, want 2", n.Count)
-	}
-	if n.TopTitle != "High" || n.TopCompany != "HiCo" {
-		t.Errorf("top match = %s/%s, want High/HiCo", n.TopTitle, n.TopCompany)
-	}
-	if n.TopScore != 92 {
-		t.Errorf("TopScore = %d, want 92", n.TopScore)
 	}
 }
 

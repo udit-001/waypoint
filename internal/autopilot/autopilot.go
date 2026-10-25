@@ -1,5 +1,5 @@
-// Package autopilot implements the six-stage curation cycle:
-// sweep → detail → prefilter → curate → store+notify → runlog.
+// Package autopilot implements the curation cycle:
+// sweep → detail → prefilter → curate → stream+notify → runlog.
 //
 // The cycle is driven by a ticker goroutine inside the daemon. Each
 // stage commits per-posting — zen outage mid-cycle leaves postings
@@ -41,9 +41,13 @@ type CycleConfig struct {
 	Store     db.Store
 	ZenClient *zen.Client
 	Scrapers  []scraper.Scraper
-	// Notifier delivers the one per-cycle nudge when shortlists exist.
-	// Nil (or any error it returns) never blocks scoring.
+	// Notifier announces shortlists as they land during the cycle,
+	// coalesced per quiet window. Nil (or any error it returns) never
+	// blocks scoring.
 	Notifier Notifier
+	// NotifyWindow coalesces shortlist announcements: one notification
+	// per quiet window of this length. 0 means DefaultNotifyQuietWindow.
+	NotifyWindow time.Duration
 	// ExaClient is the shared Exa seam: one budget and one cache for
 	// company research (zen) and posting fetch (detail tier 4). Created
 	// by Run when nil; the budget resets per cycle to ExaCap.
@@ -255,10 +259,23 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	start := time.Now().UTC()
 	rec := newRunRecord(start)
 
+	var stream *shortlistStream
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("autopilot: cycle panicked: %v", r)
 			rec.stageError("panic: %v", r)
+		}
+		// The flusher must finish before the run row closes: its final
+		// flush is every shortlist's notification landing within the run's
+		// lifetime, and its delivery failures belong in this run's stage
+		// errors. Closing the channel is what unblocks a flusher draining
+		// on a canceled ctx, so this runs on the panic path too.
+		if stream != nil {
+			close(stream.events)
+			<-stream.done
+			for _, err := range stream.drainErrs() {
+				rec.stageError("notify: %v", err)
+			}
 		}
 		// One place closes the record: a panicked cycle still ends with a
 		// verdict rather than an open row.
@@ -334,19 +351,21 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	defer cancel()
 	pipe := newPipeline(cancel)
 
+	// Streaming notifications (WP-195): each shortlist announces itself
+	// as it lands, coalesced per quiet window by the flusher goroutine.
+	if cfg.Notifier != nil {
+		stream = newShortlistStream(cfg.NotifyWindow)
+		go stream.run(ctx, cfg.Notifier)
+	}
+
 	sweepGated := gate("sweep")
 	buf := newRunRecord(start) // producer's sweep evidence, merged after the consumer's loop ends
 	go pipe.produce(pctx, cfg, rec, buf, sel, sweepGated)
 
-	pipe.consume(ctx, pctx, cfg, rec, gate)
+	pipe.consume(ctx, pctx, cfg, rec, gate, stream)
 	close(pipe.consumerDone)
 	<-pipe.producerDone
 	rec.sumTotals()
-
-	// Stage 6: Notify — one nudge per cycle when shortlists exist. The
-	// URL set is what the consumer escalated, however the batches landed;
-	// the notice reads the ledger, so it still runs on a spent budget.
-	notifyShortlist(ctx, cfg, rec, pipe.escalatedSoFar())
 
 	// Stage 7: Run log — closed by the deferred finish above; written by
 	// RunLogged by the caller.
@@ -449,7 +468,9 @@ func stageDetail(ctx context.Context, cfg CycleConfig, postings []scraper.Result
 // stagePrefilterCurate runs the prefilter and zen curation per-posting.
 // Every outcome is written to the ledger and attributed to the posting's
 // source; the run totals are summed from those rows when the record closes.
-func stagePrefilterCurate(ctx context.Context, cfg CycleConfig, postings []scraper.Result, rec *runRecord) {
+// Each shortlist also emits a ShortlistEvent to stream (WP-195) — Emit's
+// nil receiver makes a run without a Notifier a noop.
+func stagePrefilterCurate(ctx context.Context, cfg CycleConfig, postings []scraper.Result, rec *runRecord, stream *shortlistStream) {
 	// Build the prefilter profile from the store.
 	profile := buildPrefilterProfile(cfg.Store)
 
@@ -520,6 +541,7 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 		}
 		if verdict.Action == "shortlist" {
 			rec.record(cfg.Store, p, db.StatusShortlisted)
+			stream.Emit(ShortlistEvent{URL: p.URL, Title: p.Title, Company: p.Company})
 			continue
 		}
 
@@ -527,6 +549,7 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 		if session == nil {
 			// No zen client — escalate to shortlist for manual review.
 			rec.record(cfg.Store, p, db.StatusShortlisted)
+			stream.Emit(ShortlistEvent{URL: p.URL, Title: p.Title, Company: p.Company})
 			continue
 		}
 
@@ -555,6 +578,7 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 			rec.record(cfg.Store, p, db.StatusDismissed)
 		} else {
 			rec.record(cfg.Store, p, db.StatusShortlisted)
+			stream.Emit(ShortlistEvent{URL: p.URL, Title: p.Title, Company: p.Company, Score: v.Score})
 		}
 	}
 

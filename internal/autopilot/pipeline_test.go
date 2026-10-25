@@ -394,15 +394,21 @@ func TestPipeline_NoticeFromMidPipelineBatches(t *testing.T) {
 
 	entry := Run(context.Background(), cfg)
 
-	if n.calls != 1 {
-		t.Fatalf("notifier calls = %d, want exactly 1", n.calls)
+	batches := n.batches()
+	if len(batches) != 1 {
+		t.Fatalf("deliveries = %d, want exactly 1", len(batches))
 	}
-	got := n.notices[0]
-	if got.Count != 2 {
-		t.Errorf("notice.Count = %d, want 2 (both mid-pipeline batches)", got.Count)
+	if len(batches[0]) != 2 {
+		t.Errorf("delivered %d events, want 2 (both mid-pipeline batches)", len(batches[0]))
 	}
-	if got.TopTitle != "High" || got.TopCompany != "HiCo" || got.TopScore != 90 {
-		t.Errorf("top match = %s/%s score %d, want High/HiCo score 90", got.TopTitle, got.TopCompany, got.TopScore)
+	var top *ShortlistEvent
+	for i := range batches[0] {
+		if batches[0][i].Title == "High" {
+			top = &batches[0][i]
+		}
+	}
+	if top == nil || top.Company != "HiCo" || top.Score != 90 {
+		t.Errorf("High/HiCo score 90 not delivered: %+v", batches[0])
 	}
 	if entry.Verdict != db.VerdictWaitingOnYou {
 		t.Errorf("verdict = %q, want waiting-on-you", entry.Verdict)

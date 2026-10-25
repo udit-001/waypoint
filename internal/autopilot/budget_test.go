@@ -154,7 +154,11 @@ func TestBudget_ExpirySkipsStages(t *testing.T) {
 		}
 	}
 
-	// Select and notify still ran; the run row closed honestly.
+	// Select still ran; the run row closed honestly. No shortlists were
+	// committed, so the notifier never fired.
+	if len(n.batches()) != 0 {
+		t.Errorf("notifier deliveries = %d, want 0 (nothing shortlisted)", len(n.batches()))
+	}
 	if entry.Verdict != db.VerdictDegraded {
 		t.Errorf("verdict = %q, want degraded (stage errors recorded)", entry.Verdict)
 	}
