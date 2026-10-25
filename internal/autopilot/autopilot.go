@@ -66,6 +66,12 @@ type CycleConfig struct {
 	// cap), distinct from the user-facing Limit. Nil means defaults; zero
 	// fields inside a provided Budget keep their "no limit" meaning.
 	Budget *Budget
+	// LaneWidth is how many network calls (zen curation) run at once per
+	// batch. 0 means DefaultLaneWidth; values above MaxLaneWidth clamp to
+	// that ceiling. Changes HOW MANY calls run concurrently, never how
+	// many escalate — the escalation bounds and budget gates are
+	// untouched. Provisional default pending WP-191 measurement.
+	LaneWidth int
 	// Direct overrides the detail stage's tier-3 HTTP fetcher. When nil,
 	// the cycle falls back to a real scraper.HTTPFetcher. Tests inject a
 	// fake so the cycle never touches the network.
@@ -429,6 +435,10 @@ func stageDetail(ctx context.Context, cfg CycleConfig, postings []scraper.Result
 	}
 	chain.Exa = cfg.ExaClient
 
+	// Serial by decision (WP-192): the chain's per-run exaCount is
+	// unsynchronized, so FetchDetail is not safe for concurrent calls.
+	// Run the lanes here only after that counter moves under an atomic
+	// (or the chain grows a concurrency-safe budget seam).
 	for i := range postings {
 		p := &postings[i]
 		cfg.progress("read", fmt.Sprintf("%d/%d", i+1, len(postings)), itemLabel(*p))
@@ -525,6 +535,12 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 	// from ordinary per-posting noise — see the stage error after the loop.
 	curateAttempts, curateFailures := 0, 0
 
+	// Stage 4 first, serially: prefilter is deterministic Go reading the
+	// store — only the zen network call may leave the caller's goroutine.
+	// action is per posting: "dismiss", "shortlist", or "zen" (needs the
+	// model; results apply in input order below).
+	action := make([]string, len(postings))
+	var zenItems []int
 	for i, p := range postings {
 		cfg.progress("curate", fmt.Sprintf("%d/%d", i+1, len(postings)), itemLabel(p))
 		select {
@@ -532,38 +548,71 @@ Scoring guide: 80+ strong fit (role + domain + level + location all align), 60-7
 			return
 		default:
 		}
-
-		// Stage 4: Prefilter — deterministic Go rules.
 		verdict := prefilter.Filter(p, profile, cfg.Store)
-		if verdict.Action == "dismiss" {
+		switch {
+		case verdict.Action == "dismiss":
+			action[i] = "dismiss"
+		case verdict.Action == "shortlist":
+			action[i] = "shortlist"
+		case session == nil:
+			// No zen client — escalate to shortlist for manual review.
+			action[i] = "shortlist"
+		default:
+			action[i] = "zen"
+			zenItems = append(zenItems, i)
+		}
+	}
+
+	// Stage 5 network calls run through the bounded lane pool with
+	// throttle backoff (WP-192). Results come back in input order, so the
+	// commit loop below applies them serially — the single-writer
+	// runRecord, the stream's single-goroutine Emit, and the per-source
+	// accounting all stay exactly as they were.
+	results := runLanes(ctx, zenItems, laneWidth(cfg.LaneWidth), func(ctx context.Context, i int) (zen.Verdict, error) {
+		p := postings[i]
+		var v zen.Verdict
+		var err error
+		rerr := retryThrottled(ctx, func() error {
+			v, err = session.Curate(ctx, zen.Posting{
+				URL:      p.URL,
+				Markdown: p.Description,
+			})
+			return err
+		})
+		if rerr != nil {
+			return zen.Verdict{}, rerr
+		}
+		return v, nil
+	})
+
+	// Serial commit loop — one writer, input order.
+	nextResult := 0
+	for i, p := range postings {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		if action[i] == "dismiss" {
 			rec.record(cfg.Store, p, db.StatusDismissed)
 			continue
 		}
-		if verdict.Action == "shortlist" {
+		if action[i] != "zen" {
 			rec.record(cfg.Store, p, db.StatusShortlisted)
 			stream.Emit(ShortlistEvent{URL: p.URL, Title: p.Title, Company: p.Company})
 			continue
 		}
 
-		// Stage 5: Curate — zen LLM (when available).
-		if session == nil {
-			// No zen client — escalate to shortlist for manual review.
-			rec.record(cfg.Store, p, db.StatusShortlisted)
-			stream.Emit(ShortlistEvent{URL: p.URL, Title: p.Title, Company: p.Company})
-			continue
-		}
-
+		res := results[nextResult]
+		nextResult++
 		curateAttempts++
-		v, err := session.Curate(ctx, zen.Posting{
-			URL:      p.URL,
-			Markdown: p.Description,
-		})
-		if err != nil {
-			log.Printf("autopilot: curate %s failed: %v", p.URL, err)
+		if res.err != nil {
+			log.Printf("autopilot: curate %s failed: %v", p.URL, res.err)
 			rec.outcome(p.Source).Errored++
 			curateFailures++
 			continue
 		}
+		v := res.val
 
 		// Apply verdict — store score, overview, note, reasons in posting metadata.
 		meta := map[string]string{
