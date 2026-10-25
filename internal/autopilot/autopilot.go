@@ -12,8 +12,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/udit-001/waypoint/internal/db"
@@ -72,8 +72,11 @@ type CycleConfig struct {
 	// display name, posting company). The stages report facts and never
 	// know where they land; RunLogged adapts the callback to the run row
 	// (store.SetRunProgress), so the web's progress line and the cycle
-	// stay decoupled. Nil is legal — stages no-op — so a run without a
-	// row (RunLogged's fallback) still works.
+	// stay decoupled. Since WP-189 the sweep runs concurrently with
+	// detail+curate, so facts from different stages may interleave and
+	// the callback may be invoked from two goroutines — implementations
+	// must tolerate that. Nil is legal — stages no-op — so a run without
+	// a row (RunLogged's fallback) still works.
 	Progress func(stage, of, label string)
 }
 
@@ -320,151 +323,34 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	cfg.progress("select", "", "")
 	sel := stageSelectSource(ctx, cfg, rec)
 
-	// Stage 2: Sweep — scrape the selected sources for new postings.
-	var newPostings []scraper.Result
-	if !gate("sweep") {
-		newPostings = stageSweep(ctx, cfg, rec, sel)
-	}
-	rec.PostingsNew = len(newPostings)
+	// Stages 2-5, pipelined (WP-189): a producer goroutine scrapes the
+	// selected sources and pushes each source's new postings as a batch —
+	// then the ledger backlog as the final batch — while this goroutine
+	// consumes batches through detail and prefilter+curate. The derived
+	// context is the consumer's stop signal: a spent budget or a full
+	// escalation bound cancels it, so the sweep stops fetching once
+	// nothing more can be curated this cycle.
+	pctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	pipe := newPipeline(cancel)
 
-	// Collect swept URLs to avoid double-processing.
-	sweptURLs := make(map[string]bool, len(newPostings))
-	for _, p := range newPostings {
-		sweptURLs[p.URL] = true
-	}
+	sweepGated := gate("sweep")
+	buf := newRunRecord(start) // producer's sweep evidence, merged after the consumer's loop ends
+	go pipe.produce(pctx, cfg, rec, buf, sel, sweepGated)
 
-	// Also curate existing "new" postings from the ledger backlog,
-	// excluding any that were just swept.
-	backlog := stageBacklog(ctx, cfg, rec, sweptURLs)
-
-	// Merge: sweep results first, then backlog. Apply limit.
-	allPostings := append(newPostings, backlog...)
-	if cfg.Limit > 0 && len(allPostings) > cfg.Limit {
-		allPostings = allPostings[:cfg.Limit]
-	}
-
-	// Degraded mode (no Zen client): cap escalations to the freshest
-	// slice so a keyless fresh install doesn't flood Matches with
-	// hundreds of unscored rows in one cycle.
-	if cfg.ZenClient == nil {
-		sort.SliceStable(allPostings, func(i, k int) bool {
-			return allPostings[i].Date > allPostings[k].Date
-		})
-		if len(allPostings) > UnscoredCapPerCycle {
-			log.Printf("autopilot: no zen key — escalating newest %d of %d (unscored cap)", UnscoredCapPerCycle, len(allPostings))
-			allPostings = allPostings[:UnscoredCapPerCycle]
-		}
-	}
-
-	// Scored cap: the cycle's total escalations to zen, on top of the
-	// per-run Limit and the degraded-path unscored cap. The freshest
-	// slice survives; the rest stay "new" for the next cycle's backlog.
-	if cfg.Budget.MaxScored > 0 && len(allPostings) > cfg.Budget.MaxScored {
-		log.Printf("autopilot: cycle budget — escalating newest %d of %d (scored cap)", cfg.Budget.MaxScored, len(allPostings))
-		allPostings = cfg.Budget.ApplyCap(allPostings)
-	}
-
-	// Stage 3: Detail — enrich postings with full job body.
-	if !gate("detail") {
-		stageDetail(ctx, cfg, allPostings)
-	}
-
-	// Stage 4+5: Prefilter + Curate — per-posting commit. Outcomes land in
-	// the per-source rows; sum them so the notifier sees this cycle's count.
-	if !gate("curate") {
-		stagePrefilterCurate(ctx, cfg, allPostings, rec)
-	}
+	pipe.consume(ctx, pctx, cfg, rec, gate)
+	close(pipe.consumerDone)
+	<-pipe.producerDone
 	rec.sumTotals()
 
-	// Stage 6: Notify — one nudge per cycle when shortlists exist.
-	notifyShortlist(ctx, cfg, rec, allPostings)
+	// Stage 6: Notify — one nudge per cycle when shortlists exist. The
+	// URL set is what the consumer escalated, however the batches landed;
+	// the notice reads the ledger, so it still runs on a spent budget.
+	notifyShortlist(ctx, cfg, rec, pipe.escalatedSoFar())
 
 	// Stage 7: Run log — closed by the deferred finish above; written by
 	// RunLogged by the caller.
 	return
-}
-
-// stageSweep scrapes the sources the selection chose and adds new
-// postings to the ledger. It records one per-source row per scraper:
-// results returned, results actually new, any fetch failure — and, for
-// every source the selection left out, a skipped row with its reason, so
-// "why did nothing show up" answers per source, not just per run.
-func stageSweep(ctx context.Context, cfg CycleConfig, rec *runRecord, sel *SourceSelection) []scraper.Result {
-	var allNew []scraper.Result
-
-	disabled := disabledSet(cfg)
-	// Plan first: the skipped rows are recorded for every scraper (they
-	// carry the selection's decision to the user), while the progress
-	// counter "k/n" counts only the sources this cycle actually sweeps.
-	type sweepSource struct {
-		s    scraper.Scraper
-		name string
-	}
-	var plan []sweepSource
-	for _, s := range cfg.Scrapers {
-		name := s.Name()
-		if reason, skip := skipReason(name, sel, disabled); skip {
-			row := rec.outcome(name)
-			row.Skipped = true
-			row.Reason = reason
-			continue
-		}
-		plan = append(plan, sweepSource{s: s, name: name})
-	}
-	for k, item := range plan {
-		cfg.progress("sweep", fmt.Sprintf("%d/%d", k+1, len(plan)), item.s.Source())
-
-		// Politeness: jittered delay between sources.
-		jitter := time.Duration(2000+rand.Intn(1000)) * time.Millisecond
-		select {
-		case <-ctx.Done():
-			return allNew
-		case <-after(jitter):
-		}
-
-		// 30s timeout per source.
-		srcCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		results, err := item.s.Search(srcCtx, scraper.SearchOpts{
-			Limit:  50,
-			JobAge: cfg.Recency,
-		})
-		cancel()
-
-		if err != nil {
-			log.Printf("autopilot: sweep %s failed: %v", item.name, err)
-			row := rec.outcome(item.name)
-			row.Errored++
-			rec.stageError("sweep %s: %v", item.name, err)
-			continue
-		}
-		row := rec.outcome(item.name)
-		row.Scraped = len(results)
-
-		// Dedup against existing postings and jobs.
-		for _, r := range results {
-			seen, _ := cfg.Store.HasPosting(r.URL)
-			if seen {
-				continue
-			}
-			tracked, _ := cfg.Store.JobExists(r.URL)
-			if tracked {
-				continue
-			}
-			r.Source = item.name
-			allNew = append(allNew, r)
-			row.New++
-		}
-	}
-
-	// Batch-add all new results to the postings ledger.
-	if len(allNew) > 0 {
-		if err := cfg.Store.AddPostings(allNew); err != nil {
-			log.Printf("autopilot: sweep add postings: %v", err)
-			rec.stageError("sweep: add postings: %v", err)
-		}
-	}
-
-	return allNew
 }
 
 // skipReason answers why a source is not swept this cycle, and whether
@@ -718,8 +604,13 @@ func RunLogged(ctx context.Context, cfg CycleConfig) db.RunLog {
 	// Live progress (migration 00021): the cycle reports what it is doing
 	// right now and the run row carries it to /api/autopilot, which already
 	// returns the full RunLog. Best effort — a failed progress write costs
-	// the page one stale line, never a result.
+	// the page one stale line, never a result. The pipelined cycle calls
+	// this from two goroutines (sweep and consumer), so the write is
+	// serialized here.
+	var progressMu sync.Mutex
 	cfg.Progress = func(stage, of, label string) {
+		progressMu.Lock()
+		defer progressMu.Unlock()
 		_ = cfg.Store.SetRunProgress(id, stage, of, label)
 	}
 	entry = Run(ctx, cfg)

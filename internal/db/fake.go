@@ -14,6 +14,8 @@ import (
 
 // FakeStore is an in-memory implementation of Store for tests.
 // No SQLite, no files — just maps. Use NewFakeStore() to construct.
+// It is safe for concurrent use, like the real store: the pipelined
+// cycle (WP-189) hits the ledger from two goroutines.
 //
 // Compile-time check: FakeStore must satisfy Store.
 var _ Store = (*FakeStore)(nil)
@@ -219,6 +221,8 @@ func (f *FakeStore) JobCount() (int, error) {
 }
 
 func (f *FakeStore) JobExists(url string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for _, j := range f.Jobs {
 		if j.URL == url {
 			return true, nil
@@ -630,11 +634,15 @@ func (f *FakeStore) Close() error                      { return nil }
 // --- Postings ledger ---
 
 func (f *FakeStore) HasPosting(url string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	_, ok := f.Postings[url]
 	return ok, nil
 }
 
 func (f *FakeStore) AddPostings(results []scraper.Result) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, r := range results {
 		if _, ok := f.Postings[r.URL]; ok {
@@ -650,6 +658,8 @@ func (f *FakeStore) AddPostings(results []scraper.Result) error {
 }
 
 func (f *FakeStore) ListPostings(status string) ([]Posting, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var out []Posting
 	for _, p := range f.Postings {
 		if status != "" && p.Status != status {
@@ -664,11 +674,15 @@ func (f *FakeStore) ListPostings(status string) ([]Posting, error) {
 }
 
 func (f *FakeStore) GetPosting(url string) (Posting, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	p, ok := f.Postings[url]
 	return p, ok, nil
 }
 
 func (f *FakeStore) SetPostingStatus(url, status string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	p, ok := f.Postings[url]
 	if !ok {
 		return fmt.Errorf("no posting with URL %q", url)
@@ -679,6 +693,8 @@ func (f *FakeStore) SetPostingStatus(url, status string) error {
 }
 
 func (f *FakeStore) CountPostings(status string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	n := 0
 	for _, p := range f.Postings {
 		if status == "" || p.Status == status {
@@ -689,6 +705,8 @@ func (f *FakeStore) CountPostings(status string) (int, error) {
 }
 
 func (f *FakeStore) PrunePostings(days int) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	cutoff := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
 	removed := 0
 	for url, p := range f.Postings {
@@ -701,6 +719,8 @@ func (f *FakeStore) PrunePostings(days int) (int, error) {
 }
 
 func (f *FakeStore) EnrichPosting(url, desc string, meta map[string]string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	p, ok := f.Postings[url]
 	if !ok {
 		return nil
@@ -721,6 +741,8 @@ func (f *FakeStore) EnrichPosting(url, desc string, meta map[string]string) erro
 }
 
 func (f *FakeStore) MigratePostings(entries []Posting) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	imported := 0
 	for _, p := range entries {
 		if _, ok := f.Postings[p.Result.URL]; ok {

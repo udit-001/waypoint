@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/udit-001/waypoint/internal/db"
-	"github.com/udit-001/waypoint/internal/scraper"
 )
 
 // ShortlistNotice is the payload of the one nudge per cycle: how many
@@ -55,15 +54,13 @@ func buildNotice(ctx context.Context, store interface {
 }
 
 // notifyShortlist sends the nudge through cfg.Notifier when the run
-// shortlisted anything. Errors are recorded as stage errors in the run row —
-// the loop's "on never lies" surface — but never fail the cycle.
-func notifyShortlist(ctx context.Context, cfg CycleConfig, rec *runRecord, allPostings []scraper.Result) {
+// shortlisted anything. cycleURLs is the set the consumer escalated this
+// cycle — count and top pick are per-cycle for the same reason. Errors are
+// recorded as stage errors in the run row — the loop's "on never lies"
+// surface — but never fail the cycle.
+func notifyShortlist(ctx context.Context, cfg CycleConfig, rec *runRecord, cycleURLs map[string]bool) {
 	if cfg.Notifier == nil || rec.PostingsShortlisted <= 0 {
 		return
-	}
-	cycleURLs := make(map[string]bool, len(allPostings))
-	for _, p := range allPostings {
-		cycleURLs[p.URL] = true
 	}
 	if err := cfg.Notifier.NotifyShortlist(ctx, buildNotice(ctx, cfg.Store, rec.PostingsShortlisted, cycleURLs)); err != nil {
 		log.Printf("autopilot: notify failed: %v", err)
