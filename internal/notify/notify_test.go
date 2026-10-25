@@ -7,6 +7,46 @@ import (
 	"github.com/udit-001/waypoint/internal/autopilot"
 )
 
+func TestFormatDegraded(t *testing.T) {
+	tests := []struct {
+		name      string
+		errs      []string
+		wantTitle string
+		wantBody  string
+	}{
+		{
+			name:      "single error carried whole",
+			errs:      []string{"sweep hn: portal down"},
+			wantTitle: "Waypoint · autopilot run degraded",
+			wantBody:  "sweep hn: portal down",
+		},
+		{
+			name:      "multiple errors count the rest",
+			errs:      []string{"sweep hn: portal down", "curate: all 3 postings failed", "backlog: db locked"},
+			wantTitle: "Waypoint · autopilot run degraded",
+			wantBody:  "sweep hn: portal down +2 more",
+		},
+		{
+			name:      "long first error truncated",
+			errs:      []string{strings.Repeat("x", 100)},
+			wantTitle: "Waypoint · autopilot run degraded",
+			wantBody:  strings.Repeat("x", 57) + "…",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			title, body := formatDegraded(tt.errs)
+			if title != tt.wantTitle {
+				t.Errorf("title = %q, want %q", title, tt.wantTitle)
+			}
+			if body != tt.wantBody {
+				t.Errorf("body = %q, want %q", body, tt.wantBody)
+			}
+		})
+	}
+}
+
 func TestFormatShortlist(t *testing.T) {
 	tests := []struct {
 		name      string

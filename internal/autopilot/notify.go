@@ -19,12 +19,22 @@ type ShortlistEvent struct {
 	Score   int
 }
 
-// Notifier delivers shortlist announcements. It is the seam that keeps
-// the cycle free of delivery mechanics — desktop notifications today,
-// Web Push or anything else behind the same one method later. A nil
-// Notifier is a valid noop; failures never block scoring.
+// DegradedNotice announces a run that closed degraded: the stage
+// errors, exactly as the runlog shows them (WP-193). A healthy run
+// sends nothing — recovery is signaled by the shortlist stream, not by
+// a counter-notice.
+type DegradedNotice struct {
+	Errors []string
+}
+
+// Notifier delivers shortlist announcements and degraded-run notices.
+// It is the seam that keeps the cycle free of delivery mechanics —
+// desktop notifications today, Web Push or anything else behind the
+// same methods later. A nil Notifier is a valid noop; failures never
+// block scoring.
 type Notifier interface {
 	NotifyShortlists(ctx context.Context, events []ShortlistEvent) error
+	NotifyDegraded(ctx context.Context, d DegradedNotice) error
 }
 
 // DefaultNotifyQuietWindow coalesces a burst of shortlists into one

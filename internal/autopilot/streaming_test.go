@@ -181,6 +181,10 @@ func (panickyNotifier) NotifyShortlists(context.Context, []ShortlistEvent) error
 	panic("boom")
 }
 
+func (panickyNotifier) NotifyDegraded(context.Context, DegradedNotice) error {
+	return nil
+}
+
 // TestRun_FlusherPanicContained: a panicking Notifier must not take
 // down the cycle — the run closes with its normal shape and the panic
 // surfaces as a stage error.

@@ -158,9 +158,10 @@ func (r *runRecord) stageError(format string, args ...any) {
 }
 
 // finish closes the record: it stamps the end, materializes the per-source
-// rows, and computes the verdict. Called once from Run's defer, so a
-// panicked or interrupted cycle still ends with a verdict.
-func (r *runRecord) finish(ctx context.Context, store db.Store) db.RunLog {
+// rows, computes the verdict, and announces a degraded run (WP-193).
+// Called once from Run's defer, so a panicked or interrupted cycle still
+// ends with a verdict.
+func (r *runRecord) finish(ctx context.Context, store db.Store, n Notifier) db.RunLog {
 	if r.closed {
 		return r.RunLog
 	}
@@ -179,6 +180,15 @@ func (r *runRecord) finish(ctx context.Context, store db.Store) db.RunLog {
 	r.PerSource = r.rows()
 	r.sumTotals()
 	r.Verdict = verdictFor(r.RunLog, queueDepth(store, r))
+	// Degraded runs announce themselves (WP-193): one notice per degraded
+	// run, derived from the same verdict the runlog shows. A failure here
+	// is only logged — the entry is returned by value below, so a stage
+	// error recorded now could never reach the closed row anyway.
+	if n != nil && r.Verdict == db.VerdictDegraded {
+		if err := n.NotifyDegraded(ctx, DegradedNotice{Errors: r.StageErrors}); err != nil {
+			log.Printf("autopilot: notify degraded: %v", err)
+		}
+	}
 	return r.RunLog
 }
 
@@ -285,7 +295,7 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 		}
 		// One place closes the record: a panicked cycle still ends with a
 		// verdict rather than an open row.
-		logEntry = rec.finish(ctx, cfg.Store)
+		logEntry = rec.finish(ctx, cfg.Store, cfg.Notifier)
 	}()
 
 	// One allowlist projection for the whole cycle. Every LLM input the

@@ -45,6 +45,18 @@ func (d *Desktop) NotifyShortlists(_ context.Context, events []autopilot.Shortli
 	return deliver(title, body, d.clickAction())
 }
 
+// NotifyDegraded implements autopilot.Notifier: one notice when a run
+// closes degraded (WP-193). An empty error list never delivers — the
+// verdict cannot be degraded without errors, so reaching here with none
+// means a caller bug, not copy to toast.
+func (d *Desktop) NotifyDegraded(_ context.Context, notice autopilot.DegradedNotice) error {
+	if len(notice.Errors) == 0 {
+		return nil
+	}
+	title, body := formatDegraded(notice.Errors)
+	return deliver(title, body, d.clickAction())
+}
+
 func (d *Desktop) clickAction() func() {
 	if d.OpenURL == "" {
 		return nil
@@ -85,10 +97,7 @@ func formatShortlist(events []autopilot.ShortlistEvent) (title, body string) {
 		return title, "Review them when you have two minutes."
 	}
 
-	topTitle := top.Title
-	if runes := []rune(topTitle); len(runes) > 60 {
-		topTitle = strings.TrimSpace(string(runes[:57])) + "…"
-	}
+	topTitle := truncate60(top.Title)
 	var b strings.Builder
 	b.WriteString("Top pick: ")
 	b.WriteString(topTitle)
@@ -99,4 +108,25 @@ func formatShortlist(events []autopilot.ShortlistEvent) (title, body string) {
 		fmt.Fprintf(&b, " (%d)", top.Score)
 	}
 	return title, b.String()
+}
+
+// truncate60 clips copy to a toast-sized line, same rule the shortlist
+// body uses: 60 runes, ellipsis on the cut.
+func truncate60(s string) string {
+	if runes := []rune(s); len(runes) > 60 {
+		return strings.TrimSpace(string(runes[:57])) + "…"
+	}
+	return s
+}
+
+// formatDegraded renders the degraded-run copy: body carries the first
+// stage error (the runlog's own text) plus a count of the rest. Pure so
+// tests pin it.
+func formatDegraded(errs []string) (title, body string) {
+	title = fmt.Sprintf("%s · autopilot run degraded", appName)
+	body = truncate60(errs[0])
+	if n := len(errs) - 1; n > 0 {
+		body += fmt.Sprintf(" +%d more", n)
+	}
+	return title, body
 }

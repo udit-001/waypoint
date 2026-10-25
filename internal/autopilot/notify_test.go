@@ -1,8 +1,12 @@
 package autopilot
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"log"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -14,12 +18,15 @@ import (
 
 // --- fixtures ---
 
-// recordingNotifier records each NotifyShortlists delivery. Safe to
-// read while a Run is in flight — the flusher delivers mid-cycle.
+// recordingNotifier records each NotifyShortlists and NotifyDegraded
+// delivery. Safe to read while a Run is in flight — the flusher
+// delivers mid-cycle.
 type recordingNotifier struct {
-	mu         sync.Mutex
-	deliveries [][]ShortlistEvent
-	err        error
+	mu          sync.Mutex
+	deliveries  [][]ShortlistEvent
+	degraded    [][]string
+	err         error // NotifyShortlists failure
+	degradedErr error // NotifyDegraded failure
 }
 
 func (r *recordingNotifier) NotifyShortlists(_ context.Context, events []ShortlistEvent) error {
@@ -29,10 +36,23 @@ func (r *recordingNotifier) NotifyShortlists(_ context.Context, events []Shortli
 	return r.err
 }
 
+func (r *recordingNotifier) NotifyDegraded(_ context.Context, d DegradedNotice) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.degraded = append(r.degraded, d.Errors)
+	return r.degradedErr
+}
+
 func (r *recordingNotifier) batches() [][]ShortlistEvent {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.deliveries
+}
+
+func (r *recordingNotifier) degradedNotices() [][]string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.degraded
 }
 
 // stubDiscovery replaces the discovery pipeline with a no-op so cycle
@@ -217,5 +237,77 @@ func TestCycle_NoZenCapsUnscored(t *testing.T) {
 	}
 	if len(shortlisted) != 25 {
 		t.Fatalf("ledger shortlisted rows = %d, want 25", len(shortlisted))
+	}
+}
+
+// TestCycle_DegradedNotifiesOnce: a run that closes degraded sends
+// exactly one NotifyDegraded carrying the run's stage errors (WP-193).
+func TestCycle_DegradedNotifiesOnce(t *testing.T) {
+	stubDiscovery(t)
+	stubSelection(t)
+	f := db.NewFakeStore()
+	n := &recordingNotifier{}
+
+	cfg := newCycle(f, []scraper.Scraper{failingScraper{name: "broken-portal"}})
+	cfg.Notifier = n
+	entry := Run(context.Background(), cfg)
+
+	if entry.Verdict != db.VerdictDegraded {
+		t.Fatalf("verdict = %q, want degraded", entry.Verdict)
+	}
+	notices := n.degradedNotices()
+	if len(notices) != 1 {
+		t.Fatalf("degraded notices = %d, want exactly 1", len(notices))
+	}
+	if strings.Join(notices[0], "\n") != strings.Join(entry.StageErrors, "\n") {
+		t.Errorf("notice errors = %v, want the run's stage errors %v", notices[0], entry.StageErrors)
+	}
+}
+
+// TestCycle_HealthyRunSilentOnDegraded: a quiet run announces nothing —
+// silence is the absence of a degraded verdict, with no state behind it.
+func TestCycle_HealthyRunSilentOnDegraded(t *testing.T) {
+	stubDiscovery(t)
+	stubSelection(t)
+	f := db.NewFakeStore()
+	n := &recordingNotifier{}
+
+	cfg := newCycle(f, []scraper.Scraper{&fixtureScraper{name: "empty-scraper"}})
+	cfg.Notifier = n
+	entry := Run(context.Background(), cfg)
+
+	if entry.Verdict == db.VerdictDegraded {
+		t.Fatalf("verdict = degraded, want a healthy verdict")
+	}
+	if notices := n.degradedNotices(); len(notices) != 0 {
+		t.Errorf("degraded notices = %d, want 0 for a healthy run", len(notices))
+	}
+}
+
+// TestCycle_DegradedNotifyFailureDoesNotFailRun: a failed degraded
+// notice is logged, not propagated — the run row is already closed by
+// the time the notice fires, so there is nothing left to record into.
+func TestCycle_DegradedNotifyFailureDoesNotFailRun(t *testing.T) {
+	stubDiscovery(t)
+	stubSelection(t)
+	f := db.NewFakeStore()
+	var logBuf bytes.Buffer
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	n := &recordingNotifier{degradedErr: errors.New("no bus")}
+	cfg := newCycle(f, []scraper.Scraper{failingScraper{name: "broken-portal"}})
+	cfg.Notifier = n
+
+	entry := Run(context.Background(), cfg)
+
+	if entry.FinishedAt == "" {
+		t.Error("run did not finish after a failed degraded notice")
+	}
+	if entry.Verdict != db.VerdictDegraded {
+		t.Errorf("verdict = %q, want the runlog unchanged by the notify failure", entry.Verdict)
+	}
+	if !strings.Contains(logBuf.String(), "notify degraded") {
+		t.Errorf("log = %q, want the notify failure logged", logBuf.String())
 	}
 }

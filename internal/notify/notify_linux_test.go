@@ -79,3 +79,47 @@ func TestDesktopNotifyErrorPropagates(t *testing.T) {
 		t.Error("want error propagated to the cycle (which logs it)")
 	}
 }
+
+func TestDesktopNotifyDegradedWiresCopyAndClick(t *testing.T) {
+	rec := &recordingDeliver{}
+	orig := sendDBus
+	sendDBus = rec.record
+	t.Cleanup(func() { sendDBus = orig })
+
+	d := New("http://localhost:8080/#/found")
+	err := d.NotifyDegraded(context.Background(), autopilot.DegradedNotice{
+		Errors: []string{"sweep hn: portal down", "curate: all 3 postings failed"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rec.titles) != 1 {
+		t.Fatalf("deliveries = %d, want 1", len(rec.titles))
+	}
+	if rec.titles[0] != "Waypoint · autopilot run degraded" {
+		t.Errorf("title = %q, want degraded title", rec.titles[0])
+	}
+	if rec.bodies[0] != "sweep hn: portal down +1 more" {
+		t.Errorf("body = %q, want first error with a more-count", rec.bodies[0])
+	}
+	if rec.clicks != 1 {
+		t.Errorf("click actions registered = %d, want 1 (OpenURL set)", rec.clicks)
+	}
+}
+
+// TestDesktopNotifyDegradedEmptyNeverDelivers: an empty error list must
+// not reach the delivery mechanism at all.
+func TestDesktopNotifyDegradedEmptyNeverDelivers(t *testing.T) {
+	rec := &recordingDeliver{}
+	orig := sendDBus
+	sendDBus = rec.record
+	t.Cleanup(func() { sendDBus = orig })
+
+	d := New("http://localhost:8080/#/found")
+	if err := d.NotifyDegraded(context.Background(), autopilot.DegradedNotice{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rec.titles) != 0 {
+		t.Errorf("deliveries = %d, want 0 for an empty notice", len(rec.titles))
+	}
+}
