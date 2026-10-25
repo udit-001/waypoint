@@ -58,6 +58,10 @@ type CycleConfig struct {
 	Recency  int           // days for recency filter (default 14)
 	Cadence  time.Duration // time between cycles
 	Limit    int           // max new postings to curate (0 = all)
+	// Budget is the cycle's own resource envelope (wall clock + scored
+	// cap), distinct from the user-facing Limit. Nil means defaults; zero
+	// fields inside a provided Budget keep their "no limit" meaning.
+	Budget *Budget
 	// Direct overrides the detail stage's tier-3 HTTP fetcher. When nil,
 	// the cycle falls back to a real scraper.HTTPFetcher. Tests inject a
 	// fake so the cycle never touches the network.
@@ -245,7 +249,8 @@ func loadLLMInput(store db.Store) db.LLMInput {
 // scheduler's cadence measures from the last finished run, so an open row
 // would re-fire a poisoned cycle at poll rate forever.
 func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
-	rec := newRunRecord(time.Now().UTC())
+	start := time.Now().UTC()
+	rec := newRunRecord(start)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -274,6 +279,30 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	}
 	cfg.ExaClient.SetBudget(exaCap)
 
+	// Cycle budget: the autopilot's own envelope, separate from the
+	// user-facing Limit. Nil config takes the defaults; a provided
+	// Budget's zero fields stay "no limit" so tests can build partial
+	// budgets.
+	defaultedBudget := false
+	if cfg.Budget == nil {
+		cfg.Budget = &Budget{Deadline: start.Add(DefaultWall), MaxScored: DefaultScoredCap}
+		defaultedBudget = true
+	}
+	// gate skips a stage the wall budget spent, recording why coverage
+	// is partial. Postings a skip leaves behind stay "new" in the
+	// ledger; the next cycle's backlog picks them up.
+	gate := func(stage string) bool {
+		if !cfg.Budget.Expired() {
+			return false
+		}
+		wall := DefaultWall
+		if !defaultedBudget {
+			wall = time.Since(start).Round(time.Second)
+		}
+		rec.stageError("wall budget (%s) spent before %s stage", wall, stage)
+		return true
+	}
+
 	// Stage 0: Discovery — widen the company universe when a trigger
 	// fires (first-run / brief change / interval). Never blocks scoring:
 	// a failure is recorded as a stage error and the cycle proceeds.
@@ -292,7 +321,10 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 	sel := stageSelectSource(ctx, cfg, rec)
 
 	// Stage 2: Sweep — scrape the selected sources for new postings.
-	newPostings := stageSweep(ctx, cfg, rec, sel)
+	var newPostings []scraper.Result
+	if !gate("sweep") {
+		newPostings = stageSweep(ctx, cfg, rec, sel)
+	}
 	rec.PostingsNew = len(newPostings)
 
 	// Collect swept URLs to avoid double-processing.
@@ -324,12 +356,24 @@ func Run(ctx context.Context, cfg CycleConfig) (logEntry db.RunLog) {
 		}
 	}
 
+	// Scored cap: the cycle's total escalations to zen, on top of the
+	// per-run Limit and the degraded-path unscored cap. The freshest
+	// slice survives; the rest stay "new" for the next cycle's backlog.
+	if cfg.Budget.MaxScored > 0 && len(allPostings) > cfg.Budget.MaxScored {
+		log.Printf("autopilot: cycle budget — escalating newest %d of %d (scored cap)", cfg.Budget.MaxScored, len(allPostings))
+		allPostings = cfg.Budget.ApplyCap(allPostings)
+	}
+
 	// Stage 3: Detail — enrich postings with full job body.
-	stageDetail(ctx, cfg, allPostings)
+	if !gate("detail") {
+		stageDetail(ctx, cfg, allPostings)
+	}
 
 	// Stage 4+5: Prefilter + Curate — per-posting commit. Outcomes land in
 	// the per-source rows; sum them so the notifier sees this cycle's count.
-	stagePrefilterCurate(ctx, cfg, allPostings, rec)
+	if !gate("curate") {
+		stagePrefilterCurate(ctx, cfg, allPostings, rec)
+	}
 	rec.sumTotals()
 
 	// Stage 6: Notify — one nudge per cycle when shortlists exist.
